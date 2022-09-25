@@ -1,4 +1,4 @@
-# genesis3space/go-planet
+# go-planet
 
 ### Official Go support for the PlanetXR framework & runtime
 
