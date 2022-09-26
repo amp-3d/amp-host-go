@@ -1,4 +1,4 @@
 # go-planet
 
-### Official Go support for the PlanetXR UI framework & runtime
+### Official Go implementation for the PlanetXR UI framework & runtime
 
