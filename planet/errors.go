@@ -1,0 +1,60 @@
+package planet
+
+import (
+	"fmt"
+)
+
+// Error makes our custom error type conform to a standard Go error
+func (err *Err) Error() string {
+	codeStr, exists := ErrCode_name[int32(err.Code)]
+	if !exists {
+		codeStr = ErrCode_name[int32(ErrCode_UnnamedErr)]
+	}
+
+	if len(err.Msg) == 0 {
+		return codeStr
+	}
+
+	return codeStr + ": " + err.Msg
+}
+
+// Error returns an *Err with the given error code
+func (code ErrCode) Error(msg string) error {
+	if code == ErrCode_NoErr {
+		return nil
+	}
+	return &Err{
+		Code: code,
+		Msg:  msg,
+	}
+}
+
+// Errorf returns an *Err with the given error code and msg.
+// If one or more args are given, msg is used as a format string
+func (code ErrCode) Errorf(msg string, msgArgs ...interface{}) error {
+	if code == ErrCode_NoErr {
+		return nil
+	}
+
+	err := &Err{
+		Code: code,
+	}
+	if len(msgArgs) == 0 {
+		err.Msg = msg
+	} else {
+		err.Msg = fmt.Sprintf(msg, msgArgs...)
+	}
+
+	return err
+}
+
+// Wrap returns a ReqErr with the given error code and "cause" error
+func (code ErrCode) Wrap(cause error) error {
+	if cause == nil {
+		return nil
+	}
+	return &Err{
+		Code: code,
+		Msg:  cause.Error(),
+	}
+}

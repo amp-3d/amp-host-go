@@ -1,0 +1,7 @@
+
+
+.vscode/*.log
+cmd/phost/*.data
+
+__debug_bin
+__debug_bin.exe
