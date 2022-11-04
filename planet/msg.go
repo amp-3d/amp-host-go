@@ -11,40 +11,52 @@ import (
 const MsgValBufCopyLimit = 16 * 1024
 
 func NewMsgBatch() MsgBatch {
-	batch := gMsgBatchPool.Get().(*msgBatch)
-	return batch
+	return gMsgBatchPool.Get().(MsgBatch)
 }
 
-type msgBatch struct {
-	msgs []*Msg
+func (batch *MsgBatch) Reset(count int) []*Msg{
+	if count > cap(batch.Msgs) {
+		msgs := make([]*Msg, count)
+		copy(msgs, batch.Msgs)
+		batch.Msgs = msgs
+	} else {
+		batch.Msgs = batch.Msgs[:count]
+	}
+	
+	// Alloc or init  each msg
+	for i, msg := range batch.Msgs {
+		if msg == nil {
+			batch.Msgs[i] = NewMsg()
+		} else {
+			msg.Init()
+		}
+	}
+	
+	return batch.Msgs
 }
 
-func (batch *msgBatch) AddNew(count int) []*Msg{
-	N := len(batch.msgs)
+func (batch *MsgBatch) AddNew(count int) []*Msg{
+	N := len(batch.Msgs)
 	for i := 0; i < count; i++ {
-		batch.msgs = append(batch.msgs, NewMsg())
+		batch.Msgs = append(batch.Msgs, NewMsg())
 	}
-	return batch.msgs[N:]
+	return batch.Msgs[N:]
 }
 
-func (batch *msgBatch) AddMsgs(msgs []*Msg) {
-	batch.msgs = append(batch.msgs, msgs...)
+func (batch *MsgBatch) AddMsgs(msgs []*Msg) {
+	batch.Msgs = append(batch.Msgs, msgs...)
 }
 
-func (batch *msgBatch) AddMsg(msg *Msg) {
-	batch.msgs = append(batch.msgs, msg)
+func (batch *MsgBatch) AddMsg(msg *Msg) {
+	batch.Msgs = append(batch.Msgs, msg)
 }
 
-func (batch *msgBatch) Msgs() []*Msg {
-	return batch.msgs
-}
-
-func (batch *msgBatch) Reclaim() {
-	for i, msg := range batch.msgs {
+func (batch *MsgBatch) Reclaim() {
+	for i, msg := range batch.Msgs {
 		msg.Reclaim()
-		batch.msgs[i] = nil
+		batch.Msgs[i] = nil
 	}
-	batch.msgs = batch.msgs[:0]
+	batch.Msgs = batch.Msgs[:0]
 }
 
 func NewMsg() *Msg {
@@ -74,16 +86,20 @@ func CopyMsg(src *Msg) *Msg {
 	return msg
 }
 
+func (msg *Msg) Init() {
+	if msg.ValBufIsShared {
+		*msg = Msg{}
+	} else {
+		valBuf := msg.ValBuf[:0]
+		*msg = Msg{
+			ValBuf: valBuf,
+		}
+	}
+}
+
 func (msg *Msg) Reclaim() {
 	if msg != nil {
-		if msg.ValBufIsShared {
-			*msg = Msg{}
-		} else {
-			valBuf := msg.ValBuf[:0]
-			*msg = Msg{
-				ValBuf: valBuf,
-			}
-		}
+		msg.Init()
 		gMsgPool.Put(msg)
 	}
 }
@@ -228,13 +244,15 @@ func loadNil(dst interface{}) {
 
 var gMsgPool = sync.Pool{
 	New: func() interface{} {
-		return new(Msg)
+		return &Msg{}
 	},
 }
 
 var gMsgBatchPool = sync.Pool{
 	New: func() interface{} {
-		return new(msgBatch)
+		return MsgBatch{
+			Msgs: make([]*Msg, 0, 16),
+		}
 	},
 }
 

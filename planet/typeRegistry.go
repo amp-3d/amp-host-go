@@ -85,9 +85,25 @@ func (reg *typeRegistry) ResolveAndRegister(defs *Defs) error {
 	return err
 }
 
+func cleanURI(uri *string) bool {
+	u := *uri
+	N := len(u)
+	if N <= 1 {
+		return false
+	}
+	if u[N-1] == '/' {
+		*uri = u[:N-1]
+	}
+	return true
+}
+
 func (reg *typeRegistry) resolveSchema(schema *AttrSchema) error {
 
-	if len(schema.SchemaURI) == 0 {
+	if !cleanURI(&schema.DataModelURI) {
+		return ErrCode_BadSchema.Error("DataModelURI missing")
+	}
+
+	if !cleanURI(&schema.SchemaURI) {
 		return ErrCode_BadSchema.Error("SchemaURI missing")
 	}
 
@@ -95,22 +111,22 @@ func (reg *typeRegistry) resolveSchema(schema *AttrSchema) error {
 		return ErrCode_BadSchema.Error("SchemaID missing")
 	}
 
-	for _, attr := range schema.Attrs {
+	for i, attr := range schema.Attrs {
 
-		if len(attr.AttrURI) == 0 {
-			return ErrCode_BadSchema.Errorf("DataModelAttrURI missing for schema %v", schema.SchemaURI)
+		if !cleanURI(&attr.AttrURI) {
+			return ErrCode_BadSchema.Errorf("missing Attrs[%d].AttrURI in schema %s", i, schema.AbsURI())
 		}
 
 		if attr.AttrID == 0 {
-			return ErrCode_BadSchema.Errorf("AttrSpec.AttrID missing for Atr %s/%s", schema.SchemaURI, attr.AttrURI)
+			return ErrCode_BadSchema.Errorf("missing Attrs[%d].AttrID in schema %s for attr %s", i, schema.AbsURI(), attr.AttrURI)
 		}
 
 		if attr.SeriesType != SeriesType_Fixed && attr.Fixed_SI != 0 {
-			return ErrCode_BadSchema.Errorf("AttrSpec.Fixed_SI is set but is ignored for %s/%s", schema.SchemaURI, attr.AttrURI)
+			return ErrCode_BadSchema.Errorf("Attrs[%d].Fixed_SI is set but is ignored in schema %s for attr %s", i, schema.AbsURI(), attr.AttrURI)
 		}
 
-		if len(attr.ValTypeURI) == 0 {
-			return ErrCode_BadSchema.Errorf("AttrSpec.ValTypeURI missing for %s/%s", schema.SchemaURI, attr.AttrURI)
+		if !cleanURI(&attr.ValTypeURI) {
+			return ErrCode_BadSchema.Errorf("missing Attrs[%d].ValTypeURI in schema %s for attr %s", i, schema.AbsURI(), attr.AttrURI)
 		}
 
 		// if attr.ValTypeID == 0 {

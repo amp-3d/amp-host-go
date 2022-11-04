@@ -10,6 +10,7 @@ import (
 	"github.com/genesis3systems/go-cedar/process"
 	"github.com/genesis3systems/go-cedar/utils"
 	"github.com/genesis3systems/go-planet/planet"
+	"github.com/genesis3systems/go-planet/planet/apps/filesys"
 	"github.com/genesis3systems/go-planet/planet/apps/vibe"
 	"github.com/genesis3systems/go-planet/planet/grpc_server"
 	"github.com/genesis3systems/go-planet/planet/host"
@@ -51,6 +52,7 @@ func main() {
 	}
 	
 	host.RegisterApp(vibe.NewApp())
+	host.RegisterApp(filesys.NewApp())
 
 	opts := grpc_server.DefaultGrpcServerOpts(*hostPort)
 	srv, err := opts.AttachNewGrpcServer(host)

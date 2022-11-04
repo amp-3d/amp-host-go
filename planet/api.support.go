@@ -2,6 +2,7 @@ package planet
 
 import (
 	bytes "bytes"
+	"path"
 	"time"
 
 	"github.com/genesis3systems/go-cedar/bufs"
@@ -198,4 +199,8 @@ func (tid TID) CopyNext(inTID TID) {
 			break
 		}
 	}
+}
+
+func (schema *AttrSchema) AbsURI() string {
+	return path.Join(schema.AppURI, schema.DataModelURI, schema.SchemaURI)
 }

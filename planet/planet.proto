@@ -4,9 +4,10 @@ syntax = "proto3";
 // files, media, and communication system running a realtime 2D/3D/XR client.
 package planet;
 
-option csharp_namespace = "Genesis3.PlanetXR";
+// https://stackoverflow.com/questions/43026449/gogo-proto-file-not-found
+// import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
-// option go_package = "github.com/planet.tools/go-planet/planet/builtin_types/planet";
+option csharp_namespace = "Genesis3.PlanetXR";
 
 
 // High-level channel repository RPC.
@@ -155,7 +156,7 @@ enum MsgOp {
     // Note that the same cell pinned multiple times may not have child cells with matching cell IDs.
     //
     // Params: 
-    //      Msg.ParentReqID:  parent of cell to be pinned
+    //      Msg.ParentReqID:  parent context
     //      Msg.ReqID:        newly client-generated (unique) request ID 
     //      Msg.TargetCellID: which cell to be pinned
     //      Msg.ValType:      ValType_PinReq
@@ -189,7 +190,6 @@ enum MsgOp {
     //
     // Params: 
     //      Msg.ReqID:        originating request ID
-    //      Msg.ParentCellID: parent cell of the child cell being pushed 
     //      Msg.TargetCellID: new cell ID of the child cell being pushed
     //      Msg.ValType:      ValType_SchemaID
     //      Msg.ValInt:       cell type ID being pushed (specifies which Cell attribs are expected to follow)
@@ -362,13 +362,17 @@ message Defs {
 // Otherwise, data corruption is possible.
 message AttrSchema {
     
-    // AppURI specifies which app should handle this request.
-    // If omitted, the default or otherwise best app is chosen based on DataModelURI.
-    // e.g. "genesis3.systems/vibe.app/v1"
+    // AppURI specifies which specific app and optional version should handle requests with this schema.
+    // The reserved value "." tells the host to choose the default app registered to handle the below DataModelURI (common).
+    // e.g. 
+    //      "."
+    //      "planet.tools/vibe.app"
+    //      "planet.tools/vibe.app/v1.2022.1"
+    //      "planet.tools/hfs.app/v1.2.3"
     string              AppURI = 1;
     
     // DataModelURI names a particular data model used by this schema, in effect specifying a namespace / scope for the attached Attrs.
-    // This URI names a complete data model / specification that this collection of AttrSpecs conforms to (and is a subset of).
+    // This URI names a complete data protocol / specification that this collection of AttrSpecs conforms to (and is a subset of).
     // To an implementing app on the Go side, this URI implies a family of valid possible AttrSpecs to choose from. 
     // e.g.
     //      "spotify/v1/artist"
@@ -377,21 +381,21 @@ message AttrSchema {
     //      "hfs1/directory"
     //      "hfs1/fstat"
     string              DataModelURI = 3;
-    
 
-    // SchemaURI names *this* particular collection of AttrSpecs, and is implicitly scoped within the given DataModelURI.
-    // Typically, a UI Cell view specifies a unique SchemaURI for the set of attrs it wants to display, meaning this field tends to correspond to a particular "view" of a data model instance.
+    // SchemaURI names this particular AttrSchema, a particular collection of AttrSpecs (and so is implicitly scoped within DataModelURI).
+    // Typically, a UI Cell view specifies a unique SchemaURI for the set of attrs it wants to display, meaning this field tends to correspond to a particular cell "view".
+    // The host (and its apps) don't typically even look at this URI since "{DataModelURI}/{Attrs[i].AttrURI}" specifies each attr's data model URI.
     // e.g. for DataModelURI == "spotify/v1/album":
     //      "ux1/item.1x1.cell"
     //      "ux1/item.row.cell"
     //      "ux1/detailed.row.cell"
     string              SchemaURI = 4;
 
-    // SchemaID is a non-zero, unique, client-generated ID that is bound to this AttrSchema during RegisterAndResolve.
-    // This ID is used in PinReq to specify this AttrSchema and persists for the duration of the host session.
-    uint32              SchemaID = 6; 
+    // SchemaID is a non-zero, unique, client-generated ID that is bound to this AttrSchema (and registered during RegisterAndResolve).
+    // This ID is used in PinReq to specify this particular AttrSchema and persists for the duration of the host session.
+    uint32              SchemaID = 6; // [(gogoproto.customname) = "SchemaID"];
 
-    // The set of AttrSpecs bound to this SchemaURI.
+    // Attrs binds a set of AttrSpecs to this SchemaURI.
     repeated AttrSpec   Attrs = 8;
 
 }
@@ -404,6 +408,7 @@ message AttrSchema {
 // AttrSpec binds an app data model attr URI to a client-provided AttrID, corresponding to a handler on the client side (typically a UI element).
 message AttrSpec {
 
+
     // AttrURI is a self-describing URI scoped within the parent's DataModelURI.
     // It communicates a purpose or role, for a particular usage context of the attr.
     // It originates from an app data model spec and allows the host to associate an app attr to a client-provided AttrID (and SI when SeriesType == Fixed).
@@ -414,7 +419,7 @@ message AttrSpec {
     //      "v1/name"
     //      "v1/status"
     //      "v1/item-count"
-    string              AttrURI = 1;
+    string              AttrURI = 2;
 
     // AttrID is a non-zero, client-generated ID that is bound to the given AttrURI during RegisterAndResolve.
     // This identifies which attr is being updated in a PushAttr Msg and can be thought of as a binding to a given UI entity.
@@ -646,7 +651,8 @@ enum ErrCode {
     ErrCode_TypeNotRegistered           = 5051;
     ErrCode_BadSchema                   = 5052;
     ErrCode_DataFailure                 = 5053;
-    ErrCode_CellNotFound                = 5055;
+    ErrCode_InvalidCell                 = 5055;
+    ErrCode_NotPinnable                 = 5056;   
     
     ErrCode_ViolatesAppendOnly          = 5100;
     ErrCode_InsufficientPermissions     = 5101;

@@ -5,21 +5,37 @@ import "github.com/genesis3systems/go-cedar/process"
 /*
 packages
 
-planet
-    is the set of APIs and API-consuming support utils
-host
-    implements planet.Host + HostSession
-grpc_server
-	implements a grpc server that consumes planet.Host + HostSession
+	planet
+	    planet interfaces and support utils
+	planet/host
+	    an implementation of planet.Host & planet.HostSession
+	planet/grpc_server
+		implements a grpc server that consumes a planet.Host instance
+	planet/apps
+		implementations of planet.App
 
 
+	phost process.Context model:
+		* Host
+		    * HostHomePlanet
+		        * hostSess
+		        * cell_101
+		        * cell_104
+		    * GrpcServer
+		        * grpcSess
+		            * grpc <- hostSess.Outbox
+		            * grpc -> hostSess.Inbox
+		        * grpcSess
+		            * grpc <- hostSess.Outbox
+		            * grpc -> hostSess.Inbox
 
-May this project be dedicated to God, for all other things are darkness or imperfection.
-May these hands and this mind be blessed with Holy Spirit and Holy Purpose.
-May I be an instrument for manifesting software that serves the light and used to manifest joy at the largest scale possible.
-May the blocks to this mission dissolve into light amidst God's will.
-~ Dec 25th, 2021
 
+	May this project be dedicated to God, for all other things are darkness or imperfection.
+	May these hands and this mind be blessed with Holy Spirit and Holy Purpose.
+	May I be an instrument for manifesting software that serves the light and used to manifest joy at the largest scale possible.
+	May the blocks to this mission dissolve into light amidst God's will.
+
+	~ Dec 25th, 2021
 
 */
 
@@ -35,10 +51,7 @@ type TIDBuf [TIDBinaryLen]byte
 
 type Context interface {
 	process.Context
-
-
 }
-
 
 
 
@@ -68,9 +81,12 @@ type Host interface {
 		
 	HostPlanet() Planet
 	
+	// Registers an App for invocation by its AppURI and DataModelURIs.
 	RegisterApp(app App) error
-	
-	GetRegisteredApp(appURI string) (App, error)
+		
+	// Selects an App, typically based on schema.DataModelURI (or schema.AppURI if given).
+	// The given schema is READ ONLY.
+	SelectAppForSchema(schema *AttrSchema) (App, error)
 		
     StartNewSession() (HostSession, error)
     
@@ -88,6 +104,23 @@ type HostEndpoint interface {
 	
 }
 
+// HostSession in an open session instance with a Host.
+// HostSession is intended to be consumed by a Msg transport layer that in turn is intended
+// to be consumed by an implementation of a client.HostSession.
+type HostSession interface {
+	HostEndpoint
+
+	// Threadsafe
+	TypeRegistry
+	
+	LoggedIn() User
+	
+	//UserPlanet() Planet
+	
+    
+}
+
+
 
 // Planet is content and governance enclosure.
 // A Planet is 1:1 with a KV database model, which works out well for efficiency and performance.
@@ -102,92 +135,13 @@ type Planet interface {
 	GetSymbolID(value []byte, autoIssue bool) (ID uint64)
 	LookupID(ID uint64) []byte
 
-
 	//GetCell(ID CellID) (CellInstance, error)
 
-	
 	// BlobStore offers access to this planet's blob store (referenced via ValueType_BlobID).
 	//blob.Store
 	
-	
 }
 
-
-
-/*
-
-Host (1)
-    * Home (2)
-        * hostSess (8)
-	* MountedPlanets
-		* Planet1
-		* PlanetXYZ
-    * GrpcServer (3)
-        * grpcSess (9)
-            * rpc.SendToClient (10)
-            * rpc.RecvFromClient (11)
-
-
-
-type MsgPipe interface {
-	Context
-
-	// A host servicing this request *sends* to this channel while the client consumes messages
-	// When Msg.IsClosed, this will be the last message sent on this channel.
-	// Future: this chan is a special overflow chan than won't ever overflow
-	ToClient() chan<- *Msg
-	
-}
-
-*/
-
-
-
-
-// HostSession has two implementations:
-//    1) host (processes Msg inbox+outbox, maintains open reqs, etc)
-//      PinNode() opens a new req and serves it
-//    2)  client (processes Msg inbox+outbox and is a model for C# / Unity)
-//      PinNode() generates a request and waits for responses
-// HostSession is intended to be consumed by a Msg transport layer that in turn is intended
-// to be consumed by an implementation of a client.HostSession.
-type HostSession interface {
-	HostEndpoint
-
-	// Threadsafe
-	TypeRegistry
-	
-	LoggedIn() User
-	
-	//UserPlanet() Planet
-	
-	//GetCell(cellID uint64) (CellInstance, error)
-	
-	//OnCellOpened(CellInstance) error
-
-	// Pin requests that the Host serve or "pin" a requested Planet Node (or expand the currently mapped or "pinned" attr sub-range).
-	// 
-	// Client request to pin a range of attr values.
-	// For each attr item that is a node ref, the host:
-	//    1) generates a new PinID for that instance
-	//    2) pushes all attrs for that node (recursively auto-pinning subs based on AttrDef.AutoPin)
-	//    3) sends a MsgOp_NodeUpdated when requested range is sent 
-	//    4) any updates to the pinned range will be pushed, termianted by MsgOp_NodeUpdated, etc.
-	//Pin(req PinReq, pipe MsgPipe) error
-	  
-    
-    // Client request to reconstruct a given node based on its underlying node type (i.e. attr map).
-    // The host pushes attr value updates though this request's Msg pipe.
-    // For the given node and expected type (i.e. attr map), this loads the requested node's root attr values (values, nodeID, or nodeSetID).
-    // Typically called by a client (or invoked via a client-sent MsgOp)
-    //PinCell(req CellReq) error
-	
-	
-	// Initiates connection shutdown, cancelling all pending requests and declining any new requests.
-	// If/when 
-    //PoliteClose() 
-    
-}
 
 
 type CellID uint64
@@ -198,29 +152,42 @@ type CellReq struct {
 	Parent       *CellReq
 	PlanetID     uint64
 	Target       CellID
-	URI          string
+	CellURI      string
 	PinSchema    *AttrSchema
 	PinChildren  []*AttrSchema
-	
+	App          App         // App responding to this request
+	AppItem      interface{} // Optionally set by App.ResolveRequest()
 }
+
+// Signals to use the default App for a given AttrSchema DataModelURI.
+// See AttrSchema.AppURI in planet.proto 
+const DefaultAppForDataModel = "."
+
 // App creates a new Channel instance on demand when Planet.GetChannel() is called.
 // App and AppChannel consume the Planet and Channel interfaces to perform specialized functionality.
 // In general, a channel app should be specialized for a specific, taking inspiration from the legacy of unix util way-of-thinking.
 type App interface {
 
-	// Identifies this App's functionality and author.
+	// Identifies this App and usually has the form: "{domain_name}/{app_identifier}/v{MAJOR}.{MINOR}.{REV}"
 	AppURI() string
 	
-	// Maps a set of data model URIs to this App for handling.
+	// Lists data model URIs (i.e. data protocols) that this app handles.
+	// When the host session receives a client request with a specific data model URI, it will route it to the app that handles it.
 	DataModelURIs() []string
 		
 	// Attaches the given request to the requested cell until it is canceled or completed.
 	//PinCell(req *CellReq) (CellSub, error)
 	
 	// Resolves the given request to final target Planet and CellID that used to   
+	// An App typically sets an AppItem value so that PushCellState() are ready to work.
 	ResolveRequest(req *CellReq) error
 	
-	ServeCell(sub CellSub) error
+	// Called when the sub is new and needs a state refresh.  
+	// Makes calls to sub.PushUpdate() to dispatch state.
+	// Called on the goroutine owned by the the target cell. 
+	PushCellState(sub CellSub) error
+	
+	//GetLabel(sub CellSub) string
 
 	// Creates a new App instance that is bound to the given channel and starts it as a "child process" of the host / bound channel
 	// Blocks until the new AppChannel is in a valid and ready state.
@@ -229,33 +196,18 @@ type App interface {
 }
 
 
-// OpenCell?
-type CellInstance interface {
-	Context
-
-	//CellID() uint64
-	
-	// AddSub(echo CellSub) CellSub
-	// RemoveSub(sub CellSub)
-	
-	PushUpdate(batch MsgBatch)
-	
-	
-	// Callback when a sub has been added and is awaiting a state push 
-	//OnSubPinned(sub CellSub)
-
-	//PushTx(tx) error
-}
 
 
 
 type CellSub interface {
 
 	Req() *CellReq
-	
-	Cell() CellInstance
-		
+			
+	// Pushes copies of the msgs in the given batch to this sub, blocking until complete or canceled.
 	PushUpdate(batch MsgBatch) error
+	
+	//PushError(err error)
+	
 }
 
 
@@ -264,20 +216,11 @@ type User interface {
 }
 
 // MsgBatch is an ordered list os Msgs
-// See NewMsgBatch() for construction
-type MsgBatch interface {
-	
-	AddNew(count int) []*Msg
-	
-	AddMsgs(msgs []*Msg)
-
-	AddMsg(msg *Msg)
-	
-	Msgs() []*Msg
-	
-	// Reclaim is called when this MsgBatch is no longer referenced
-	Reclaim()
+// See NewMsgBatch()
+type MsgBatch struct {
+	Msgs []*Msg
 }
+
 
 
 // // PinnedCell?

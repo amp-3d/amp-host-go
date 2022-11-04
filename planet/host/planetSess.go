@@ -2,7 +2,7 @@ package host
 
 import (
 	"fmt"
-	"time"
+	"sync"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/genesis3systems/go-cedar/process"
@@ -10,13 +10,18 @@ import (
 	"github.com/genesis3systems/go-planet/symbol"
 )
 
-// func (pl *planetSess) GetSymbolID(value []byte) uint64 {
-// 	return uint64(pl.Table.GetSymbolID(value, false))
-// }
+// cellInst is a "mounted" cell servicing requests for a specific cell (typically one).
+// This can be thought of as the controller for one or more active cell pins.
+// cellService?  cellSupe?
+type cellInst struct {
+	process.Context // TODO: make custom lightweight later
 
-// func (pl *planetSess) LookupSymbolID(ID uint64) []byte {
-// 	return pl.Table.LookupID(symbol.ID(ID))
-// }
+	pl       *planetSess          // parent planet
+	subsHead *openReq             // single linked list of open reqs on this cell
+	subsMu   sync.Mutex           // mutex for subs
+	newReqs  chan *openReq        // new requests waiting for state
+	newTxns  chan planet.MsgBatch // txns to be pushed to subs
+}
 
 func (pl *planetSess) onStart(opts symbol.TableOpts) error {
 	var err error
@@ -64,31 +69,139 @@ func (pl *planetSess) SetSymbolID(value []byte, ID uint64) uint64 {
 	return uint64(pl.symTable.SetSymbolID(value, symbol.ID(ID)))
 }
 
-func (pl *planetSess) getCell(ID planet.CellID) (*cellInst, error) {
+func (pl *planetSess) getCell(ID planet.CellID) (cell *cellInst, err error) {
 	pl.cellsMu.Lock()
 	defer pl.cellsMu.Unlock()
 
-	cell := pl.cells[ID]
+	cell = pl.cells[ID]
 	if cell != nil {
-		return cell, nil
-	}
-
-	ctx, err := pl.Context.StartChild(&process.Task{
-		Label:     fmt.Sprintf("cell_%d", ID),
-		IdleClose: time.Minute,
-	})
-	if err != nil {
-		return nil, err
+		return
 	}
 
 	cell = &cellInst{
 		pl:      pl,
-		Context: ctx,
-		//cellID:  cellID,
+		newReqs: make(chan *openReq),
+		newTxns: make(chan planet.MsgBatch),
 	}
+
+	cell.Context, err = pl.Context.StartChild(&process.Task{
+		Label: fmt.Sprintf("Cell %d", ID),
+		OnRun: func(ctx process.Context) {
+
+			for running := true; running; {
+				var err error
+
+				// Manage incoming subs, push state to subs, and then maintain state for each sub.
+				select {
+				case req := <-cell.newReqs:
+					err = req.App.PushCellState(req)
+					{
+					} // TODO: add tracking to make sure a cell pushing state is propely closed, etc
+
+				case tx := <-cell.newTxns:
+					cell.pushToSubs(tx)
+
+				case <-cell.Context.Closing():
+					running = false
+				}
+
+				if err != nil {
+					panic(err)
+				}
+			}
+
+		},
+	})
+	if err != nil {
+		return
+	}
+
 	pl.cells[ID] = cell
 
-	return cell, nil
+	return
+}
+
+func (pl *planetSess) queueReq(cell *cellInst, req *openReq) error {
+	if req.cell != nil {
+		panic("already has sub")
+	}
+
+	var err error
+	if cell == nil {
+		cell, err = pl.getCell(req.Target)
+		if err != nil {
+			return err
+		}
+	}
+
+	req.cell = cell
+
+	cell.subsMu.Lock() // needed?  or just one pl mutex?
+	{
+		prev := &cell.subsHead
+		for *prev != nil {
+			prev = &((*prev).next)
+		}
+		*prev = req
+		req.next = nil
+
+		cell.newReqs <- req
+	}
+	cell.subsMu.Unlock()
+
+	return nil
+}
+
+func (pl *planetSess) cancelSub(req *openReq) {
+	cell := req.cell
+	if cell == nil /* || req.closed != 0 */ {
+		return
+	}
+
+	req.cell = nil
+
+	cell.subsMu.Lock()
+	{
+		prev := &cell.subsHead
+		for *prev != req && *prev != nil {
+			prev = &((*prev).next)
+		}
+		if *prev == req {
+			*prev = req.next
+			req.next = nil
+		} else {
+			panic("failed to find sub")
+		}
+	}
+	cell.subsMu.Unlock()
+
+	// N := len(csess.subs)
+	// for i := 0; i < N; i++ {
+	// 	if csess.subs[i] == remove {
+	// 		N--
+	// 		csess.subs[i] = csess.subs[N]
+	// 		csess.subs[N] = nil
+	// 		csess.subs = csess.subs[:N]
+	// 		break
+	// 	}
+	// }
+}
+
+func (cell *cellInst) pushToSubs(tx planet.MsgBatch) {
+
+	cell.subsMu.Lock()
+	defer cell.subsMu.Unlock()
+
+	for sub := cell.subsHead; sub != nil; sub = sub.next {
+		err := sub.PushUpdate(tx)
+		if err != nil {
+			panic(err)
+			// sub.Error("dropping client due to error", err)
+			// sub.Close()  // TODO: prevent deadlock since chSess.subsMu is locked
+			// chSess.subs[i] = nil
+		}
+	}
+
 }
 
 // This will be replaced in the future with generic use of GetCell() with a "user" App type.

@@ -21,7 +21,8 @@ type host struct {
 
 	homePlanetID uint64
 	home         *planetSess // Home planet of this host
-	apps         map[string]planet.App
+	appsByURI    map[string]planet.App
+	appsByModel  map[string]planet.App
 	plSess       map[uint64]*planetSess
 	plMu         sync.RWMutex
 }
@@ -37,9 +38,10 @@ func newHost(opts HostOpts) (planet.Host, error) {
 	}
 
 	host := &host{
-		opts:   opts,
-		apps:   make(map[string]planet.App),
-		plSess: make(map[uint64]*planetSess),
+		opts:        opts,
+		appsByURI:   make(map[string]planet.App),
+		appsByModel: make(map[string]planet.App),
+		plSess:      make(map[uint64]*planetSess),
 	}
 
 	// err = host.loadSeat()
@@ -210,6 +212,7 @@ func (host *host) mountPlanet(
 		planetID: planetID,
 		dbPath:   path.Join(host.opts.BasePath, string(fsName)),
 		cells:    make(map[planet.CellID]*cellInst),
+		//newReqs:  make(chan *openReq, 1),
 	}
 
 	// The db should already exist if opening and vice versa
@@ -255,15 +258,36 @@ func (host *host) mountPlanet(
 
 func (host *host) RegisterApp(app planet.App) error {
 	appURI := app.AppURI()
-	host.apps[appURI] = app
+	if appURI == "" {
+		return planet.ErrCode_InvalidURI.Error("invalid app URI")
+	}
+	host.appsByURI[appURI] = app
+
+	for _, modelURI := range app.DataModelURIs() {
+		if modelURI != "" {
+			host.appsByModel[modelURI] = app
+		}
+	}
 	return nil
 }
 
-func (host *host) GetRegisteredApp(appURI string) (planet.App, error) {
-	app := host.apps[appURI]
-	if app == nil {
-		return nil, planet.ErrCode_AppNotFound.Errorf("app not found: %v", appURI)
+func (host *host) SelectAppForSchema(schema *planet.AttrSchema) (planet.App, error) {
+	if schema == nil {
+		return nil, planet.ErrCode_AppNotFound.Errorf("missing schema")
 	}
+
+	if schema.AppURI != planet.DefaultAppForDataModel {
+		app := host.appsByURI[schema.AppURI]
+		if app != nil {
+			return app, nil
+		}
+	}
+
+	app := host.appsByModel[schema.DataModelURI]
+	if app == nil {
+		return nil, planet.ErrCode_AppNotFound.Errorf("App not found for schema: %s", schema.AbsURI())
+	}
+
 	return app, nil
 }
 
@@ -317,7 +341,7 @@ type planetSess struct {
 	dbPath   string                      // local pathname to db
 	db       *badger.DB                  // db access
 	cells    map[planet.CellID]*cellInst // cells that recently have one or more active cells (subscriptions)
-	cellsMu  sync.Mutex
+	cellsMu  sync.Mutex                  // cells mutex
 }
 
 type openReq struct {
@@ -330,7 +354,7 @@ type openReq struct {
 	next   *openReq // single linked list of same-cell reqs
 	echo   planet.CellSub
 
-	// sess        *hostSess        // TODO: replace .sess & .attr with int entry (fewer pointers)
+	// err    error
 	// attr        *planet.AttrSpec // if set, describes this attr (read-only).  if nil, all SeriesType_0 values are to be loaded.
 	// idle        uint32           // set when the pinnedRange reaches the target range
 	// pinnedRange Range            // the range currently mapped
@@ -342,11 +366,11 @@ func (req *openReq) Req() *planet.CellReq {
 	return &req.CellReq
 }
 
-func (req *openReq) Cell() planet.CellInstance {
-	return req.cell
-}
-
 func (req *openReq) PushUpdate(batch planet.MsgBatch) error {
+	if atomic.LoadUint32(&req.closed) != 0 {
+		return nil
+	}
+
 	var err error
 	if req.echo != nil {
 		err = req.echo.PushUpdate(batch)
@@ -355,7 +379,7 @@ func (req *openReq) PushUpdate(batch planet.MsgBatch) error {
 		return err
 	}
 
-	for _, src := range batch.Msgs() {
+	for _, src := range batch.Msgs {
 		msg := planet.CopyMsg(src)
 		err = req.pushReply(msg)
 		if err != nil {
@@ -395,7 +419,7 @@ func (req *openReq) closeReq(val interface{}) {
 
 		// first, remove this req as a sub if applicable
 		if cell := req.cell; cell != nil {
-			cell.removeSub(req)
+			cell.pl.cancelSub(req)
 		}
 
 		// next, send a close msg to the client
@@ -597,9 +621,13 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 		return err
 	}
 
-	parentReq, _ := sess.getReq(msg.ParentReqID, getReq)
-	if err != nil {
-		return err
+	if msg.ParentReqID != 0 {
+		parentReq, _ := sess.getReq(msg.ParentReqID, getReq)
+		if parentReq != nil {
+			err = planet.ErrCode_InvalidReq.Error("invalid ParentReqID")
+			return err
+		}
+		req.Parent = &parentReq.CellReq
 	}
 
 	var pinReq planet.PinReq
@@ -612,16 +640,13 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 		return err
 	}
 
-	app, err := sess.host.GetRegisteredApp(schema.AppURI)
+	req.App, err = sess.host.SelectAppForSchema(schema)
 	if err != nil {
 		return err
 	}
 
-	if parentReq != nil {
-		req.Parent = &parentReq.CellReq
-	}
 	req.Target = planet.CellID(msg.TargetCellID)
-	req.URI = pinReq.CellURI
+	req.CellURI = pinReq.CellURI
 	req.PinSchema = schema
 	req.PinChildren = make([]*planet.AttrSchema, len(pinReq.ChildSchemas))
 
@@ -632,7 +657,7 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 		}
 	}
 
-	err = app.ResolveRequest(&req.CellReq)
+	err = req.App.ResolveRequest(&req.CellReq)
 	if err != nil {
 		return err
 	}
@@ -648,29 +673,10 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 		return err
 	}
 
-	req.cell, err = pl.getCell(req.Target)
+	err = pl.queueReq(nil, req)
 	if err != nil {
 		return err
 	}
-
-	req.cell.addSub(req)
-
-	// TODO:
-	//   - inside its own goroutine
-	//   - serve cell then seamlessly make sub push msg batches once idle
-	err = app.ServeCell(req)
-	if err != nil {
-		return err
-	}
-	
-	//go app.serveReq(req)
-
-	// go func() {
-	// 	err := sess.serveState(req)
-	// 	if err != nil {
-	// 		//sess.closeReq(req.reqID, err)
-	// 	}
-	// }()
 
 	return nil
 }
