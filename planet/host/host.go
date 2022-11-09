@@ -232,6 +232,7 @@ func (host *host) mountPlanet(
 			}
 			return pl.onStart(opts)
 		},
+		OnRun: pl.onRun,
 		OnClosed: pl.onClosed,
 	}
 
@@ -409,7 +410,7 @@ func (req *openReq) pushReply(msg *planet.Msg) error {
 	return err
 }
 
-func (req *openReq) closeReq(val interface{}) {
+func (req *openReq) closeReq(pushClose bool, msgVal interface{}) {
 	if req == nil {
 		return
 	}
@@ -423,36 +424,36 @@ func (req *openReq) closeReq(val interface{}) {
 		}
 
 		// next, send a close msg to the client
-		msg := planet.NewMsg()
-		msg.Op = planet.MsgOp_CloseReq
-		if val != nil {
-			msg.SetVal(val)
+		if pushClose {
+			msg := planet.NewMsg()
+			msg.Op = planet.MsgOp_CloseReq
+			if msgVal != nil {
+				msg.SetVal(msgVal)
+			}
+			req.pushReply(msg)
 		}
-		req.pushReply(msg)
 
 		// finally, close the cancel chan now that the close msg has been pushed
 		close(req.cancel)
 	}
 }
 
-func (sess *hostSess) closeReq(reqID uint64, val interface{}) {
-
+func (sess *hostSess) closeReq(reqID uint64, pushClose bool, msgVal interface{}) {
 	req, _ := sess.getReq(reqID, removeReq)
 	if req != nil {
-		req.closeReq(val)
-	} else {
-		msg := planet.NewMsg()
-		msg.ReqID = reqID
-		msg.Op = planet.MsgOp_CloseReq
-
-		sess.pushMsg(msg, val)
+		req.closeReq(pushClose, msgVal)
+	} else if pushClose {
+		sess.pushMsg(reqID, planet.MsgOp_CloseReq, msgVal)
 	}
 }
 
-// pushMsg send the give msg to the client, blocking until it is sent
-func (sess *hostSess) pushMsg(msg *planet.Msg, value interface{}) {
-	if value != nil {
-		msg.SetVal(value)
+func (sess *hostSess) pushMsg(reqID uint64, msgOp planet.MsgOp, msgVal interface{}) {
+	msg := planet.NewMsg()
+	msg.ReqID = reqID
+	msg.Op = msgOp
+
+	if msgVal != nil {
+		msg.SetVal(msgVal)
 	}
 	select {
 	case sess.msgsOut <- msg:
@@ -472,18 +473,13 @@ func (sess *hostSess) LoggedIn() planet.User {
 	return sess.user
 }
 
-// // IssueEphemeralID issued a new ID that will persist
-// func (sess *hostSess) IssueEphemeralID() uint64 {
-// 	return (atomic.AddUint64(&sess.nextID, 1) << 1) + 1
-// }
-
 func (sess *hostSess) consumeInbox() {
 	for running := true; running; {
 		select {
 
 		case msg := <-sess.msgsIn:
 			if msg != nil && msg.Op != planet.MsgOp_NoOp {
-				closeReq := false
+				closeReq := true
 
 				var err error
 				switch msg.Op {
@@ -494,31 +490,24 @@ func (sess *hostSess) consumeInbox() {
 					closeReq = err != nil
 				case planet.MsgOp_ResolveAndRegister:
 					err = sess.resolveAndRegister(msg)
-					closeReq = true
 				case planet.MsgOp_Login:
 					err = sess.login(msg)
-					closeReq = true
 				case planet.MsgOp_CloseReq:
-					closeReq = true
 				default:
 					err = planet.ErrCode_UnsupportedOp.Errorf("unknown MsgOp: %v", msg.Op)
 				}
 
 				if closeReq {
-					sess.closeReq(msg.ReqID, err)
+					sess.closeReq(msg.ReqID, true, err)
 				}
 			}
-			//msg.Reclaim() // TODO: this
+			msg.Reclaim()
 
 		case <-sess.Closing():
 			sess.cancelAll()
 			running = false
 		}
 	}
-}
-
-func (sess *hostSess) cancelAll() {
-	// TODO
 }
 
 func (host *host) login(msg *planet.Msg) (planet.User, error) {
@@ -571,7 +560,7 @@ func (sess *hostSess) resolveAndRegister(msg *planet.Msg) error {
 		return err
 	}
 
-	sess.pushMsg(msg, &defs)
+	sess.pushMsg(msg.ReqID, planet.MsgOp_CloseReq, nil)
 	return nil
 }
 
@@ -582,6 +571,16 @@ const (
 	removeReq
 	getReq
 )
+
+func (sess *hostSess) cancelAll() {
+	sess.openReqsMu.Lock()
+	defer sess.openReqsMu.Unlock()
+
+	for reqID, req := range sess.openReqs {
+		req.closeReq(false, nil)
+		delete(sess.openReqs, reqID)
+	}
+}
 
 // onReq performs the given pinVerb on given reqID and returns its openReq
 func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *openReq, err error) {

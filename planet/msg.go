@@ -105,7 +105,6 @@ func (msg *Msg) Reclaim() {
 }
 
 func (msg *Msg) SetValBuf(valType ValType, sz int) {
-
 	msg.ValInt = int64(sz)
 	msg.ValType = uint64(valType)
 	if sz > cap(msg.ValBuf) {
@@ -113,7 +112,6 @@ func (msg *Msg) SetValBuf(valType ValType, sz int) {
 	} else {
 		msg.ValBuf = msg.ValBuf[:sz]
 	}
-
 }
 
 func (msg *Msg) SetVal(value interface{}) {

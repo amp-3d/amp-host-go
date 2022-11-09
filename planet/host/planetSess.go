@@ -3,6 +3,7 @@ package host
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/badger/v3"
 	"github.com/genesis3systems/go-cedar/process"
@@ -14,6 +15,7 @@ import (
 // This can be thought of as the controller for one or more active cell pins.
 // cellService?  cellSupe?
 type cellInst struct {
+	planet.CellID
 	process.Context // TODO: make custom lightweight later
 
 	pl       *planetSess          // parent planet
@@ -21,6 +23,7 @@ type cellInst struct {
 	subsMu   sync.Mutex           // mutex for subs
 	newReqs  chan *openReq        // new requests waiting for state
 	newTxns  chan planet.MsgBatch // txns to be pushed to subs
+	idleSecs int32                // ticks up as time passes when there are no subs
 }
 
 func (pl *planetSess) onStart(opts symbol.TableOpts) error {
@@ -39,6 +42,20 @@ func (pl *planetSess) onStart(opts symbol.TableOpts) error {
 	}
 
 	return nil
+}
+
+func (pl *planetSess) onRun(process.Context) {
+	const period = 60
+	timer := time.NewTicker(period * time.Second)
+	for running := true; running; {
+		select {
+		case <-timer.C:
+			pl.closeIdleCells(period)
+		case <-pl.Closing():
+			running = false
+		}
+	}
+	timer.Stop()
 }
 
 func (pl *planetSess) onClosed() {
@@ -69,10 +86,26 @@ func (pl *planetSess) SetSymbolID(value []byte, ID uint64) uint64 {
 	return uint64(pl.symTable.SetSymbolID(value, symbol.ID(ID)))
 }
 
+func (pl *planetSess) closeIdleCells(deltaSecs int32) {
+	pl.cellsMu.Lock()
+	defer pl.cellsMu.Unlock()
+
+	const idleCloseDelay = 3*60 - 1
+
+	// With the cells locked, we can check and close idle cells
+	for _, cell := range pl.cells {
+		if cell.idleTick(deltaSecs) > idleCloseDelay {
+			delete(pl.cells, cell.CellID)
+			cell.Close()
+		}
+	}
+}
+
 func (pl *planetSess) getCell(ID planet.CellID) (cell *cellInst, err error) {
 	pl.cellsMu.Lock()
 	defer pl.cellsMu.Unlock()
 
+	// If the cell is already open, we're done
 	cell = pl.cells[ID]
 	if cell != nil {
 		return
@@ -80,12 +113,13 @@ func (pl *planetSess) getCell(ID planet.CellID) (cell *cellInst, err error) {
 
 	cell = &cellInst{
 		pl:      pl,
+		CellID:  ID,
 		newReqs: make(chan *openReq),
 		newTxns: make(chan planet.MsgBatch),
 	}
 
 	cell.Context, err = pl.Context.StartChild(&process.Task{
-		Label: fmt.Sprintf("Cell %d", ID),
+		Label: fmt.Sprintf("cell_%d", cell.CellID),
 		OnRun: func(ctx process.Context) {
 
 			for running := true; running; {
@@ -94,9 +128,8 @@ func (pl *planetSess) getCell(ID planet.CellID) (cell *cellInst, err error) {
 				// Manage incoming subs, push state to subs, and then maintain state for each sub.
 				select {
 				case req := <-cell.newReqs:
+					// TODO: verify that a cell pushing state doesn't escape idle or close analysis
 					err = req.App.PushCellState(req)
-					{
-					} // TODO: add tracking to make sure a cell pushing state is propely closed, etc
 
 				case tx := <-cell.newTxns:
 					cell.pushToSubs(tx)
@@ -147,6 +180,7 @@ func (pl *planetSess) queueReq(cell *cellInst, req *openReq) error {
 
 		cell.newReqs <- req
 	}
+	cell.idleSecs = 0
 	cell.subsMu.Unlock()
 
 	return nil
@@ -187,8 +221,15 @@ func (pl *planetSess) cancelSub(req *openReq) {
 	// }
 }
 
-func (cell *cellInst) pushToSubs(tx planet.MsgBatch) {
+func (cell *cellInst) idleTick(deltaSecs int32) int32 {
+	if cell.subsHead != nil {
+		return 0
+	}
+	cell.idleSecs += deltaSecs
+	return cell.idleSecs
+}
 
+func (cell *cellInst) pushToSubs(tx planet.MsgBatch) {
 	cell.subsMu.Lock()
 	defer cell.subsMu.Unlock()
 
