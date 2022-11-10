@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"os"
 	"path"
 	"time"
 
@@ -62,6 +63,8 @@ func main() {
 
 	gracefulStopSignal, immediateStopSignal := log.AwaitInterrupt()
 
+	host.Infof(0, "Graceful stop: \x1b[1m^C\x1b[0m or \x1b[1mkill -s SIGINT %d\x1b[0m", /*, or \x1b[1mkill -9 %d\x1b[0m", os.Getpid(),*/ os.Getpid())
+
 	go func() {
 		<-gracefulStopSignal
 		srv.Info(2, "<-gracefulStopSignal")
@@ -76,7 +79,7 @@ func main() {
 	}()
 
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(time.Minute)
 		debugAbort := int(0)
 		for debugAbort == 0 {
 			tick := <-ticker.C
@@ -88,8 +91,13 @@ func main() {
 
 		host.Close()
 	}()
-
+	
+	// Block on grpc shutdown completion, then initiate host shutdown.
+	<-srv.Done()
+	host.Close()
+	
+	// Block on host shutdown completion
 	<-host.Done()
-
+	
 	klog.Flush()
 }

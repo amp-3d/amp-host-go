@@ -44,15 +44,15 @@ func (srv *grpcServer) attachAndStart(label string) error {
 		Label:     label,
 		IdleClose: time.Nanosecond,
 		OnRun: func(ctx process.Context) {
-			srv.Infof(0, "Serving \x1b[1;32m%v %v\x1b[0m", srv.opts.ListenNetwork, srv.opts.ListenAddr)
+			srv.Infof(0, "Serving on \x1b[1;32m%v %v\x1b[0m", srv.opts.ListenNetwork, srv.opts.ListenAddr)
 			srv.server.Serve(lis)
-			srv.Info(1, "GrpcServer.Serve() COMPLETE")
+			srv.Info(2, "Serve COMPLETE")
 		},
 		OnClosing: func() {
 			if srv.server != nil {
-				srv.Info(1, "GrpcServer.Stop()")
+				srv.Info(1, "Stop")
 				srv.server.Stop()
-				srv.Info(1, "GrpcServer.Stop() COMPLETE")
+				srv.Info(2, "Stop COMPLETE")
 			}
 		},
 	})
@@ -65,9 +65,9 @@ func (srv *grpcServer) attachAndStart(label string) error {
 
 func (srv *grpcServer) GracefulStop() {
 	if srv.server != nil {
-		srv.Info(0, "GrpcServer.GracefulStop")
+		srv.Info(0, "GracefulStop")
 		srv.server.GracefulStop()
-		srv.Info(1, "GrpcServer.GracefulStop COMPLETE")
+		srv.Info(2, "GracefulStop COMPLETE")
 	}
 }
 

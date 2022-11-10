@@ -21,7 +21,7 @@ GOFILES = $(shell find . -type f -name '*.go')
 .PHONY: build protos
 
 ## build lib-phost
-build:  lib-phost
+build:  phost lib-phost
 
 
 #
@@ -40,6 +40,12 @@ lib-phost: $(GOFILES)
 		go build -trimpath -o ../../${BUILD_OUTPUT}/lib-phost.so -buildmode=c-shared main.go
 	rm ${BUILD_OUTPUT}/lib-phost.h
 
+# build phost command line daemon
+phost: $(GOFILES)
+	touch cmd/phost/main.go
+	cd cmd/phost && \
+		GOOS=darwin GOARCH=amd64 \
+		go build .
 	
 ## GrpcTools (2.49.1)
 ## Install protoc & grpc_csharp_plugin:
