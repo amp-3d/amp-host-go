@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"os"
 	"path"
@@ -23,10 +24,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
-	defaultDataDir := path.Join(exePath, "phost.data")
+	defaultDataPath := path.Join(exePath, "phost.data")
 
-	hostPort := flag.Int("port", int(planet.Const_DefaultGrpcServicePort), "Sets the port used to bind HostGrpc service")
-	dataDir := flag.String("data", defaultDataDir, "Specifies the path for all file access and storage")
+	hostPort := flag.Int("host-port", int(planet.Const_DefaultGrpcServicePort), "Sets the port used to bind HostGrpc service")
+	showTree := flag.Int("show-tree", 0, "Prints the process tree periodically, checking every given number of seconds")
+	dataPath := flag.String("data-path", defaultDataPath, "Specifies the path for all file access and storage")
 
 	flag.Set("logtostderr", "true")
 	flag.Set("v", "2")
@@ -44,14 +46,14 @@ func main() {
 	flag.Parse()
 
 	params := host.HostOpts{
-		BasePath: *dataDir,
+		BasePath: *dataPath,
 	}
 
 	host, err := host.StartNewHost(params)
 	if err != nil {
 		log.Fatalf("failed to start new host: %v", err)
 	}
-	
+
 	host.RegisterApp(vibe.NewApp())
 	host.RegisterApp(filesys.NewApp())
 
@@ -63,7 +65,7 @@ func main() {
 
 	gracefulStopSignal, immediateStopSignal := log.AwaitInterrupt()
 
-	host.Infof(0, "Graceful stop: \x1b[1m^C\x1b[0m or \x1b[1mkill -s SIGINT %d\x1b[0m", /*, or \x1b[1mkill -9 %d\x1b[0m", os.Getpid(),*/ os.Getpid())
+	host.Infof(0, "Graceful stop: \x1b[1m^C\x1b[0m or \x1b[1mkill -s SIGINT %d\x1b[0m" /*, or \x1b[1mkill -9 %d\x1b[0m", os.Getpid(),*/, os.Getpid())
 
 	go func() {
 		<-gracefulStopSignal
@@ -78,26 +80,62 @@ func main() {
 		srv.Close()
 	}()
 
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		debugAbort := int(0)
-		for debugAbort == 0 {
-			tick := <-ticker.C
-			process.PrintContextTree(host, nil, 2)
-			if tick.IsZero() {
-				debugAbort = 1
-			}
-		}
+	if *showTree > 0 {
+		go PrintTreePeriodically(host, time.Duration(*showTree)*time.Second, 2)
+	}
 
-		host.Close()
-	}()
-	
 	// Block on grpc shutdown completion, then initiate host shutdown.
 	<-srv.Done()
 	host.Close()
-	
+
 	// Block on host shutdown completion
 	<-host.Done()
-	
+
 	klog.Flush()
+}
+
+func PrintTreePeriodically(ctx process.Context, period time.Duration, verboseLevel int32) {
+	block := [32]byte{}
+	var text []byte
+	buf := bytes.Buffer{}
+	buf.Grow(256)
+
+	ticker := time.NewTicker(period)
+	for running := true; running; {
+		select {
+		case <-ticker.C:
+			{
+				process.PrintContextTree(ctx, &buf, verboseLevel)
+				R := buf.Len()
+				if R != len(text) {
+					if cap(text) < R {
+						text = make([]byte, R, (R+0x1FF)&^0x1FF)
+					} else {
+						text = text[:R]
+					}
+				}
+				same := true
+				for pos := 0; pos < R; {
+					n, _ := buf.Read(block[:])
+					if n == 0 {
+						break
+					}
+					if same {
+						same = bytes.Equal(block[:n], text[pos:pos+n])
+					}
+					if !same {
+						copy(text[pos:], block[:n])
+					}
+					pos += n
+				}
+				if !same {
+					ctx.Info(verboseLevel, string(text[:R]))
+				}
+				buf.Reset()
+			}
+		case <-ctx.Closing():
+			running = false
+		}
+	}
+	ticker.Stop()
 }
