@@ -1,7 +1,7 @@
 syntax = "proto3";
 package crates;
 
-option csharp_namespace = "Genesis3.Crates";
+option csharp_namespace = "Planet3.Crates";
 
 
 
@@ -72,15 +72,16 @@ message AppVars {
 message AssetEntry {
 
     // AssetFlags specifies properties about this AssetEntry.
-                AssetFlags          AssetFlags                  = 1;
-                string              BrowsePath                  = 2;        // DEPRECATED -- this disappears when we have a real browsing system (vs a HFS/path based system)
+                AssetFlags          Flags                       = 1;
+    
+    // URI is a unix-style pathname that identifies an asset within a crate.
+    // By convention this URI does *not* start or end with '/'
+    // An asset URI has the form "{CrateURI}/{EntryURI}"
+    // If two or more assets have same EntryURI then only one is accessible.
+                string              EntryURI                    = 2; 
                 
     // Name is the human-readable label for this asset.
-                string              Label                        = 3;
-                
-    // AssetID is a unique string name that identifies this asset for a given crate.
-    // If two or more assets have the same AssetID, then only one is accessible.
-                string              AssetID                     = 4;
+                string              Label                       = 3;
                 
     // CenterX and CenterZ specify the positional center of this asset (and are typically 0).
     // CenterY is the distance above the baseline (y=0) to the y center-point height of this asset.
@@ -94,6 +95,9 @@ message AssetEntry {
                 float               ExtentsY                    = 11;
                 float               ExtentsZ                    = 12;
 
+    // Reserved for runtime use -- defaults to empty
+                string              LocalURI                    = 30;
+                
     // Comma delimited and whitespace-trimmed list of of tags  
                 string              Tags                        = 31;
 
@@ -202,7 +206,7 @@ message CrateInfo {
 // It contains catalog and type info that PLAN loads at runtime to know what's inside binary asset bundles without having to load them.
 //
 // A reference to a PLAN asset is via a URI with the form:
-//   assetURI := "PublisherID/CrateID[@CrateBuildID]/AssetID"
+//   assetURI := "PublisherID/CrateID[@CrateBuildID]/{AssetEntry.Pathname}"
 // 
 message CrateManifest {
 
