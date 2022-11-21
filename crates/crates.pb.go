@@ -285,7 +285,7 @@ type AssetEntry struct {
 	ExtentsX float32 `protobuf:"fixed32,10,opt,name=ExtentsX,proto3" json:"ExtentsX,omitempty"`
 	ExtentsY float32 `protobuf:"fixed32,11,opt,name=ExtentsY,proto3" json:"ExtentsY,omitempty"`
 	ExtentsZ float32 `protobuf:"fixed32,12,opt,name=ExtentsZ,proto3" json:"ExtentsZ,omitempty"`
-	// Ignored; available for dynamic use.
+	// Reserved for runtime use -- defaults to empty
 	LocalURI string `protobuf:"bytes,30,opt,name=LocalURI,proto3" json:"LocalURI,omitempty"`
 	// Comma delimited and whitespace-trimmed list of of tags
 	Tags string `protobuf:"bytes,31,opt,name=Tags,proto3" json:"Tags,omitempty"`

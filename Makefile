@@ -2,8 +2,8 @@ MAKEFLAGS += --warn-undefined-variables
 SHELL = /bin/bash -o nounset -o errexit -o pipefail
 .DEFAULT_GOAL = build
 UNITY_ASSETS_DIR = ../unity-app/Assets
-UNITY_PLANETXR_DIR = ${UNITY_ASSETS_DIR}/Genesis3/PlanetXR
-BUILD_OUTPUT = ${UNITY_ASSETS_DIR}/Plugins/Genesis3/PlanetXR
+UNITY_PLANETXR_DIR = ${UNITY_ASSETS_DIR}/Planet3/PlanetXR
+BUILD_OUTPUT = ${UNITY_ASSETS_DIR}/Plugins/Planet3/PlanetXR
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
 
 ## display this help message

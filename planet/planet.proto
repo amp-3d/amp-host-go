@@ -7,7 +7,7 @@ package planet;
 // https://stackoverflow.com/questions/43026449/gogo-proto-file-not-found
 // import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
-option csharp_namespace = "Genesis3.PlanetXR";
+option csharp_namespace = "Planet3.PlanetXR";
 
 
 // High-level channel repository RPC.
@@ -104,7 +104,6 @@ enum ValType {
 
     ValType_LiteralMax         = 299;
 }
-
 
 
 
