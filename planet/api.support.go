@@ -17,11 +17,11 @@ const TIDStringLen = int(Const_TIDStringLen)
 // nilTID is a zeroed TID that denotes a void/nil/zero value of a TID
 var nilTID = TIDBuf{}
 
-// TimeFS is the UTC in 1/1<<16 seconds elapsed since Jan 1, 1970 UTC ("FS" = fractional seconds)
+// TimeFS is a signed int64 that stores a UTC in 1/2^16 sec ticks elapsed since Jan 1, 1970 UTC ("FS" = fractional seconds)
 //
 // timeFS := TimeNowFS()
 //
-// Shifting this right 16 bits will yield stanard Unix time.
+// Shifting this right 16 bits will yield standard Unix time.
 // This means there are 47 bits dedicated for seconds, implying max timestamp of 4.4 million years.
 type TimeFS int64
 
@@ -31,8 +31,11 @@ const (
 
 // TimeNowFS returns the current time (a standard unix UTC timestamp in 1/1<<16 seconds)
 func TimeNowFS() TimeFS {
-	t := time.Now()
+	return ConvertToTimeFS(time.Now())
+}
 
+// Converts a time.Time to a TimeFS.
+func ConvertToTimeFS(t time.Time) TimeFS {
 	timeFS := t.Unix() << 16
 	frac := uint16((2199 * (uint32(t.Nanosecond()) >> 10)) >> 15)
 	return TimeFS(timeFS | int64(frac))
@@ -201,6 +204,62 @@ func (tid TID) CopyNext(inTID TID) {
 	}
 }
 
-func (schema *AttrSchema) AbsURI() string {
-	return path.Join(schema.AppURI, schema.DataModelURI, schema.SchemaURI)
+func (schema *AttrSchema) SchemaDesc() string {
+	return path.Join(schema.AppURI, schema.DataModelURI, schema.SchemaName)
+}
+
+func (schema *AttrSchema) LookupAttr(attrURI string) *AttrSpec {
+	for _, attr := range schema.Attrs {
+		if attr.AttrURI == attrURI {
+			return attr
+		}
+	}
+	return nil
+}
+
+func (req *CellReq) GetChildSchema(modelURI string) *AttrSchema {
+	for _, schema := range req.ChildSchemas {
+		if schema.DataModelURI == modelURI {
+			return schema
+		}
+	}
+	return nil
+}
+
+func (req *CellReq) PushInsertChildCell(target CellID, schema *AttrSchema) {
+	if schema != nil {
+		m := NewMsg()
+		m.TargetCellID = target.U64()
+		m.Op = MsgOp_InsertChildCell
+		m.ValType = uint64(ValType_SchemaID)
+		m.ValInt = int64(schema.SchemaID)
+		req.PushMsg(m)
+	}
+}
+
+func (req *CellReq) PushAttr(target CellID, schema *AttrSchema, attrURI string, attrVal interface{}) {
+	attr := schema.LookupAttr(attrURI)
+	if attr == nil {
+		return
+	}
+
+	m := NewMsg()
+	m.TargetCellID = target.U64()
+	m.Op = MsgOp_PushAttr
+	m.AttrID = attr.AttrID
+	if attr.SeriesType == SeriesType_Fixed {
+		m.SI = attr.Fixed_SI
+	}
+	m.SetVal(attrVal)
+	req.PushMsg(m)
+}
+
+func (req *CellReq) PushCheckpoint(err error) {
+	m := NewMsg()
+	m.Op = MsgOp_Commit
+	m.TargetCellID = req.Target.U64()
+	if err != nil {
+		m.SetVal(err)
+	}
+	req.PushMsg(m)
 }

@@ -238,7 +238,7 @@ message Msg {
     
     uint64              FromID          = 11;
 
-    uint32              AttrID          = 15;
+    int32               AttrID          = 15;
 
     // SI ("Series Index") associates and binds a value to and int64 key.
     // By convention, this is 48.16 fixed signed fractional seconds (one second == 0x10000 ticks), naming a time duration or timestamp.
@@ -377,22 +377,18 @@ message AttrSchema {
     //      "spotify/v1/artist"
     //      "spotify/v1/album"
     //      "spotify/v1/track"
-    //      "hfs1/directory"
-    //      "hfs1/fstat"
+    //      "filesys/dir"
+    //      "filesys/fil"
     string              DataModelURI = 3;
 
-    // SchemaURI names this particular AttrSchema, a particular collection of AttrSpecs (and so is implicitly scoped within DataModelURI).
-    // Typically, a UI Cell view specifies a unique SchemaURI for the set of attrs it wants to display, meaning this field tends to correspond to a particular cell "view".
-    // The host (and its apps) don't typically even look at this URI since "{DataModelURI}/{Attrs[i].AttrURI}" specifies each attr's data model URI.
-    // e.g. for DataModelURI == "spotify/v1/album":
-    //      "ux1/item.1x1.cell"
-    //      "ux1/item.row.cell"
-    //      "ux1/detailed.row.cell"
-    string              SchemaURI = 4;
+    // This describes this *particular* AttrSchema, a particular collection of AttrSpecs (and is implicitly scoped within DataModelURI).
+    // The host (and its apps) generally don't even look at this field since "{DataModelURI}/{Attrs[i].AttrURI}" fully specifies each attr's data model URI.
+    // The can use this for internal identification, usually to link this schema to particular cell view binding.
+    string              SchemaName = 4;
 
     // SchemaID is a non-zero, unique, client-generated ID that is bound to this AttrSchema (and registered during RegisterAndResolve).
     // This ID is used in PinReq to specify this particular AttrSchema and persists for the duration of the host session.
-    uint32              SchemaID = 6; // [(gogoproto.customname) = "SchemaID"];
+    int32               SchemaID = 6; // [(gogoproto.customname) = "SchemaID"];
 
     // Attrs binds a set of AttrSpecs to this SchemaURI.
     repeated AttrSpec   Attrs = 8;
@@ -423,7 +419,7 @@ message AttrSpec {
     // AttrID is a non-zero, client-generated ID that is bound to the given AttrURI during RegisterAndResolve.
     // This identifies which attr is being updated in a PushAttr Msg and can be thought of as a binding to a given UI entity.
     // Multiple AttrURIs can be bound to the same AttrID and is useful when funneling multiple data model attrs to a single UI element for unified handling.
-    uint32              AttrID = 4;
+    int32               AttrID = 4;
 
     // SeriesType specifies how the client interprets the attr domain SeriesIndex ("SI") integer.
     // Scalar (non-array-like) attrs are typically SeriesType_Fixed since a particular SI value is fixed or "hard-wired" to the given AttrURI.
@@ -456,12 +452,12 @@ message PinReq {
     // This is typically omitted since the given SchemaID + CellID imply which cell is being pinned. 
     string              CellURI = 2;
 
-    // SchemaID specifies an AttrSchema, implying which attrs of the pinned cell are to be pushed to the client.
-    uint32              SchemaID = 3; 
+    // Specifies an AttrSchema for the parent cell to be pinned, which specifies which attrs of the parent cell will be pushed to the client.
+    int32               ParentSchemaID = 3; 
     
     // ChildSchemas specifies which child cell types should be pushed (and which attr schema they should be pushed with).
     // If empty, no child cells are pushed.
-    repeated uint32     ChildSchemas = 4; 
+    repeated int32      ChildSchemas = 4; 
     
     // Explicit list of SI values or CellIDs to be pinned
     //repeated uint64     CellIDs         = 15;

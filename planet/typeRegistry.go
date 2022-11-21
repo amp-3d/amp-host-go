@@ -16,14 +16,14 @@ type schemaDef struct {
 type typeRegistry struct {
 	mu    sync.Mutex
 	table symbol.Table
-	defs  map[uint32]schemaDef
+	defs  map[int32]schemaDef
 	//nameLookup map[string]uint64
 }
 
 func NewTypeRegistry(table symbol.Table) TypeRegistry {
 	reg := &typeRegistry{
 		table: table,
-		defs:  make(map[uint32]schemaDef),
+		defs:  make(map[int32]schemaDef),
 	}
 	// if table == nil {
 	// 	reg.nameLookup = make(map[string]uint64)
@@ -47,7 +47,7 @@ func NewTypeRegistry(table symbol.Table) TypeRegistry {
 // 	return def.Spec
 // }
 
-func (reg *typeRegistry) GetSchemaByID(schemaID uint32) (*AttrSchema, error) {
+func (reg *typeRegistry) GetSchemaByID(schemaID int32) (*AttrSchema, error) {
 	def := reg.defs[schemaID]
 	if def.Schema == nil {
 		return nil, ErrCode_TypeNotFound.Errorf("Schema %v not found", schemaID)
@@ -103,8 +103,8 @@ func (reg *typeRegistry) resolveSchema(schema *AttrSchema) error {
 		return ErrCode_BadSchema.Error("DataModelURI missing")
 	}
 
-	if !cleanURI(&schema.SchemaURI) {
-		return ErrCode_BadSchema.Error("SchemaURI missing")
+	if !cleanURI(&schema.SchemaName) {
+		return ErrCode_BadSchema.Error("SchemaName missing")
 	}
 
 	if schema.SchemaID == 0 {
@@ -114,19 +114,19 @@ func (reg *typeRegistry) resolveSchema(schema *AttrSchema) error {
 	for i, attr := range schema.Attrs {
 
 		if !cleanURI(&attr.AttrURI) {
-			return ErrCode_BadSchema.Errorf("missing Attrs[%d].AttrURI in schema %s", i, schema.AbsURI())
+			return ErrCode_BadSchema.Errorf("missing Attrs[%d].AttrURI in schema %s", i, schema.SchemaDesc())
 		}
 
 		if attr.AttrID == 0 {
-			return ErrCode_BadSchema.Errorf("missing Attrs[%d].AttrID in schema %s for attr %s", i, schema.AbsURI(), attr.AttrURI)
+			return ErrCode_BadSchema.Errorf("missing Attrs[%d].AttrID in schema %s for attr %s", i, schema.SchemaDesc(), attr.AttrURI)
 		}
 
 		if attr.SeriesType != SeriesType_Fixed && attr.Fixed_SI != 0 {
-			return ErrCode_BadSchema.Errorf("Attrs[%d].Fixed_SI is set but is ignored in schema %s for attr %s", i, schema.AbsURI(), attr.AttrURI)
+			return ErrCode_BadSchema.Errorf("Attrs[%d].Fixed_SI is set but is ignored in schema %s for attr %s", i, schema.SchemaDesc(), attr.AttrURI)
 		}
 
 		if !cleanURI(&attr.ValTypeURI) {
-			return ErrCode_BadSchema.Errorf("missing Attrs[%d].ValTypeURI in schema %s for attr %s", i, schema.AbsURI(), attr.AttrURI)
+			return ErrCode_BadSchema.Errorf("missing Attrs[%d].ValTypeURI in schema %s for attr %s", i, schema.SchemaDesc(), attr.AttrURI)
 		}
 
 		// if attr.ValTypeID == 0 {

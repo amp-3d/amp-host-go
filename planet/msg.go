@@ -3,6 +3,7 @@ package planet
 import (
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/genesis3systems/go-planet/symbol"
 )
@@ -10,11 +11,11 @@ import (
 // Sets a reasonable size beyond which buffers should be shared rather than copied.
 const MsgValBufCopyLimit = 16 * 1024
 
-func NewMsgBatch() MsgBatch {
-	return gMsgBatchPool.Get().(MsgBatch)
+func NewMsgBatch() *MsgBatch {
+	return gMsgBatchPool.Get().(*MsgBatch)
 }
 
-func (batch *MsgBatch) Reset(count int) []*Msg{
+func (batch *MsgBatch) Reset(count int) []*Msg {
 	if count > cap(batch.Msgs) {
 		msgs := make([]*Msg, count)
 		copy(msgs, batch.Msgs)
@@ -22,7 +23,7 @@ func (batch *MsgBatch) Reset(count int) []*Msg{
 	} else {
 		batch.Msgs = batch.Msgs[:count]
 	}
-	
+
 	// Alloc or init  each msg
 	for i, msg := range batch.Msgs {
 		if msg == nil {
@@ -31,11 +32,11 @@ func (batch *MsgBatch) Reset(count int) []*Msg{
 			msg.Init()
 		}
 	}
-	
+
 	return batch.Msgs
 }
 
-func (batch *MsgBatch) AddNew(count int) []*Msg{
+func (batch *MsgBatch) AddNew(count int) []*Msg {
 	N := len(batch.Msgs)
 	for i := 0; i < count; i++ {
 		batch.Msgs = append(batch.Msgs, NewMsg())
@@ -47,8 +48,10 @@ func (batch *MsgBatch) AddMsgs(msgs []*Msg) {
 	batch.Msgs = append(batch.Msgs, msgs...)
 }
 
-func (batch *MsgBatch) AddMsg(msg *Msg) {
-	batch.Msgs = append(batch.Msgs, msg)
+func (batch *MsgBatch) AddMsg() *Msg {
+	m := NewMsg()
+	batch.Msgs = append(batch.Msgs, m)
+	return m
 }
 
 func (batch *MsgBatch) Reclaim() {
@@ -104,6 +107,12 @@ func (msg *Msg) Reclaim() {
 	}
 }
 
+func (msg *Msg) SetValInt(valType ValType, valInt int64) {
+	msg.ValType = uint64(valType)
+	msg.ValInt = valInt
+	msg.ValBuf = msg.ValBuf[:0]
+}
+
 func (msg *Msg) SetValBuf(valType ValType, sz int) {
 	msg.ValInt = int64(sz)
 	msg.ValType = uint64(valType)
@@ -114,14 +123,20 @@ func (msg *Msg) SetValBuf(valType ValType, sz int) {
 	}
 }
 
-func (msg *Msg) SetVal(value interface{}) {
+func (msg *Msg) SetVal(val interface{}) {
 	var err error
 
-	switch v := value.(type) {
-	
+	switch v := val.(type) {
+
 	case string:
 		msg.SetValBuf(ValType_string, len(v))
 		copy(msg.ValBuf, v)
+
+	case time.Time:
+		msg.SetValInt(ValType_DateTime, int64(ConvertToTimeFS(v)))
+
+	case TimeFS:
+		msg.SetValInt(ValType_DateTime, int64(v))
 
 	case *Defs:
 		msg.SetValBuf(ValType_Defs, v.Size())
@@ -188,7 +203,7 @@ func (msg *Msg) LoadVal(dst interface{}) error {
 				ok = true
 			}
 		}
-		
+
 	case uint64(ValType_LoginReq):
 		if v, match := dst.(*LoginReq); match {
 			tmp := LoginReq{}
@@ -248,7 +263,7 @@ var gMsgPool = sync.Pool{
 
 var gMsgBatchPool = sync.Pool{
 	New: func() interface{} {
-		return MsgBatch{
+		return &MsgBatch{
 			Msgs: make([]*Msg, 0, 16),
 		}
 	},

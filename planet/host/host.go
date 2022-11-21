@@ -232,7 +232,7 @@ func (host *host) mountPlanet(
 			}
 			return pl.onStart(opts)
 		},
-		OnRun: pl.onRun,
+		OnRun:    pl.onRun,
 		OnClosed: pl.onClosed,
 	}
 
@@ -286,7 +286,7 @@ func (host *host) SelectAppForSchema(schema *planet.AttrSchema) (planet.App, err
 
 	app := host.appsByModel[schema.DataModelURI]
 	if app == nil {
-		return nil, planet.ErrCode_AppNotFound.Errorf("App not found for schema: %s", schema.AbsURI())
+		return nil, planet.ErrCode_AppNotFound.Errorf("App not found for schema: %s", schema.SchemaDesc())
 	}
 
 	return app, nil
@@ -353,8 +353,8 @@ type openReq struct {
 	cancel chan struct{}
 	closed uint32
 	next   *openReq // single linked list of same-cell reqs
-	echo   planet.CellSub
 
+	//echo   planet.CellSub
 	// err    error
 	// attr        *planet.AttrSpec // if set, describes this attr (read-only).  if nil, all SeriesType_0 values are to be loaded.
 	// idle        uint32           // set when the pinnedRange reaches the target range
@@ -367,22 +367,20 @@ func (req *openReq) Req() *planet.CellReq {
 	return &req.CellReq
 }
 
-func (req *openReq) PushUpdate(batch planet.MsgBatch) error {
+func (req *openReq) PushUpdate(batch *planet.MsgBatch) error {
 	if atomic.LoadUint32(&req.closed) != 0 {
 		return nil
 	}
 
-	var err error
-	if req.echo != nil {
-		err = req.echo.PushUpdate(batch)
-	}
-	if err != nil {
-		return err
-	}
-
+	// TODO / FUTURE
+	// Instead of every req running its own goroutine, just have one that round robbins
+	// based on a 'wakeup' channel saying which req sub is actively pushing msgs.
+	//
+	// This also make app sb life easier since msgs are just pushed as they're made rather than building batches
+	// and then sending them all to this for one big PushUpdate.
 	for _, src := range batch.Msgs {
 		msg := planet.CopyMsg(src)
-		err = req.pushReply(msg)
+		err := req.PushMsg(msg)
 		if err != nil {
 			return err
 		}
@@ -391,7 +389,7 @@ func (req *openReq) PushUpdate(batch planet.MsgBatch) error {
 	return nil
 }
 
-func (req *openReq) pushReply(msg *planet.Msg) error {
+func (req *openReq) PushMsg(msg *planet.Msg) error {
 	var err error
 
 	{
@@ -430,7 +428,7 @@ func (req *openReq) closeReq(pushClose bool, msgVal interface{}) {
 			if msgVal != nil {
 				msg.SetVal(msgVal)
 			}
-			req.pushReply(msg)
+			req.PushMsg(msg)
 		}
 
 		// finally, close the cancel chan now that the close msg has been pushed
@@ -603,6 +601,7 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *openReq, err erro
 					cancel: make(chan struct{}),
 				}
 				req.ReqID = reqID
+				req.CellSub = req
 				sess.openReqs[reqID] = req
 			}
 		}
@@ -634,29 +633,27 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 		return err
 	}
 
-	schema, err := sess.TypeRegistry.GetSchemaByID(pinReq.SchemaID)
+	req.ParentSchema, err = sess.TypeRegistry.GetSchemaByID(pinReq.ParentSchemaID)
 	if err != nil {
 		return err
 	}
 
-	req.App, err = sess.host.SelectAppForSchema(schema)
+	req.ParentApp, err = sess.host.SelectAppForSchema(req.ParentSchema)
 	if err != nil {
 		return err
 	}
 
 	req.Target = planet.CellID(msg.TargetCellID)
 	req.CellURI = pinReq.CellURI
-	req.PinSchema = schema
-	req.PinChildren = make([]*planet.AttrSchema, len(pinReq.ChildSchemas))
-
+	req.ChildSchemas = make([]*planet.AttrSchema, len(pinReq.ChildSchemas))
 	for i, child := range pinReq.ChildSchemas {
-		req.PinChildren[i], err = sess.TypeRegistry.GetSchemaByID(child)
+		req.ChildSchemas[i], err = sess.TypeRegistry.GetSchemaByID(child)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = req.App.ResolveRequest(&req.CellReq)
+	err = req.ParentApp.ResolveRequest(&req.CellReq)
 	if err != nil {
 		return err
 	}

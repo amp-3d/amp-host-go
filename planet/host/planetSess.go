@@ -18,12 +18,12 @@ type cellInst struct {
 	planet.CellID
 	process.Context // TODO: make custom lightweight later
 
-	pl       *planetSess          // parent planet
-	subsHead *openReq             // single linked list of open reqs on this cell
-	subsMu   sync.Mutex           // mutex for subs
-	newReqs  chan *openReq        // new requests waiting for state
-	newTxns  chan planet.MsgBatch // txns to be pushed to subs
-	idleSecs int32                // ticks up as time passes when there are no subs
+	pl       *planetSess           // parent planet
+	subsHead *openReq              // single linked list of open reqs on this cell
+	subsMu   sync.Mutex            // mutex for subs
+	newReqs  chan *openReq         // new requests waiting for state
+	newTxns  chan *planet.MsgBatch // txns to be pushed to subs
+	idleSecs int32                 // ticks up as time passes when there are no subs
 }
 
 func (pl *planetSess) onStart(opts symbol.TableOpts) error {
@@ -115,7 +115,7 @@ func (pl *planetSess) getCell(ID planet.CellID) (cell *cellInst, err error) {
 		pl:      pl,
 		CellID:  ID,
 		newReqs: make(chan *openReq),
-		newTxns: make(chan planet.MsgBatch),
+		newTxns: make(chan *planet.MsgBatch),
 	}
 
 	cell.Context, err = pl.Context.StartChild(&process.Task{
@@ -123,13 +123,18 @@ func (pl *planetSess) getCell(ID planet.CellID) (cell *cellInst, err error) {
 		OnRun: func(ctx process.Context) {
 
 			for running := true; running; {
-				var err error
 
 				// Manage incoming subs, push state to subs, and then maintain state for each sub.
 				select {
 				case req := <-cell.newReqs:
-					// TODO: verify that a cell pushing state doesn't escape idle or close analysis
-					err = req.App.PushCellState(req)
+					var err error
+					if req.PinnedCell == nil {
+						err = planet.ErrCode_InternalErr.Errorf("parent planet.App instance %q did not assign an AppCell", req.ParentApp.AppURI())
+					} else {
+						// TODO: verify that a cell pushing state doesn't escape idle or close analysis
+						err = req.PinnedCell.PushCellState(&req.CellReq)
+					}
+					req.PushCheckpoint(err)
 
 				case tx := <-cell.newTxns:
 					cell.pushToSubs(tx)
@@ -138,9 +143,6 @@ func (pl *planetSess) getCell(ID planet.CellID) (cell *cellInst, err error) {
 					running = false
 				}
 
-				if err != nil {
-					panic(err)
-				}
 			}
 
 		},
@@ -229,7 +231,7 @@ func (cell *cellInst) idleTick(deltaSecs int32) int32 {
 	return cell.idleSecs
 }
 
-func (cell *cellInst) pushToSubs(tx planet.MsgBatch) {
+func (cell *cellInst) pushToSubs(tx *planet.MsgBatch) {
 	cell.subsMu.Lock()
 	defer cell.subsMu.Unlock()
 

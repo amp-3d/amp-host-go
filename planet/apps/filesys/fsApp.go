@@ -1,8 +1,10 @@
 package filesys
 
 import (
+	"mime"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -13,7 +15,7 @@ import (
 
 type fsApp struct {
 	// openMu  sync.Mutex
-	// openDirs map[string]*hfsDir
+	// openDirs map[string]*pinnedDir
 	nextID uint64
 }
 
@@ -22,12 +24,8 @@ func (app *fsApp) AppURI() string {
 }
 
 func (app *fsApp) DataModelURIs() []string {
-	return []string{
-		PinDir,
-		PinFile,
-	}
+	return DataModels[1:]
 }
-
 
 // IssueEphemeralID issued a new ID that will persist
 func (app *fsApp) IssueCellID() planet.CellID {
@@ -43,22 +41,24 @@ func (app *fsApp) ResolveRequest(req *planet.CellReq) error {
 
 		req.Target = app.IssueCellID()
 
-		dir := &hfsDir{
-			CellID:   req.Target,
+		dir := &pinnedDir{
 			pathname: path.Clean(req.CellURI),
 		}
-
-		//dir, _ := app.getOpenDir(req.URI, 0)
-		req.AppItem = dir
+		fi, err := os.Stat(dir.pathname)
+		if err != nil {
+			return planet.ErrCode_InvalidCell.Errorf("path not found: %q", dir.pathname)
+		}
+		dir.fsItem.setFrom(fi)
+		req.PinnedCell = dir
 
 	} else {
-		if req.Parent == nil || req.Parent.AppItem == nil {
-			return planet.ErrCode_InvalidCell.Error("invalid parent")
+		if req.Parent == nil || req.Parent.PinnedCell == nil {
+			return planet.ErrCode_InvalidCell.Error("parent cell is nil")
 		}
 
-		parent, ok := req.Parent.AppItem.(*hfsDir)
+		parent, ok := req.Parent.PinnedCell.(*pinnedDir)
 		if !ok {
-			return planet.ErrCode_NotPinnable.Error("parent is not a hfsDir")
+			return planet.ErrCode_NotPinnable.Error("parent is not an pinnedDir")
 		}
 
 		item := parent.itemByID[req.Target]
@@ -66,91 +66,49 @@ func (app *fsApp) ResolveRequest(req *planet.CellReq) error {
 			return planet.ErrCode_InvalidCell.Error("invalid target cell")
 		}
 
-		switch {
-		case item.isDir != 0:
-			{
-				dir := &hfsDir{
-					CellID:   req.Target,
-					pathname: path.Join(parent.pathname, item.name),
-				}
-
-				//dir, _ := app.getOpenDir(path.Join(parent.pathname, item.name), req.Target)
-				req.AppItem = dir
+		//
+		switch item.model {
+		case DirItem:
+			pinned := &pinnedDir{
+				pathname: path.Join(parent.pathname, item.name),
 			}
-		default:
-			{
-				item := &hfsPlayable{}
-				req.AppItem = item
-			}
+			pinned.fsItem = *item
+			req.PinnedCell = pinned
+		// case PlayableItem:
+		// 	playable := &hfsPlayable{}
+		// 	req.AppCell = playable
+		case FileItem:
+			req.PinnedCell = item
 		}
 	}
 
 	return nil
 }
 
-func (app *fsApp) PushCellState(sub planet.CellSub) error {
-	var err error
+type pinnedDir struct {
+	fsItem
 
-	switch item := sub.Req().AppItem.(type) {
-	case *hfsDir:
-		err = item.pushCellState(sub)
-	case *hfsPlayable:
-		err = item.pushCellState(sub)
-	default:
-		err = planet.ErrCode_InternalErr.Error("invalid AppItem")
-	}
-
-	return err
+	pathname string    // full pathname (couple be some other OS handle to a file system dir item)
+	items    []*fsItem // ordered
+	itemByID map[planet.CellID]*fsItem
 }
 
-/*
-func (app *fsApp) getOpenDir(pathname string, cellID planet.CellID) (*hfsDir, error) {
-    pathname = path.Clean(pathname)
-
-    app.openMu.Lock()
-    defer app.openMu.Unlock()
-
-    dir := app.openDirs[pathname]
-    if dir == nil {
-        if cellID == 0 {
-            cellID = app.IssueCellID()
-        }
-        dir = &hfsDir{
-			CellID:   cellID,
-            pathname: pathname,
-            //itemMap:  make(map[planet.CellID]*hfsItem),
-        }
-        app.openDirs[pathname] = dir
-    }
-    return dir, nil
-}
-*/
-
-type hfsDir struct {
+type fsItem struct {
 	planet.CellID
 
-	pathname string // full hfs pathname
-	readtAt  time.Time
-	itemByID map[planet.CellID]*hfsItem
-	//itemsByName  map[planet.CellID]*hfsItem
-	items []*hfsItem // ordered
-	//nextID   uint64
+	lastRefresh time.Time
+	isHidden    bool
+	name        string // base file name
+	mode        os.FileMode
+	size        int64
+	model       DataModel
+	modTime     time.Time
 }
 
-type hfsItem struct {
-	planet.CellID
-
-	name    string
-	mode    os.FileMode
-	size    int64
-	isDir   int8
-	modTime time.Time
-}
-
-func (item *hfsItem) Compare(oth *hfsItem) int {
-	if item.isDir != oth.isDir {
-		return int(item.isDir) - int(oth.isDir)
-	}
+func (item *fsItem) Compare(oth *fsItem) int {
+	// if item.isDir != oth.isDir {
+	// 	return int(item.isDir) - int(oth.isDir)
+	// }
 	if diff := strings.Compare(item.name, oth.name); diff != 0 {
 		return diff
 	}
@@ -166,16 +124,10 @@ func (item *hfsItem) Compare(oth *hfsItem) int {
 	return 0
 }
 
-type hfsPlayable struct {
-}
+const crateURL = "crate-asset://crates.planet.tools/filesys.crate/"
 
-func (item *hfsPlayable) pushCellState(sub planet.CellSub) error {
-	return nil
-}
-
-func (dir *hfsDir) readDir(sub planet.CellSub) error {
-
-	app := sub.Req().App.(*fsApp)
+func (dir *pinnedDir) readDir(req *planet.CellReq) error {
+	app := req.ParentApp.(*fsApp)
 
 	{
 		//dir.subs = make(map[planet.CellID]os.DirEntry)
@@ -185,7 +137,7 @@ func (dir *hfsDir) readDir(sub planet.CellSub) error {
 		}
 		defer f.Close()
 
-		lookup := make(map[string]*hfsItem, len(dir.itemByID))
+		lookup := make(map[string]*fsItem, len(dir.itemByID))
 		for _, sub := range dir.itemByID {
 			lookup[sub.name] = sub
 		}
@@ -197,27 +149,18 @@ func (dir *hfsDir) readDir(sub planet.CellSub) error {
 		}
 
 		N := len(fsItems)
-		dir.itemByID = make(map[planet.CellID]*hfsItem, N)
-
+		dir.itemByID = make(map[planet.CellID]*fsItem, N)
 		dir.items = dir.items[:0]
 
-		var tmp *hfsItem
-		for _, fsItem := range fsItems {
+		var tmp *fsItem
+		for _, fi := range fsItems {
 			sub := tmp
 			if sub == nil {
-				sub = &hfsItem{}
+				sub = &fsItem{}
 			}
-			sub.CellID = 0
-			sub.name = fsItem.Name()
-			if strings.HasPrefix(sub.name, ".") {
+			sub.setFrom(fi)
+			if sub.isHidden {
 				continue
-			}
-			sub.mode = fsItem.Mode()
-			sub.modTime = fsItem.ModTime()
-			if fsItem.IsDir() {
-				sub.isDir = 1
-			} else {
-				sub.size = fsItem.Size()
 			}
 
 			// preserve items that have not changed
@@ -243,57 +186,76 @@ func (dir *hfsDir) readDir(sub planet.CellSub) error {
 
 }
 
-func (dir *hfsDir) pushCellState(sub planet.CellSub) error {
+func (dir *pinnedDir) PushCellState(req *planet.CellReq) error {
 
+	// Refresh if first time or too old
 	now := time.Now()
-	if dir.readtAt.Before(now.Add(-time.Minute)) {
-		dir.readtAt = now
-		dir.readDir(sub)
+	if dir.lastRefresh.Before(now.Add(-time.Minute)) {
+		dir.lastRefresh = now
+		dir.readDir(req)
 	}
 
-	req := sub.Req()
-
-	batch := planet.NewMsgBatch()
-	msgs := batch.Reset(2)
-
+	dir.pushCellState(req, false)
 	for _, item := range dir.items {
-
-		for i, m := range msgs {
-			m.TargetCellID = item.CellID.U64()
-
-			switch i {
-			case 0:
-				m.Op = planet.MsgOp_InsertChildCell
-				m.ValType = uint64(planet.ValType_SchemaID)
-				m.ValInt = int64(req.PinChildren[0].SchemaID)
-			case 1:
-				m.Op = planet.MsgOp_PushAttr
-				m.AttrID = req.PinChildren[0].Attrs[1].AttrID // main.label
-				m.SetVal(item.name)
-				// case 2:
-				//     msg.Op = planet.MsgOp_PushAttr
-				//     msg.AttrID = req.PinChildren[0].Attrs[0].AttrID // main.glyph
-				//     msg.SetVal(item.name)
-				// case 3:
-				//     msg.Op = planet.MsgOp_PushAttr
-				//     msg.AttrID = req.PinChildren[0].Attrs[0].AttrID // MIME type
-				//     msg.SetVal(item.MIMEType())
-			}
-		}
-		sub.PushUpdate(batch)
+		item.pushCellState(req, true)
 	}
 
-	{
-		msgs := batch.Reset(1)
-		m := msgs[0]
-		m.Op = planet.MsgOp_Commit
-		m.TargetCellID = dir.CellID.U64()
+	return nil
+}
 
-		sub.PushUpdate(batch)
+func (item *fsItem) PushCellState(req *planet.CellReq) error {
+	return item.pushCellState(req, false)
+}
+
+func (item *fsItem) setFrom(fi os.FileInfo) {
+	item.CellID = 0
+	item.name = fi.Name()
+	item.mode = fi.Mode()
+	item.modTime = fi.ModTime()
+	item.isHidden = strings.HasPrefix(item.name, ".")
+	switch {
+	case fi.IsDir():
+		item.model = DirItem
+	// case strings.HasSuffix(sub.name, ".mp3"):
+	// 	sub.model = PlayableCell
+	default:
+		item.model = FileItem
+		item.size = fi.Size()
+	}
+}
+
+func (item *fsItem) pushCellState(req *planet.CellReq, asChild bool) error {
+	schema := req.ParentSchema
+	if asChild {
+		schema = req.GetChildSchema(DataModels[item.model])
 	}
 
-	batch.Reclaim()
+	if schema == nil {
+		return nil
+	}
+	if asChild {
+		req.PushInsertChildCell(item.CellID, schema)
+	}
 
+	req.PushAttr(item.CellID, schema, attr_ItemName, item.name)
+
+	url := crateURL
+	switch {
+	case item.model == DirItem:
+		url += "generic-dir"
+	default:
+		url += "generic-file"
+	}
+	req.PushAttr(item.CellID, schema, attr_ThumbGlyphURL, url)
+
+	if item.model == FileItem {
+		mimeType := mime.TypeByExtension(filepath.Ext(item.name))
+		req.PushAttr(item.CellID, schema, attr_MimeType, mimeType)
+
+		req.PushAttr(item.CellID, schema, attr_ByteSz, item.size)
+
+		req.PushAttr(item.CellID, schema, attr_LastModified, planet.ConvertToTimeFS(item.modTime))
+	}
 	return nil
 }
 
@@ -302,92 +264,3 @@ func (dir *hfsDir) pushCellState(sub planet.CellSub) error {
 // //     req.Target = app.IssueEphemeralID()
 // //     return nil
 // // }
-
-// func (app *fsApp) ServeCell(sub planet.CellSub) error {
-
-//     req := sub.Req()
-
-//     dir := ""
-//     items, err := os.ReadDir(dir)
-//     sort.Slice(items, func(i, j int) bool {
-//         ti, tj := 0, 0
-//         if items[i].IsDir() {
-//             ti = 1
-//         }
-//         if items[j].IsDir() {
-//             tj = 1
-//         }
-//         if (ti != tj) {
-//             return ti < tj
-//         }
-
-//         return items[i].Name() < items[j].Name()
-//     })
-
-//     batch := planet.NewMsgBatch()
-
-//     for _, item := range items {
-//         cellID := app.IssueEphemeralID()
-//         msgs = batch.AddNew(3)
-
-//         m := msgs[0]
-
-//         m.TargetCellID = cellID.U64()
-//         m.ReqID = req.ReqID
-
-//         switch i {
-//         case 0:
-//             m.Op = planet.MsgOp_InsertChildCell
-//             //m.ParentCellID = ?
-//             m.ValType = uint64(planet.ValType_SchemaID)
-//             m.ValInt = int64(req.PinChildren[0].SchemaID)
-//         case 1:
-//             msg.Op = planet.MsgOp_PushAttr
-//             msg.TargetCellID = childID1
-//             msg.AttrID = req.PinChildren[0].Attrs[1].AttrID // main.label
-//             msg.SetVal("Hello World 1")
-//         }
-//     }
-
-//     cellID := req.Target.U64()
-//     childID1 := app.IssueEphemeralID().U64()  // TEMP
-//     childID2 := app.IssueEphemeralID().U64()  // TEMP
-
-//     for i, msg := range batch.AddNew(6) {
-//         msg.ReqID = req.ReqID
-
-//         switch i {
-//         case 0:
-//             msg.Op = planet.MsgOp_PushAttr
-//             msg.TargetCellID = cellID
-//         case 1:
-//             msg.Op = planet.MsgOp_InsertChildCell
-//             msg.TargetCellID = childID1
-//             msg.ValType = uint64(planet.ValType_SchemaID)
-//             msg.ValInt = int64(req.PinChildren[0].SchemaID)
-//         case 2:
-//             msg.Op = planet.MsgOp_PushAttr
-//             msg.TargetCellID = childID1
-//             msg.AttrID = req.PinChildren[0].Attrs[1].AttrID // main.label
-//             msg.SetVal("Hello World 1")
-//         case 3:
-//             msg.Op = planet.MsgOp_InsertChildCell
-//             msg.TargetCellID = childID2
-//             msg.ValType = uint64(planet.ValType_SchemaID)
-//             msg.ValInt = int64(req.PinChildren[0].SchemaID)
-//         case 4:
-//             msg.Op = planet.MsgOp_PushAttr
-//             msg.TargetCellID = childID2
-//             msg.AttrID = req.PinChildren[0].Attrs[1].AttrID // main.label
-//             msg.SetVal("Hello World 2")
-//         case 5:
-//             msg.Op = planet.MsgOp_Commit
-//             msg.TargetCellID = cellID
-//         }
-//     }
-
-//     sub.Cell().PushUpdate(batch)
-//     batch.Reclaim()
-
-//     return nil
-// }
