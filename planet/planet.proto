@@ -145,31 +145,30 @@ enum MsgOp {
     // MsgOp_ResolveAndRegister allows a client to send the host a set of Defs to the Host, defining all session CellTypes and identifiers.
     //
     // Params: 
-    //      Msg.ReqID:        newly client-generated (unique) request ID 
-    //      Msg.ValType:      ValType_Defs
-    //      Msg.ValBuf:       Defs (serialized) 
+    //      Msg.ReqID:      newly client-generated (unique) request ID 
+    //      Msg.ValType:    ValType_Defs
+    //      Msg.ValBuf:     Defs (serialized) 
     MsgOp_ResolveAndRegister = 5;
     
     
-    // A client request for a given CellID to be pinned under a client-generated "pin" ID.
+    // From client to host, this requests a given cell be pinned.
+    // From host to client, this is precedes a push of the pinned cell's attributes.
     // Note that the same cell pinned multiple times may not have child cells with matching cell IDs.
     //
     // Params: 
-    //      Msg.ParentReqID:  parent context
-    //      Msg.ReqID:        newly client-generated (unique) request ID 
-    //      Msg.TargetCellID: which cell to be pinned
-    //      Msg.ValType:      ValType_PinReq
-    //      Msg.ValBuf:       req params
+    //      Msg.ReqID:      newly client-generated (unique) request ID 
+    //      Msg.CellID:     CellID being pinned     (host to client, otherwise 0)
+    //      Msg.ValType:    ValType_PinReq          (client to host, otherwise nil)
+    //      Msg.ValBuf:     PinReq                  (client to host, otherwise nil)
     MsgOp_PinCell = 6;
 
     // Requests a given CellID to be pinned under a client-generated PinID
     //
     // Params: 
-    //      Msg.ParentReqID:  parent context
-    //      Msg.ReqID:        newly client-generated (unique) request ID 
-    //      Msg.TargetCellID: which cell
-    //      Msg.ValType:      ValType_AttrRange
-    //      Msg.ValInt:       cell type ID specifying the AttrSchema (the expected cell and format)
+    //      Msg.ReqID:      newly client-generated (unique) request ID 
+    //      Msg.CellID:     which cell
+    //      Msg.ValType:    ValType_AttrRange
+    //      Msg.ValInt:     cell type ID specifying the AttrSchema (the expected cell and format)
     //MsgOp_PinAttrRange = 8;
     
     //MsgOp_StartTxn =  
@@ -178,28 +177,28 @@ enum MsgOp {
     // A cell attr item us specified by the host via ReqID+AttrID+SI and its value type via ValType. 
     //
     // Params: 
-    //      Msg.ReqID:        originating request ID
-    //      Msg.TargetCellID: which cell is being updated
-    //      Msg.AttrID:       which attr is being updated
-    //      Msg.ValType:      format of Msg.ValInt / .ValFloat / .ValBuf 
-    //      Msg.Val*:         attr value
+    //      Msg.ReqID:      originating request ID
+    //      Msg.CellID:     which cell is being updated
+    //      Msg.AttrID:     which attr is being updated
+    //      Msg.ValType:    format of Msg.ValInt / .ValFloat / .ValBuf 
+    //      Msg.Val*:       attr value
     MsgOp_PushAttr = 10;
     
-    // Signals the addition of a new child cell of a given pinned cell (with MsgOp_PushAttr and MsgOp_Checkpoint to follow). 
+    // Signals the insertion of a new cell as a child of the pinned cell (with MsgOp_PushAttr and MsgOp_Checkpoint to follow). 
     //
     // Params: 
-    //      Msg.ReqID:        originating request ID
-    //      Msg.TargetCellID: new cell ID of the child cell being pushed
-    //      Msg.ValType:      ValType_SchemaID
-    //      Msg.ValInt:       cell type ID being pushed (specifies which Cell attribs are expected to follow)
-    MsgOp_InsertChildCell = 11;
+    //      Msg.ReqID:      originating request ID
+    //      Msg.CellID:     the child cell being added
+    //      Msg.ValType:    ValType_SchemaID
+    //      Msg.ValInt:     cell type ID being pushed (specifies which Cell attribs are expected to follow)
+    MsgOp_InsertChildCell = 14;
     
     // Used by the Host to signal that the request associated with ReqID is up to date and in a state to be processed by the client.
     // This msg is typically used to drive UI updates or other aggregate cell dependencies.
     //
     // Params: 
-    //      Msg.ReqID:        originating request ID
-    //      Msg.TargetCellID: which cell is an an updated state
+    //      Msg.ReqID:      originating request ID
+    //      Msg.CellID:     which cell is an an updated state
     MsgOp_Commit = 24;
 
     // From the client to host, this signals to cancel the operation(s) associated with the given request ID (PinID). 
@@ -207,8 +206,8 @@ enum MsgOp {
     // if Msg.ValType == ValType_Err, amplifying info in included as to why the request was closed.
     //
     // Params: 
-    //      Msg.ReqID:    parent request ID
-    //      Msg.ValType:  ValType_Err (or 0)
+    //      Msg.ReqID:      parent request ID
+    //      Msg.ValType:    ValType_Err (or 0)
     MsgOp_CloseReq = 255;
     
 }
@@ -226,15 +225,8 @@ message Msg {
     // If this msg is a reply to a request, ReqID identifies the originating request op.
     uint64              ReqID           = 3;
     
-    // ParentReqID specifies the parent request ID of this ReqID and provides context that TargetCellID cannot provide.
-    // If 0, this denotes that this Msg is a response to the request to the given ReqID.
-    uint64              ParentReqID     = 5;  // ParentID?
-    
-    // TargetCellID identifies the cell associated with this MsgOp.
-    //
-    // When child cells are being pushed, they may or may not have persistent TargetCellIDs, 
-    // so never assume any two matching or non-matching TargetCellIDs are the same cell (unless they have the same ParentCellID).
-    uint64              TargetCellID     = 6;
+    // CellID identifies the cell associated with Msg.Op.
+    uint64              CellID          = 6;
     
     uint64              FromID          = 11;
 
@@ -444,20 +436,25 @@ message AttrSpec {
 
 
 
-
+// PinReq is a client request to "pin" a cell, meaning selected attrs and child cells will be pushed to the client.  
 message PinReq {
-    
-    
-    // Specifies which cell is to be pinned
-    // This is typically omitted since the given SchemaID + CellID imply which cell is being pinned. 
-    string              CellURI = 2;
 
-    // Specifies an AttrSchema for the parent cell to be pinned, which specifies which attrs of the parent cell will be pushed to the client.
-    int32               ParentSchemaID = 3; 
+    // Specifies the request that pushed PinCell to the client, providing context for the cell to be pinned.
+    // Set to 0 if PinCell and/or PinURI implies that no parent req exists.
+    uint64              ParentReqID = 1;
     
-    // ChildSchemas specifies which child cell types should be pushed (and which attr schema they should be pushed with).
+    // URI associated with this pin request (usually omitted since ParentReqID & PinCell specify the cell to be pinned) 
+    string              PinURI = 3;
+        
+    // Cell ID to be pinned (or 0 if PinURI does not require a cell ID)
+    uint64              PinCell = 5;
+    
+    // AttrSchema ID to apply on the cell being pinned, specifying which attrs of the target cell will be pushed to the client.
+    int32               PinCellSchema = 7; 
+    
+    // Specifies which child cell types should be pushed (and which attr schema they should be pushed with).
     // If empty, no child cells are pushed.
-    repeated int32      ChildSchemas = 4; 
+    repeated int32      ChildSchemas = 9; 
     
     // Explicit list of SI values or CellIDs to be pinned
     //repeated uint64     CellIDs         = 15;

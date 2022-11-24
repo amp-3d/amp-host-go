@@ -34,34 +34,34 @@ func (app *fsApp) IssueCellID() planet.CellID {
 
 func (app *fsApp) ResolveRequest(req *planet.CellReq) error {
 
-	if req.Target == 0 {
-		if req.CellURI == "" {
+	if req.PinCell == 0 {
+		if req.PinURI == "" {
 			return planet.ErrCode_InvalidCell.Error("invalid root URI")
 		}
 
-		req.Target = app.IssueCellID()
-
 		dir := &pinnedDir{
-			pathname: path.Clean(req.CellURI),
+			pathname: path.Clean(req.PinURI),
 		}
 		fi, err := os.Stat(dir.pathname)
 		if err != nil {
 			return planet.ErrCode_InvalidCell.Errorf("path not found: %q", dir.pathname)
 		}
+		req.PinCell = app.IssueCellID()
 		dir.fsItem.setFrom(fi)
+		dir.fsItem.CellID = req.PinCell
 		req.PinnedCell = dir
 
 	} else {
-		if req.Parent == nil || req.Parent.PinnedCell == nil {
+		if req.ParentReq == nil || req.ParentReq.PinnedCell == nil {
 			return planet.ErrCode_InvalidCell.Error("parent cell is nil")
 		}
 
-		parent, ok := req.Parent.PinnedCell.(*pinnedDir)
+		parent, ok := req.ParentReq.PinnedCell.(*pinnedDir)
 		if !ok {
 			return planet.ErrCode_NotPinnable.Error("parent is not an pinnedDir")
 		}
 
-		item := parent.itemByID[req.Target]
+		item := parent.itemByID[req.PinCell]
 		if item == nil {
 			return planet.ErrCode_InvalidCell.Error("invalid target cell")
 		}
@@ -208,7 +208,6 @@ func (item *fsItem) PushCellState(req *planet.CellReq) error {
 }
 
 func (item *fsItem) setFrom(fi os.FileInfo) {
-	item.CellID = 0
 	item.name = fi.Name()
 	item.mode = fi.Mode()
 	item.modTime = fi.ModTime()
@@ -225,7 +224,7 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 }
 
 func (item *fsItem) pushCellState(req *planet.CellReq, asChild bool) error {
-	schema := req.ParentSchema
+	schema := req.PinCellSchema
 	if asChild {
 		schema = req.GetChildSchema(DataModels[item.model])
 	}
@@ -235,6 +234,8 @@ func (item *fsItem) pushCellState(req *planet.CellReq, asChild bool) error {
 	}
 	if asChild {
 		req.PushInsertChildCell(item.CellID, schema)
+	} else {
+		req.PushBeginPin(item.CellID)
 	}
 
 	req.PushAttr(item.CellID, schema, attr_ItemName, item.name)

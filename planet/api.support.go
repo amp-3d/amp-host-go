@@ -226,10 +226,17 @@ func (req *CellReq) GetChildSchema(modelURI string) *AttrSchema {
 	return nil
 }
 
+func (req *CellReq) PushBeginPin(target CellID) {
+	m := NewMsg()
+	m.CellID = target.U64()
+	m.Op = MsgOp_PinCell;
+	req.PushMsg(m)
+}
+
 func (req *CellReq) PushInsertChildCell(target CellID, schema *AttrSchema) {
 	if schema != nil {
 		m := NewMsg()
-		m.TargetCellID = target.U64()
+		m.CellID = target.U64()
 		m.Op = MsgOp_InsertChildCell
 		m.ValType = uint64(ValType_SchemaID)
 		m.ValInt = int64(schema.SchemaID)
@@ -244,7 +251,7 @@ func (req *CellReq) PushAttr(target CellID, schema *AttrSchema, attrURI string, 
 	}
 
 	m := NewMsg()
-	m.TargetCellID = target.U64()
+	m.CellID = target.U64()
 	m.Op = MsgOp_PushAttr
 	m.AttrID = attr.AttrID
 	if attr.SeriesType == SeriesType_Fixed {
@@ -257,7 +264,7 @@ func (req *CellReq) PushAttr(target CellID, schema *AttrSchema, attrURI string, 
 func (req *CellReq) PushCheckpoint(err error) {
 	m := NewMsg()
 	m.Op = MsgOp_Commit
-	m.TargetCellID = req.Target.U64()
+	m.CellID = req.PinCell.U64()
 	if err != nil {
 		m.SetVal(err)
 	}

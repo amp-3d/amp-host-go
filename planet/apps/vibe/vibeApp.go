@@ -29,7 +29,7 @@ func (app *vibeApp) IssueEphemeralID() planet.CellID {
 }
 
 func (app *vibeApp) ResolveRequest(req *planet.CellReq) error {
-	req.Target = app.IssueEphemeralID()
+	req.PinCell = app.IssueEphemeralID()
 	return nil
 }
 

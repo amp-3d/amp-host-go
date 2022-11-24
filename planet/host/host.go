@@ -619,32 +619,32 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 		return err
 	}
 
-	if msg.ParentReqID != 0 {
-		parentReq, _ := sess.getReq(msg.ParentReqID, getReq)
-		if parentReq != nil {
-			err = planet.ErrCode_InvalidReq.Error("invalid ParentReqID")
-			return err
-		}
-		req.Parent = &parentReq.CellReq
-	}
-
 	var pinReq planet.PinReq
 	if err = msg.LoadVal(&pinReq); err != nil {
 		return err
 	}
 
-	req.ParentSchema, err = sess.TypeRegistry.GetSchemaByID(pinReq.ParentSchemaID)
+	if pinReq.ParentReqID != 0 {
+		parentReq, _ := sess.getReq(pinReq.ParentReqID, getReq)
+		if parentReq != nil {
+			err = planet.ErrCode_InvalidReq.Error("invalid ParentReqID")
+			return err
+		}
+		req.ParentReq = &parentReq.CellReq
+	}
+
+	req.PinCellSchema, err = sess.TypeRegistry.GetSchemaByID(pinReq.PinCellSchema)
 	if err != nil {
 		return err
 	}
 
-	req.ParentApp, err = sess.host.SelectAppForSchema(req.ParentSchema)
+	req.ParentApp, err = sess.host.SelectAppForSchema(req.PinCellSchema)
 	if err != nil {
 		return err
 	}
 
-	req.Target = planet.CellID(msg.TargetCellID)
-	req.CellURI = pinReq.CellURI
+	req.PinCell = planet.CellID(pinReq.PinCell)
+	req.PinURI = pinReq.PinURI
 	req.ChildSchemas = make([]*planet.AttrSchema, len(pinReq.ChildSchemas))
 	for i, child := range pinReq.ChildSchemas {
 		req.ChildSchemas[i], err = sess.TypeRegistry.GetSchemaByID(child)

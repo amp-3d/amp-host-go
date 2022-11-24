@@ -163,7 +163,7 @@ func (pl *planetSess) queueReq(cell *cellInst, req *openReq) error {
 
 	var err error
 	if cell == nil {
-		cell, err = pl.getCell(req.Target)
+		cell, err = pl.getCell(req.PinCell)
 		if err != nil {
 			return err
 		}

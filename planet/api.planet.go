@@ -136,15 +136,15 @@ func (ID CellID) U64() uint64 { return uint64(ID) }
 type CellReq struct {
 	CellSub
 
-	ParentApp    App     // App responding to this request
-	PinnedCell   AppCell // Assigned during App.ResolveRequest()
-	ReqID        uint64
-	Parent       *CellReq
-	PlanetID     uint64
-	Target       CellID
-	CellURI      string
-	ParentSchema *AttrSchema
-	ChildSchemas []*AttrSchema
+	ParentApp     App     // App responding to this request
+	PinnedCell    AppCell // Assigned during App.ResolveRequest()
+	ReqID         uint64
+	ParentReq     *CellReq
+	PlanetID      uint64
+	PinURI        string
+	PinCell       CellID
+	PinCellSchema *AttrSchema
+	ChildSchemas  []*AttrSchema
 }
 
 // Signals to use the default App for a given AttrSchema DataModelURI.
@@ -183,11 +183,9 @@ type AppCell interface {
 
 type CellSub interface {
 
-
 	// Sets msg.ReqID and pushes the given msg to client, blocking until "complete" (queued) or canceled.
 	// This msg is reclaimed after it is sent, so it should be accessed following this call.
 	PushMsg(msg *Msg) error
-
 }
 
 type User interface {
@@ -200,13 +198,8 @@ type MsgBatch struct {
 	Msgs []*Msg
 }
 
-
-
-
-
 // LoadAttrs gets the most up to date values of the requested attr IDs.
 // Returns the number of attrs that were not found or could be exported to the target dst value type.
 // If fromID == 0, then all participant members are selected, otherwise only attrs set from the specified participant are selected.
 // If nodeID == 0, then all nodes in this channel are selected, otherwise only attrs set for the specified nodeID are selected.
 //LoadAttrs(fromID, nodeID symbol.ID, srcAttrs []symbol.ID, dstVals []interface{}) (int, error)
-
