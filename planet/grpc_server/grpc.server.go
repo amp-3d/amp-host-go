@@ -9,8 +9,8 @@ import (
 	grpc_codes "google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/arcverse/go-arcverse/planet"
 	"github.com/arcverse/go-cedar/process"
-	"github.com/arcverse/go-planet/planet"
 )
 
 // grpcServer is the GRPC implementation of repo.proto

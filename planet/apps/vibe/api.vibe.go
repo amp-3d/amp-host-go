@@ -1,6 +1,6 @@
 package vibe
 
-import "github.com/arcverse/go-planet/planet"
+import "github.com/arcverse/go-arcverse/planet"
 
 const (
 	AppURI = "vibe.planet.tools/vibe.app/v1.2022.1"

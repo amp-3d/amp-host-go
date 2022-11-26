@@ -1,6 +1,6 @@
 package filesys
 
-import "github.com/arcverse/go-planet/planet"
+import "github.com/arcverse/go-arcverse/planet"
 
 func NewApp() planet.App {
 	return &fsApp{}

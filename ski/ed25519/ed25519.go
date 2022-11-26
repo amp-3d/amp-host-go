@@ -5,7 +5,7 @@ package ed25519
 import (
 	"io"
 
-	"github.com/arcverse/go-planet/ski"
+	"github.com/arcverse/go-arcverse/ski"
 	"golang.org/x/crypto/ed25519"
 )
 

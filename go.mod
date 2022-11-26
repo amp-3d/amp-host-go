@@ -1,4 +1,4 @@
-module github.com/arcverse/go-planet
+module github.com/arcverse/go-arcverse
 
 go 1.18
 
@@ -11,9 +11,9 @@ go 1.18
 //replace github.com/arcverse/go-cedar => ../go-cedar
 
 require (
+	github.com/arcverse/go-cedar v1.2022.2
 	github.com/brynbellomy/klog v0.0.0-20200414031930-87fbf2e555ae
 	github.com/dgraph-io/badger/v3 v3.2103.4
-	github.com/arcverse/go-cedar v1.2022.1
 	github.com/gogo/protobuf v1.3.2
 	github.com/pkg/errors v0.9.1
 	github.com/zmb3/spotify/v2 v2.3.0

@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/arcverse/go-planet/planet"
+	"github.com/arcverse/go-arcverse/planet"
 )
 
 type fsApp struct {

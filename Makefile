@@ -2,14 +2,14 @@ MAKEFLAGS += --warn-undefined-variables
 SHELL = /bin/bash -o nounset -o errexit -o pipefail
 .DEFAULT_GOAL = build
 UNITY_ASSETS_DIR = ../unity-app/Assets
-UNITY_PLANETXR_DIR = ${UNITY_ASSETS_DIR}/Planet3/PlanetXR
-BUILD_OUTPUT = ${UNITY_ASSETS_DIR}/Plugins/Planet3/PlanetXR
+UNITY_PXR_DIR = ${UNITY_ASSETS_DIR}/arcverse.unity.sdk/pxr
+BUILD_OUTPUT = ${UNITY_ASSETS_DIR}/Plugins/arcverse.unity.sdk/pxr
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
 
 ## display this help message
 help:
 	@echo -e "\033[32m"
-	@echo "go-planet"
+	@echo "go-arcverse"
 	@echo
 	@awk '/^##.*$$/,/[a-zA-Z_-]+:/' $(MAKEFILE_LIST) | awk '!(NR%2){print $$0p}{p=$$0}' | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}' | sort
 
@@ -65,10 +65,10 @@ protos:
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
 	    --csharp_out ${UNITY_ASSETS_DIR} --csharp_opt=base_namespace=   \
-	    --grpc_out "${UNITY_PLANETXR_DIR}"   \
+	    --grpc_out "${UNITY_PXR_DIR}"   \
 	    --plugin=protoc-gen-grpc="${grpc_csharp_exe}" \
 	    --proto_path=. \
-		planet/planet.proto
+		pxr/pxr.proto
 
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
@@ -80,19 +80,19 @@ protos:
 	#     --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
 	#     --csharp_out ${UNITY_ASSETS_DIR} --csharp_opt=base_namespace= \
 	#     --proto_path=. \
-	# 	planet/client/client.proto
+	# 	pxr/client/client.proto
 		
 	# protoc \
-	# 	--go_out=./planet/builtin_types \
+	# 	--go_out=./pxr/builtin_types \
 	# 	--go_opt=paths=source_relative \
-	# 	planet/planet.proto \
+	# 	pxr/pxr.proto \
 
 		
 	# protoc \
 	#     --gogoslick_opt=paths=source_relative \
 	#     --gogoslick_out=plugins=grpc:. \
 	#     --proto_path=. \
-	# 	planet/host/state.proto
+	# 	pxr/host/state.proto
 				
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \

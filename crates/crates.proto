@@ -1,7 +1,7 @@
 syntax = "proto3";
 package crates;
 
-option csharp_namespace = "Planet3.Crates";
+option csharp_namespace = "arcverse.crates";
 
 
 

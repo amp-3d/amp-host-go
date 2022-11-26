@@ -1,4 +1,4 @@
-# go-planet
+# go-arcverse
 
-### Official Go implementation for the PlanetXR UI framework & runtime
+### Official Go implementation for the arcverse UI framework & runtime
 

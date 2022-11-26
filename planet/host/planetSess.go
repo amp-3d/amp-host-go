@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/arcverse/go-arcverse/planet"
+	"github.com/arcverse/go-arcverse/symbol"
 	"github.com/arcverse/go-cedar/process"
-	"github.com/arcverse/go-planet/planet"
-	"github.com/arcverse/go-planet/symbol"
 	"github.com/dgraph-io/badger/v3"
 )
 

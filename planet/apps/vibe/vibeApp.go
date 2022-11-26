@@ -3,7 +3,7 @@ package vibe
 import (
 	"sync/atomic"
 
-	"github.com/arcverse/go-planet/planet"
+	"github.com/arcverse/go-arcverse/planet"
 )
 
 type vibeApp struct {

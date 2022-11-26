@@ -9,7 +9,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/arcverse/go-planet/planet"
+	"github.com/arcverse/go-arcverse/planet"
 )
 
 type UnityRenderingExtEventType int32
