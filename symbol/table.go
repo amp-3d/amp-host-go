@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"sync"
 
+	"github.com/arcverse/go-cedar/bufs"
 	"github.com/dgraph-io/badger/v3"
-	"github.com/genesis3systems/go-cedar/bufs"
 )
 
 func (id ID) WriteTo(io []byte) []byte {

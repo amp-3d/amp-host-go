@@ -5,10 +5,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/arcverse/go-cedar/process"
+	"github.com/arcverse/go-planet/planet"
+	"github.com/arcverse/go-planet/symbol"
 	"github.com/dgraph-io/badger/v3"
-	"github.com/genesis3systems/go-cedar/process"
-	"github.com/genesis3systems/go-planet/planet"
-	"github.com/genesis3systems/go-planet/symbol"
 )
 
 // cellInst is a "mounted" cell servicing requests for a specific cell (typically one).

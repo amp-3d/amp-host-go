@@ -7,12 +7,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/arcverse/go-cedar/bufs"
+	"github.com/arcverse/go-cedar/process"
+	"github.com/arcverse/go-cedar/utils"
+	"github.com/arcverse/go-planet/planet"
+	"github.com/arcverse/go-planet/symbol"
 	"github.com/dgraph-io/badger/v3"
-	"github.com/genesis3systems/go-cedar/bufs"
-	"github.com/genesis3systems/go-cedar/process"
-	"github.com/genesis3systems/go-cedar/utils"
-	"github.com/genesis3systems/go-planet/planet"
-	"github.com/genesis3systems/go-planet/symbol"
 )
 
 type host struct {

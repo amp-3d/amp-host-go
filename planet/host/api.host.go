@@ -1,7 +1,7 @@
 package host
 
 import (
-	"github.com/genesis3systems/go-planet/planet"
+	"github.com/arcverse/go-planet/planet"
 )
 
 

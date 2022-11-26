@@ -1,19 +1,19 @@
-module github.com/genesis3systems/go-planet
+module github.com/arcverse/go-planet
 
 go 1.18
 
 // List versions of a module:
-//    go list -m -versions github.com/genesis3systems/go-cedar
+//    go list -m -versions github.com/arcverse/go-cedar
 //
 // go list & get cheatsheet:
 //    https://stackoverflow.com/a/61312937/3958082
 
-//replace github.com/genesis3systems/go-cedar => ../go-cedar
+//replace github.com/arcverse/go-cedar => ../go-cedar
 
 require (
 	github.com/brynbellomy/klog v0.0.0-20200414031930-87fbf2e555ae
 	github.com/dgraph-io/badger/v3 v3.2103.4
-	github.com/genesis3systems/go-cedar v1.2022.1
+	github.com/arcverse/go-cedar v1.2022.1
 	github.com/gogo/protobuf v1.3.2
 	github.com/pkg/errors v0.9.1
 	github.com/zmb3/spotify/v2 v2.3.0

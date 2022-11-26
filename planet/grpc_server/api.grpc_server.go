@@ -3,7 +3,7 @@ package grpc_server
 import (
 	"fmt"
 
-	"github.com/genesis3systems/go-planet/planet"
+	"github.com/arcverse/go-planet/planet"
 )
 
 // HostGrpcServer attaches to a planet.Host as a child process, offering grpc-based connections.

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/genesis3systems/go-planet/symbol"
+	"github.com/arcverse/go-planet/symbol"
 )
 
 // Sets a reasonable size beyond which buffers should be shared rather than copied.

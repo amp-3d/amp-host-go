@@ -3,7 +3,7 @@ package planet
 import (
 	"sync"
 
-	"github.com/genesis3systems/go-planet/symbol"
+	"github.com/arcverse/go-planet/symbol"
 )
 
 type schemaDef struct {

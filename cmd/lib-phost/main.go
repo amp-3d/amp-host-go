@@ -9,7 +9,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/genesis3systems/go-planet/planet"
+	"github.com/arcverse/go-planet/planet"
 )
 
 type UnityRenderingExtEventType int32
@@ -137,7 +137,6 @@ func LogPtr(msg *string) int {
 }
 
 
-
 //export Call_SessionBegin
 func Call_SessionBegin() int {
 	return 55
@@ -191,14 +190,13 @@ func Call_Realloc(buf *[]byte, numBytes int) {
 		delete(mallocs, ptr)
 	}
 	
+	// Allocate new buf and place it in our tracker map so to the GC doesn't taketh away
 	newBuf := make([]byte, capSz)
 	ptr := &newBuf[0]
 	mallocs[ptr] = struct{}{}
 	*buf = newBuf[:numBytes]
 }
 
-
-var gMsgIn = &planet.Msg{}
 
 var gOutbox = make(chan *planet.Msg, 10)
 
@@ -221,39 +219,6 @@ func Call_PushMsg(msgBuf []byte) int {
 }
 
 
-// func Call_PushMsg(
-// 	ReqID int,
-// 	ReqPhase int,
-// 	Op int,
-// 	codec int,
-// 	content []byte) int {
-
-// 	resp := Msg{
-// 		ReqID:    uint32(ReqID),
-// 		ReqPhase: int32(ReqPhase),
-// 		Op:       int32(Op),
-// 		Codec:    int32(codec),
-// 		Content:  append([]byte{}, content...),
-// 	}
-
-// 	// fmt.Printf("Call_PushMsg: ReqID: %d,   %-10s", resp.ReqID, content)
-
-// 	// go func() {
-// 	// 	N := 3
-// 	// 	resp.ReqPhase = int32(planet.ReqPhase_InProgress)
-// 	// 	for i := 0; i < N; i++ {
-// 	// 		if i == N-1 {
-// 	// 			resp.ReqPhase = int32(planet.ReqPhase_Complete)
-// 	// 		}
-
-// 	// 		resp.Content = []byte(fmt.Sprintf("%d of %d (reqID: %d)", i+1, N, resp.ReqID))  // ALLOC FROM POOL
-
-// 	// 		gOutbox <- resp
-// 	// 	}
-// 	// }()
-
-// 	return int(resp.ReqID)
-// }
 
 //export Call_WaitOnMsg
 func Call_WaitOnMsg(msgBuf *[]byte) int {
@@ -279,7 +244,6 @@ func Call_WaitOnMsg(msgBuf *[]byte) int {
 func main() {
 
 	//params := phost.DefaultHostParams
-
 	// host, err := phost.NewHost(params)
 	// if err != nil {
 	// 	log.Fatal(err)

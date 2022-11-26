@@ -1,6 +1,6 @@
 package planet
 
-import "github.com/genesis3systems/go-cedar/process"
+import "github.com/arcverse/go-cedar/process"
 
 /*
 packages
