@@ -1,9 +1,9 @@
 package vibe
 
-import "github.com/arcverse/go-arcverse/planet"
+import "github.com/arcverse/go-arcverse/pxr"
 
 const (
-	AppURI = "vibe.planet.tools/vibe.app/v1.2022.1"
+	AppURI = "vibe.pxr.tools/vibe.app/v1.2022.1"
 
 	// DataModelURIs
 	PinAppHome     = "pin/app/home"
@@ -15,6 +15,6 @@ const (
 	// childPlaylist = "child/vibe/playlist"
 )
 
-func NewApp() planet.App {
+func NewApp() pxr.App {
 	return &vibeApp{}
 }

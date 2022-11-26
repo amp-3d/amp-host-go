@@ -9,7 +9,7 @@ import (
 	grpc_codes "google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/arcverse/go-arcverse/planet"
+	"github.com/arcverse/go-arcverse/pxr"
 	"github.com/arcverse/go-cedar/process"
 )
 
@@ -17,7 +17,7 @@ import (
 type grpcServer struct {
 	process.Context
 
-	host planet.Host
+	host pxr.Host
 	//shutdown      <-chan struct{}
 	server *grpc.Server
 	opts   GrpcServerOpts
@@ -38,7 +38,7 @@ func (srv *grpcServer) attachAndStart(label string) error {
 	// 		grpc.StreamInterceptor(srv.StreamServerInterceptor()),
 	// 		grpc.UnaryInterceptor(srv.UnaryServerInterceptor()),
 	)
-	planet.RegisterHostGrpcServer(srv.server, srv)
+	pxr.RegisterHostGrpcServer(srv.server, srv)
 
 	srv.Context, err = srv.host.StartChild(&process.Task{
 		Label:     label,
@@ -75,13 +75,13 @@ type grpcSess struct {
 	process.Context
 
 	srv      *grpcServer
-	rpc      planet.HostGrpc_HostSessionServer
-	hostSess planet.HostSession
+	rpc      pxr.HostGrpc_HostSessionServer
+	hostSess pxr.HostSession
 }
 
 // HostSession is a callback for when a new grpc session instance a client opens.
 // Multiple pipes can be open at any time by the same client or multiple clients.
-func (srv *grpcServer) HostSession(rpc planet.HostGrpc_HostSessionServer) error {
+func (srv *grpcServer) HostSession(rpc pxr.HostGrpc_HostSessionServer) error {
 	sess := &grpcSess{
 		srv: srv,
 		rpc: rpc,
@@ -147,7 +147,7 @@ func (srv *grpcServer) HostSession(rpc planet.HostGrpc_HostSessionServer) error 
 			sessDone := sess.hostSess.Done()
 
 			for running := true; running; {
-				msg := planet.NewMsg()
+				msg := pxr.NewMsg()
 				err := sess.rpc.RecvMsg(msg)
 				if err != nil {
 					msg.Reclaim()

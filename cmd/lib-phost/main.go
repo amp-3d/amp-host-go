@@ -9,7 +9,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/arcverse/go-arcverse/planet"
+	"github.com/arcverse/go-arcverse/pxr"
 )
 
 type UnityRenderingExtEventType int32
@@ -198,11 +198,11 @@ func Call_Realloc(buf *[]byte, numBytes int) {
 }
 
 
-var gOutbox = make(chan *planet.Msg, 10)
+var gOutbox = make(chan *pxr.Msg, 10)
 
 //export Call_PushMsg
 func Call_PushMsg(msgBuf []byte) int {
-	msg := planet.NewMsg()
+	msg := pxr.NewMsg()
 	err := msg.Unmarshal(msgBuf)
 	if err != nil {
 		return -1

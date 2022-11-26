@@ -3,12 +3,12 @@ package grpc_server
 import (
 	"fmt"
 
-	"github.com/arcverse/go-arcverse/planet"
+	"github.com/arcverse/go-arcverse/pxr"
 )
 
-// HostGrpcServer attaches to a planet.Host as a child process, offering grpc-based connections.
+// HostGrpcServer attaches to a pxr.Host as a child process, offering grpc-based connections.
 type HostGrpcServer interface {
-	planet.Context
+	pxr.Context
 
 	// Blocks until the server has copmpeted a graceful stop (which could be a any amount of time)
 	GracefulStop()
@@ -31,7 +31,7 @@ func DefaultGrpcServerOpts(listenPort int) GrpcServerOpts {
 }
 
 // AttachNewGrpcServer attaches a child process to the given host, providing grpc-based sessions.
-func (opts GrpcServerOpts) AttachNewGrpcServer(host planet.Host) (HostGrpcServer, error) {
+func (opts GrpcServerOpts) AttachNewGrpcServer(host pxr.Host) (HostGrpcServer, error) {
 	srv := &grpcServer{
 		host: host,
 		opts: opts,

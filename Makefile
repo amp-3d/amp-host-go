@@ -1,9 +1,10 @@
 MAKEFLAGS += --warn-undefined-variables
 SHELL = /bin/bash -o nounset -o errexit -o pipefail
 .DEFAULT_GOAL = build
-UNITY_ASSETS_DIR = ../unity-app/Assets
-UNITY_PXR_DIR = ${UNITY_ASSETS_DIR}/arcverse.unity.sdk/pxr
-BUILD_OUTPUT = ${UNITY_ASSETS_DIR}/Plugins/arcverse.unity.sdk/pxr
+UNITY_ASSETS_DIR = ../arcverse.unity-app/Assets
+ARCVERSE_UNITY_SDK_DIR = ${UNITY_ASSETS_DIR}/arcverse.unity-sdk
+PXR_SDK_DIR = ${ARCVERSE_UNITY_SDK_DIR}/pxr
+BUILD_OUTPUT = ${UNITY_ASSETS_DIR}/Plugins/arcverse.unity-sdk/pxr
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
 
 ## display this help message
@@ -64,23 +65,18 @@ protos:
 
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
-	    --csharp_out ${UNITY_ASSETS_DIR} --csharp_opt=base_namespace=   \
-	    --grpc_out "${UNITY_PXR_DIR}"   \
+	    --csharp_out "${PXR_SDK_DIR}" \
+	    --grpc_out   "${PXR_SDK_DIR}" \
 	    --plugin=protoc-gen-grpc="${grpc_csharp_exe}" \
 	    --proto_path=. \
 		pxr/pxr.proto
 
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
-	    --csharp_out ${UNITY_ASSETS_DIR} --csharp_opt=base_namespace= \
+	    --csharp_out "${ARCVERSE_UNITY_SDK_DIR}/crates" \
 	    --proto_path=. \
 		crates/crates.proto
 
-	# protoc \
-	#     --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
-	#     --csharp_out ${UNITY_ASSETS_DIR} --csharp_opt=base_namespace= \
-	#     --proto_path=. \
-	# 	pxr/client/client.proto
 		
 	# protoc \
 	# 	--go_out=./pxr/builtin_types \

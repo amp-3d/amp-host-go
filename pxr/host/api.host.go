@@ -1,8 +1,6 @@
 package host
 
-import (
-	"github.com/arcverse/go-arcverse/planet"
-)
+import "github.com/arcverse/go-arcverse/pxr"
 
 
 var DefaultHostOpts = HostOpts{
@@ -15,7 +13,7 @@ type HostOpts struct {
 }
 
 // StartNewHost starts a new host with the given opts
-func StartNewHost(opts HostOpts) (planet.Host, error) {
+func StartNewHost(opts HostOpts) (pxr.Host, error) {
 	return newHost(opts)
 }
 

@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/arcverse/go-arcverse/planet"
+	"github.com/arcverse/go-arcverse/pxr"
 	"github.com/arcverse/go-arcverse/symbol"
 	"github.com/arcverse/go-cedar/bufs"
 	"github.com/arcverse/go-cedar/process"
@@ -21,8 +21,8 @@ type host struct {
 
 	homePlanetID uint64
 	home         *planetSess // Home planet of this host
-	appsByURI    map[string]planet.App
-	appsByModel  map[string]planet.App
+	appsByURI    map[string]pxr.App
+	appsByModel  map[string]pxr.App
 	plSess       map[uint64]*planetSess
 	plMu         sync.RWMutex
 }
@@ -31,7 +31,7 @@ const (
 	hackHostPlanetID = 66
 )
 
-func newHost(opts HostOpts) (planet.Host, error) {
+func newHost(opts HostOpts) (pxr.Host, error) {
 	var err error
 	if opts.BasePath, err = utils.ExpandAndCheckPath(opts.BasePath, true); err != nil {
 		return nil, err
@@ -39,8 +39,8 @@ func newHost(opts HostOpts) (planet.Host, error) {
 
 	host := &host{
 		opts:        opts,
-		appsByURI:   make(map[string]planet.App),
-		appsByModel: make(map[string]planet.App),
+		appsByURI:   make(map[string]pxr.App),
+		appsByModel: make(map[string]pxr.App),
 		plSess:      make(map[uint64]*planetSess),
 	}
 
@@ -80,7 +80,7 @@ func (host *host) mountHomePlanet() error {
 
 		_, err = host.getPlanet(host.homePlanetID)
 
-		//pl, err = host.mountPlanet(0, &planet.PlanetEpoch{
+		//pl, err = host.mountPlanet(0, &pxr.PlanetEpoch{
 		// 	EpochTID:   utils.RandomBytes(16),
 		// 	CommonName: "HomePlanet",
 		// })
@@ -89,7 +89,7 @@ func (host *host) mountHomePlanet() error {
 	return err
 	// // Add a new home/root planent if none exists
 	// if host.seat.HomePlanetID == 0 {
-	// 	pl, err = host.mountPlanet(0, &planet.PlanetEpoch{
+	// 	pl, err = host.mountPlanet(0, &pxr.PlanetEpoch{
 	// 		EpochTID:   utils.RandomBytes(16),
 	// 		CommonName: "HomePlanet",
 	// 	})
@@ -109,7 +109,7 @@ func (host *host) loadSeat() error {
 		item, err := txn.Get(gSeatKey)
 		if err == nil {
 			err = item.Value(func(val []byte) error {
-				host.seat = planet.HostSeat{}
+				host.seat = pxr.HostSeat{}
 				return host.seat.Unmarshal(val)
 			})
 		}
@@ -119,7 +119,7 @@ func (host *host) loadSeat() error {
 	switch err {
 
 	case badger.ErrKeyNotFound:
-		host.seat = planet.HostSeat{
+		host.seat = pxr.HostSeat{
 			MajorVers: 2022,
 			MinorVers: 1,
 		}
@@ -153,7 +153,7 @@ func (host *host) commitSeatChanges() error {
 
 func (host *host) getPlanet(planetID uint64) (*planetSess, error) {
 	if planetID == 0 {
-		return nil, planet.ErrCode_PlanetFailure.Error("no planet ID given")
+		return nil, pxr.ErrCode_PlanetFailure.Error("no planet ID given")
 	}
 
 	host.plMu.RLock()
@@ -170,12 +170,12 @@ func (host *host) getPlanet(planetID uint64) (*planetSess, error) {
 // mountPlanet mounts the given planet by ID, or creates a new one if genesis is non-nil.
 func (host *host) mountPlanet(
 	planetID uint64,
-	genesis *planet.PlanetEpoch,
+	genesis *pxr.PlanetEpoch,
 ) (*planetSess, error) {
 
 	if planetID == 0 {
 		if genesis == nil {
-			return nil, planet.ErrCode_PlanetFailure.Error("missing PlanetID and PlanetEpoch TID")
+			return nil, pxr.ErrCode_PlanetFailure.Error("missing PlanetID and PlanetEpoch TID")
 		}
 		planetID = host.home.GetSymbolID(genesis.EpochTID, false)
 	}
@@ -195,7 +195,7 @@ func (host *host) mountPlanet(
 	} else if planetID != 0 {
 		fsName = string(host.home.LookupID(planetID))
 		if len(fsName) == 0 && genesis == nil {
-			return nil, planet.ErrCode_PlanetFailure.Errorf("planet ID=%v failed to resolve", planetID)
+			return nil, pxr.ErrCode_PlanetFailure.Errorf("planet ID=%v failed to resolve", planetID)
 		}
 	} else {
 
@@ -211,14 +211,14 @@ func (host *host) mountPlanet(
 	pl = &planetSess{
 		planetID: planetID,
 		dbPath:   path.Join(host.opts.BasePath, string(fsName)),
-		cells:    make(map[planet.CellID]*cellInst),
+		cells:    make(map[pxr.CellID]*cellInst),
 		//newReqs:  make(chan *openReq, 1),
 	}
 
 	// The db should already exist if opening and vice versa
 	_, err := os.Stat(pl.dbPath)
 	if genesis != nil && err == nil {
-		return nil, planet.ErrCode_PlanetFailure.Error("planet db already exists")
+		return nil, pxr.ErrCode_PlanetFailure.Error("planet db already exists")
 	}
 
 	task := &process.Task{
@@ -257,10 +257,10 @@ func (host *host) mountPlanet(
 	return pl, nil
 }
 
-func (host *host) RegisterApp(app planet.App) error {
+func (host *host) RegisterApp(app pxr.App) error {
 	appURI := app.AppURI()
 	if appURI == "" {
-		return planet.ErrCode_InvalidURI.Error("invalid app URI")
+		return pxr.ErrCode_InvalidURI.Error("invalid app URI")
 	}
 	host.appsByURI[appURI] = app
 
@@ -272,12 +272,12 @@ func (host *host) RegisterApp(app planet.App) error {
 	return nil
 }
 
-func (host *host) SelectAppForSchema(schema *planet.AttrSchema) (planet.App, error) {
+func (host *host) SelectAppForSchema(schema *pxr.AttrSchema) (pxr.App, error) {
 	if schema == nil {
-		return nil, planet.ErrCode_AppNotFound.Errorf("missing schema")
+		return nil, pxr.ErrCode_AppNotFound.Errorf("missing schema")
 	}
 
-	if schema.AppURI != planet.DefaultAppForDataModel {
+	if schema.AppURI != pxr.DefaultAppForDataModel {
 		app := host.appsByURI[schema.AppURI]
 		if app != nil {
 			return app, nil
@@ -286,22 +286,22 @@ func (host *host) SelectAppForSchema(schema *planet.AttrSchema) (planet.App, err
 
 	app := host.appsByModel[schema.DataModelURI]
 	if app == nil {
-		return nil, planet.ErrCode_AppNotFound.Errorf("App not found for schema: %s", schema.SchemaDesc())
+		return nil, pxr.ErrCode_AppNotFound.Errorf("App not found for schema: %s", schema.SchemaDesc())
 	}
 
 	return app, nil
 }
 
-func (host *host) HostPlanet() planet.Planet {
+func (host *host) HostPlanet() pxr.Planet {
 	return host.home
 }
 
-func (host *host) StartNewSession() (planet.HostSession, error) {
+func (host *host) StartNewSession() (pxr.HostSession, error) {
 	sess := &hostSess{
 		host:         host,
-		TypeRegistry: planet.NewTypeRegistry(host.home.symTable),
-		msgsIn:       make(chan *planet.Msg),
-		msgsOut:      make(chan *planet.Msg, 8),
+		TypeRegistry: pxr.NewTypeRegistry(host.home.symTable),
+		msgsIn:       make(chan *pxr.Msg),
+		msgsOut:      make(chan *pxr.Msg, 8),
 		openReqs:     make(map[uint64]*openReq),
 	}
 
@@ -323,12 +323,12 @@ func (host *host) StartNewSession() (planet.HostSession, error) {
 // hostSess wraps a host session the parent host has with a client.
 type hostSess struct {
 	process.Context
-	planet.TypeRegistry
+	pxr.TypeRegistry
 
-	user       planet.User
+	user       pxr.User
 	host       *host               // parent host
-	msgsIn     chan *planet.Msg    // msgs inbound to this hostSess
-	msgsOut    chan *planet.Msg    // msgs outbound from this hostSess
+	msgsIn     chan *pxr.Msg    // msgs inbound to this hostSess
+	msgsOut    chan *pxr.Msg    // msgs outbound from this hostSess
 	openReqs   map[uint64]*openReq // ReqID maps to an open request.
 	openReqsMu sync.Mutex          // protects openReqs
 }
@@ -341,12 +341,12 @@ type planetSess struct {
 	planetID uint64                      // symbol ID (as known by the host's symbol table)
 	dbPath   string                      // local pathname to db
 	db       *badger.DB                  // db access
-	cells    map[planet.CellID]*cellInst // cells that recently have one or more active cells (subscriptions)
+	cells    map[pxr.CellID]*cellInst // cells that recently have one or more active cells (subscriptions)
 	cellsMu  sync.Mutex                  // cells mutex
 }
 
 type openReq struct {
-	planet.CellReq
+	pxr.CellReq
 
 	sess   *hostSess
 	cell   *cellInst
@@ -354,20 +354,20 @@ type openReq struct {
 	closed uint32
 	next   *openReq // single linked list of same-cell reqs
 
-	//echo   planet.CellSub
+	//echo   pxr.CellSub
 	// err    error
-	// attr        *planet.AttrSpec // if set, describes this attr (read-only).  if nil, all SeriesType_0 values are to be loaded.
+	// attr        *pxr.AttrSpec // if set, describes this attr (read-only).  if nil, all SeriesType_0 values are to be loaded.
 	// idle        uint32           // set when the pinnedRange reaches the target range
 	// pinnedRange Range            // the range currently mapped
-	// targetRange planet.AttrRange // specifies the range(s) to be mapped
-	//backlog    []*planet.Msg // backlog of update msgs if this sub falls behind.  TODO: remplace with chunked "infinite" queue class
+	// targetRange pxr.AttrRange // specifies the range(s) to be mapped
+	//backlog    []*pxr.Msg // backlog of update msgs if this sub falls behind.  TODO: remplace with chunked "infinite" queue class
 }
 
-func (req *openReq) Req() *planet.CellReq {
+func (req *openReq) Req() *pxr.CellReq {
 	return &req.CellReq
 }
 
-func (req *openReq) PushUpdate(batch *planet.MsgBatch) error {
+func (req *openReq) PushUpdate(batch *pxr.MsgBatch) error {
 	if atomic.LoadUint32(&req.closed) != 0 {
 		return nil
 	}
@@ -379,7 +379,7 @@ func (req *openReq) PushUpdate(batch *planet.MsgBatch) error {
 	// This also make app sb life easier since msgs are just pushed as they're made rather than building batches
 	// and then sending them all to this for one big PushUpdate.
 	for _, src := range batch.Msgs {
-		msg := planet.CopyMsg(src)
+		msg := pxr.CopyMsg(src)
 		err := req.PushMsg(msg)
 		if err != nil {
 			return err
@@ -389,7 +389,7 @@ func (req *openReq) PushUpdate(batch *planet.MsgBatch) error {
 	return nil
 }
 
-func (req *openReq) PushMsg(msg *planet.Msg) error {
+func (req *openReq) PushMsg(msg *pxr.Msg) error {
 	var err error
 
 	{
@@ -401,7 +401,7 @@ func (req *openReq) PushMsg(msg *planet.Msg) error {
 		select {
 		case req.sess.msgsOut <- msg:
 		case <-req.cancel:
-			err = planet.ErrCode_ShuttingDown.Error("request closing")
+			err = pxr.ErrCode_ShuttingDown.Error("request closing")
 		}
 	}
 
@@ -423,8 +423,8 @@ func (req *openReq) closeReq(pushClose bool, msgVal interface{}) {
 
 		// next, send a close msg to the client
 		if pushClose {
-			msg := planet.NewMsg()
-			msg.Op = planet.MsgOp_CloseReq
+			msg := pxr.NewMsg()
+			msg.Op = pxr.MsgOp_CloseReq
 			if msgVal != nil {
 				msg.SetVal(msgVal)
 			}
@@ -441,12 +441,12 @@ func (sess *hostSess) closeReq(reqID uint64, pushClose bool, msgVal interface{})
 	if req != nil {
 		req.closeReq(pushClose, msgVal)
 	} else if pushClose {
-		sess.pushMsg(reqID, planet.MsgOp_CloseReq, msgVal)
+		sess.pushMsg(reqID, pxr.MsgOp_CloseReq, msgVal)
 	}
 }
 
-func (sess *hostSess) pushMsg(reqID uint64, msgOp planet.MsgOp, msgVal interface{}) {
-	msg := planet.NewMsg()
+func (sess *hostSess) pushMsg(reqID uint64, msgOp pxr.MsgOp, msgVal interface{}) {
+	msg := pxr.NewMsg()
 	msg.ReqID = reqID
 	msg.Op = msgOp
 
@@ -459,15 +459,15 @@ func (sess *hostSess) pushMsg(reqID uint64, msgOp planet.MsgOp, msgVal interface
 	}
 }
 
-func (sess *hostSess) Outbox() chan *planet.Msg {
+func (sess *hostSess) Outbox() chan *pxr.Msg {
 	return sess.msgsOut
 }
 
-func (sess *hostSess) Inbox() chan *planet.Msg {
+func (sess *hostSess) Inbox() chan *pxr.Msg {
 	return sess.msgsIn
 }
 
-func (sess *hostSess) LoggedIn() planet.User {
+func (sess *hostSess) LoggedIn() pxr.User {
 	return sess.user
 }
 
@@ -476,23 +476,23 @@ func (sess *hostSess) consumeInbox() {
 		select {
 
 		case msg := <-sess.msgsIn:
-			if msg != nil && msg.Op != planet.MsgOp_NoOp {
+			if msg != nil && msg.Op != pxr.MsgOp_NoOp {
 				closeReq := true
 
 				var err error
 				switch msg.Op {
-				// case planet.MsgOp_PinAttrRange:
+				// case pxr.MsgOp_PinAttrRange:
 				// 	err = sess.pinAttrRange(msg))
-				case planet.MsgOp_PinCell:
+				case pxr.MsgOp_PinCell:
 					err = sess.pinCell(msg)
 					closeReq = err != nil
-				case planet.MsgOp_ResolveAndRegister:
+				case pxr.MsgOp_ResolveAndRegister:
 					err = sess.resolveAndRegister(msg)
-				case planet.MsgOp_Login:
+				case pxr.MsgOp_Login:
 					err = sess.login(msg)
-				case planet.MsgOp_CloseReq:
+				case pxr.MsgOp_CloseReq:
 				default:
-					err = planet.ErrCode_UnsupportedOp.Errorf("unknown MsgOp: %v", msg.Op)
+					err = pxr.ErrCode_UnsupportedOp.Errorf("unknown MsgOp: %v", msg.Op)
 				}
 
 				if closeReq {
@@ -508,15 +508,15 @@ func (sess *hostSess) consumeInbox() {
 	}
 }
 
-func (host *host) login(msg *planet.Msg) (planet.User, error) {
-	var loginReq planet.LoginReq
+func (host *host) login(msg *pxr.Msg) (pxr.User, error) {
+	var loginReq pxr.LoginReq
 	err := msg.LoadVal(&loginReq)
 	if err != nil {
 		return nil, err
 	}
 
 	//
-	// FUTURE: a "user" app would start here and is bound to the userUID on the host's home planet.
+	// FUTURE: a "user" app would start here and is bound to the userUID on the host's home pxr.
 	//
 	seat, err := host.home.getUser(loginReq, true)
 	if err != nil {
@@ -534,9 +534,9 @@ func (host *host) login(msg *planet.Msg) (planet.User, error) {
 
 }
 
-func (sess *hostSess) login(msg *planet.Msg) error {
+func (sess *hostSess) login(msg *pxr.Msg) error {
 	if sess.user != nil {
-		return planet.ErrCode_InvalidLogin.Error("already logged in")
+		return pxr.ErrCode_InvalidLogin.Error("already logged in")
 	}
 
 	var err error
@@ -548,8 +548,8 @@ func (sess *hostSess) login(msg *planet.Msg) error {
 	return nil
 }
 
-func (sess *hostSess) resolveAndRegister(msg *planet.Msg) error {
-	var defs planet.Defs
+func (sess *hostSess) resolveAndRegister(msg *pxr.Msg) error {
+	var defs pxr.Defs
 	if err := msg.LoadVal(&defs); err != nil {
 		return err
 	}
@@ -558,7 +558,7 @@ func (sess *hostSess) resolveAndRegister(msg *planet.Msg) error {
 		return err
 	}
 
-	sess.pushMsg(msg.ReqID, planet.MsgOp_CloseReq, nil)
+	sess.pushMsg(msg.ReqID, pxr.MsgOp_CloseReq, nil)
 	return nil
 }
 
@@ -591,7 +591,7 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *openReq, err erro
 			case removeReq:
 				sess.openReqs[reqID] = nil
 			case insertReq:
-				err = planet.ErrCode_InvalidReq.Error("ReqID already in use")
+				err = pxr.ErrCode_InvalidReq.Error("ReqID already in use")
 			}
 		} else {
 			switch verb {
@@ -611,7 +611,7 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *openReq, err erro
 	return
 }
 
-func (sess *hostSess) pinCell(msg *planet.Msg) error {
+func (sess *hostSess) pinCell(msg *pxr.Msg) error {
 
 	// Note that if the req isn't found to cancel, no err response is sent.
 	req, err := sess.getReq(msg.ReqID, insertReq)
@@ -619,7 +619,7 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 		return err
 	}
 
-	var pinReq planet.PinReq
+	var pinReq pxr.PinReq
 	if err = msg.LoadVal(&pinReq); err != nil {
 		return err
 	}
@@ -627,7 +627,7 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 	if pinReq.ParentReqID != 0 {
 		parentReq, _ := sess.getReq(pinReq.ParentReqID, getReq)
 		if parentReq == nil {
-			err = planet.ErrCode_InvalidReq.Error("invalid ParentReqID")
+			err = pxr.ErrCode_InvalidReq.Error("invalid ParentReqID")
 			return err
 		}
 		req.ParentReq = &parentReq.CellReq
@@ -643,9 +643,9 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 		return err
 	}
 
-	req.PinCell = planet.CellID(pinReq.PinCell)
+	req.PinCell = pxr.CellID(pinReq.PinCell)
 	req.PinURI = pinReq.PinURI
-	req.ChildSchemas = make([]*planet.AttrSchema, len(pinReq.ChildSchemas))
+	req.ChildSchemas = make([]*pxr.AttrSchema, len(pinReq.ChildSchemas))
 	for i, child := range pinReq.ChildSchemas {
 		req.ChildSchemas[i], err = sess.TypeRegistry.GetSchemaByID(child)
 		if err != nil {
@@ -660,7 +660,7 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 
 	if req.PlanetID == 0 {
 		req.PlanetID = sess.user.HomePlanet().PlanetID()
-		// err = planet.ErrCode_InvalidReq.Error("invalid PlanetID")
+		// err = pxr.ErrCode_InvalidReq.Error("invalid PlanetID")
 		// return err
 	}
 
@@ -678,10 +678,10 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 }
 
 type user struct {
-	home planet.Planet
+	home pxr.Planet
 }
 
-func (user *user) HomePlanet() planet.Planet {
+func (user *user) HomePlanet() pxr.Planet {
 	return user.home
 }
 
@@ -711,7 +711,7 @@ func (sess *hostSess) serveState(req *openReq) error {
 	// Go through all the attr for this NodeType and for any series types, queue them for loading.
 	var head, prev *cellSub
 	for _, attr := range spec.Attrs {
-		if attr.SeriesType != planet.SeriesType_0 && attr.AutoPin != planet.AutoPin_0 {
+		if attr.SeriesType != pxr.SeriesType_0 && attr.AutoPin != pxr.AutoPin_0 {
 			sub := &cellSub{
 				sess: sess,
 				attr: attr,
@@ -723,12 +723,12 @@ func (sess *hostSess) serveState(req *openReq) error {
 			}
 
 			switch attr.AutoPin {
-			case planet.AutoPin_All_Ascending:
+			case pxr.AutoPin_All_Ascending:
 				sub.targetRange.SI_SeekTo = 0
-				sub.targetRange.SI_StopAt = uint64(planet.SI_DistantFuture)
+				sub.targetRange.SI_StopAt = uint64(pxr.SI_DistantFuture)
 
-			case planet.AutoPin_All_Descending:
-				sub.targetRange.SI_SeekTo = uint64(planet.SI_DistantFuture)
+			case pxr.AutoPin_All_Descending:
+				sub.targetRange.SI_SeekTo = uint64(pxr.SI_DistantFuture)
 				sub.targetRange.SI_StopAt = 0
 			}
 
@@ -744,8 +744,8 @@ func (sess *hostSess) serveState(req *openReq) error {
 */
 /*
 
-func (sess *hostSess) pinAttrRange(msg *planet.Msg) error {
-	attrRange := planet.AttrRange{}
+func (sess *hostSess) pinAttrRange(msg *pxr.Msg) error {
+	attrRange := pxr.AttrRange{}
 
 	if err := msg.LoadValue(&attrRange); err != nil {
 		return err
@@ -773,11 +773,11 @@ func (sess *hostSess) pinAttrRange(msg *planet.Msg) error {
 			pin.Close()
 			sess.pins[msg.ReqID] = nil
 		} else {
-			err = planet.ErrCode_InvalidReq.ErrWithMsg("ReqID already in use")
+			err = pxr.ErrCode_InvalidReq.ErrWithMsg("ReqID already in use")
 		}
 	} else {
 		if cancel {
-			err = planet.ErrCode_ReqNotFound.Err()
+			err = pxr.ErrCode_ReqNotFound.Err()
 		} else {
 			pin = &nodeReq{
 				reqCancel: make(chan struct{}),
@@ -808,10 +808,10 @@ func (sess *hostSess) pinAttrRange(msg *planet.Msg) error {
 OLD phost era stuff...
 
 
-func (host *host) GetPlanet(planetID planet.TID, fromID planet.TID) (planet.Planet, error) {
+func (host *host) GetPlanet(planetID pxr.TID, fromID pxr.TID) (pxr.Planet, error) {
 
 	if len(domainName) == 0 {
-		return nil, planet.planet.ErrCode_InvalidURI.ErrWithMsg("no planet domain name given")
+		return nil, pxr.pxr.ErrCode_InvalidURI.ErrWithMsg("no planet domain name given")
 	}
 
 	host.mu.RLock()
@@ -823,7 +823,7 @@ func (host *host) GetPlanet(planetID planet.TID, fromID planet.TID) (planet.Plan
 	}
 
 	if autoMount == false {
-		return nil, planet.ErrCode_DomainNotFound.ErrWithMsg(domainName)
+		return nil, pxr.ErrCode_DomainNotFound.ErrWithMsg(domainName)
 	}
 
 	return host.mountDomain(domainName)
@@ -883,13 +883,13 @@ func (host *host) OpenChSub(req *reqJob) (*chSub, error) {
 func (host *host) SubmitTx(tx *Tx) error {
 
 	if tx == nil || tx.TxOp == nil {
-		return planet.ErrCode_NothingToCommit.ErrWithMsg("missing tx")
+		return pxr.ErrCode_NothingToCommit.ErrWithMsg("missing tx")
 	}
 
 	uri := tx.TxOp.ChStateURI
 
 	if uri == nil || len(uri.DomainName) == 0 {
-		return planet.ErrCode_InvalidURI.ErrWithMsg("no domain name given")
+		return pxr.ErrCode_InvalidURI.ErrWithMsg("no domain name given")
 	}
 
 	var err error
@@ -907,7 +907,7 @@ func (host *host) SubmitTx(tx *Tx) error {
 			case NodeOp_NodeRemove:
 			case NodeOp_NodeRemoveAll:
 			default:
-				err = planet.ErrCode_CommitFailed.ErrWithMsg("unsupported NodeOp for entry")
+				err = pxr.ErrCode_CommitFailed.ErrWithMsg("unsupported NodeOp for entry")
 			}
 
             if (entry.RevID == 0) {
@@ -931,7 +931,7 @@ func (host *host) SubmitTx(tx *Tx) error {
 
 func (host *host) getDomain(domainName string, autoMount bool) (*domain, error) {
 	if len(domainName) == 0 {
-		return nil, planet.planet.ErrCode_InvalidURI.ErrWithMsg("no planet domain name given")
+		return nil, pxr.pxr.ErrCode_InvalidURI.ErrWithMsg("no planet domain name given")
 	}
 
 	host.domainsMu.RLock()
@@ -943,7 +943,7 @@ func (host *host) getDomain(domainName string, autoMount bool) (*domain, error) 
 	}
 
 	if autoMount == false {
-		return nil, planet.ErrCode_DomainNotFound.ErrWithMsg(domainName)
+		return nil, pxr.ErrCode_DomainNotFound.ErrWithMsg(domainName)
 	}
 
 	return host.mountDomain(domainName)
@@ -1062,18 +1062,18 @@ func (sess *hostSess) dispatchMsg(msg *Msg) {
 	msgOp := msg.OpCode()
 	sess.openReqsMu.Lock()
 	job := sess.openReqs[msg.ReqID]
-	if job == nil && msgOp != planet.MsgOp_ReqDiscard {
+	if job == nil && msgOp != pxr.MsgOp_ReqDiscard {
 		job = sess.newJob(msg)
 		sess.openReqs[msg.ReqID] = job
 	}
 	sess.openReqsMu.Unlock()
 
 	var err error
-	if msgOp == planet.MsgOp_ReqDiscard {
+	if msgOp == pxr.MsgOp_ReqDiscard {
 		if job != nil {
 			job.cancelJob()
 		} else {
-			err = planet.ErrCode_ReqNotFound.Err()
+			err = pxr.ErrCode_ReqNotFound.Err()
 		}
 	} else {
 		err = job.nextMsg(msg)
@@ -1088,15 +1088,15 @@ func (sess *hostSess) dispatchMsg(msg *Msg) {
 func (sess *hostSess) EncodeToTxAndSign(txOp *TxOp) (*Tx, error) {
 
 	if txOp == nil {
-		return nil, planet.ErrCode_NothingToCommit.ErrWithMsg("missing txOp")
+		return nil, pxr.ErrCode_NothingToCommit.ErrWithMsg("missing txOp")
 	}
 
 	if len(txOp.Entries) == 0 {
-		return nil, planet.ErrCode_NothingToCommit.ErrWithMsg("no entries to commit")
+		return nil, pxr.ErrCode_NothingToCommit.ErrWithMsg("no entries to commit")
 	}
 
 	if txOp.ChannelGenesis == false && len(txOp.ChStateURI.ChID_TID) < 16 {
-		return nil, planet.ErrCode_NothingToCommit.ErrWithMsg("invalid ChID (missing TID)")
+		return nil, pxr.ErrCode_NothingToCommit.ErrWithMsg("invalid ChID (missing TID)")
 	}
 
 	//
@@ -1113,7 +1113,7 @@ func (sess *hostSess) EncodeToTxAndSign(txOp *TxOp) (*Tx, error) {
 
 	if txOp.ChannelGenesis {
 		// if len(uri.ChID) > 0 {
-		// 	return planet.ErrCode_InvalidURI.ErrWithMsg("URI must be a domain name and not be a path")
+		// 	return pxr.ErrCode_InvalidURI.ErrWithMsg("URI must be a domain name and not be a path")
 		// }
 		txOp.ChStateURI.ChID_TID = tx.TID
 		txOp.ChStateURI.ChID = TID.Base32()
@@ -1145,7 +1145,7 @@ type reqJob struct {
 	msgs     []*Msg  // msgs for this job
 	chURI    ChStateURI // Set from chOp
 	canceled bool       // Set if this job is to be discarded
-	chSub    chSub      // If getOp is planet.MsgOp_Subscribe
+	chSub    chSub      // If getOp is pxr.MsgOp_Subscribe
 	final    bool
 
 	scrap [4]*Msg
@@ -1163,37 +1163,37 @@ func (job *reqJob) nextMsg(msg *Msg) error {
 	var err error
 	opCode := msg.OpCode()
 	switch opCode {
-	case planet.MsgOp_ChOpen, planet.MsgOp_ChGenesis:
+	case pxr.MsgOp_ChOpen, pxr.MsgOp_ChGenesis:
 		if job.reqType != 0 {
-			err = planet.ErrCode_UnsupportedOp.ErrWithMsg("multi-channel ops not supported")
+			err = pxr.ErrCode_UnsupportedOp.ErrWithMsg("multi-channel ops not supported")
 			break
 		}
 		job.chOp = msg.Ops
 		err = job.chURI.AssignFromURI(msg.Keypath)
-	case planet.MsgOp_Get:
+	case pxr.MsgOp_Get:
 		if job.reqType == 0 {
 			job.reqType = chQuery
 		} else if job.reqType != chQuery {
-			err = planet.ErrCode_UnsupportedOp.ErrWithMsg("multi-channel ops not supported")
+			err = pxr.ErrCode_UnsupportedOp.ErrWithMsg("multi-channel ops not supported")
 			break
 		}
 		if job.getOp != 0 {
-			err = planet.ErrCode_UnsupportedOp.ErrWithMsg("multi-get ops not supported")
+			err = pxr.ErrCode_UnsupportedOp.ErrWithMsg("multi-get ops not supported")
 			break
 		}
 		if job.chOp != 0 {
-			err = planet.ErrCode_UnsupportedOp.ErrWithMsg("no channel URI specified for channel query")
+			err = pxr.ErrCode_UnsupportedOp.ErrWithMsg("no channel URI specified for channel query")
 			break
 		}
 		addMsgToJob = true
 		job.getOp = msg.Ops
-	case planet.MsgOp_PushAttr:
+	case pxr.MsgOp_PushAttr:
 
-	case planet.MsgOp_AccessGrant:
+	case pxr.MsgOp_AccessGrant:
 
-		// case planet.MsgOp_Get, planet.MsgOp_Subscribe:
+		// case pxr.MsgOp_Get, pxr.MsgOp_Subscribe:
 	// 	if job.chOp != nil {
-	// 		err = planet.ErrCode_FailedToOpenChURI.ErrWithMsg("multiple get ops")
+	// 		err = pxr.ErrCode_FailedToOpenChURI.ErrWithMsg("multiple get ops")
 	// 		break
 	// 	}
 	// 	job.getOp = msg
@@ -1206,17 +1206,17 @@ func (job *reqJob) nextMsg(msg *Msg) error {
 
 
 	// switch msg.OpCode() {
-	// case planet.MsgOp_ChOpen, planet.MsgOp_ChGenesis:
+	// case pxr.MsgOp_ChOpen, pxr.MsgOp_ChGenesis:
 	// 	if len(job.chURI.Domain
 	// 	if job.opCode != nil {
-	// 		err = planet.ErrCode_FailedToOpenChURI.ErrWithMsg("multiple channel open ops")
+	// 		err = pxr.ErrCode_FailedToOpenChURI.ErrWithMsg("multiple channel open ops")
 	// 		break
 	// 	}
 	// 	job.chOp = msg
 	// 	err = job.chURI.AssignFromURI(job.chOp.Keypath)
-	// case planet.MsgOp_Get, planet.MsgOp_Subscribe:
+	// case pxr.MsgOp_Get, pxr.MsgOp_Subscribe:
 	// 	if job.chOp != nil {
-	// 		err = planet.ErrCode_FailedToOpenChURI.ErrWithMsg("multiple get ops")
+	// 		err = pxr.ErrCode_FailedToOpenChURI.ErrWithMsg("multiple get ops")
 	// 		break
 	// 	}
 	// 	job.getOp = msg
@@ -1225,7 +1225,7 @@ func (job *reqJob) nextMsg(msg *Msg) error {
 
 	// job.msgs = append(job.scrap[:], msg)
 
-	// if (msg.Ops & planet.MsgOp_ReqComplete) != 0 {
+	// if (msg.Ops & pxr.MsgOp_ReqComplete) != 0 {
 	// 	job.final = true
 
 	// 	go job.exeJob()
@@ -1233,7 +1233,7 @@ func (job *reqJob) nextMsg(msg *Msg) error {
 
 }
 
-func (job *reqJob) OnMsg(msg *planet.Msg) error {
+func (job *reqJob) OnMsg(msg *pxr.Msg) error {
 
 	for i := 0; i < 2; i++ {
 
@@ -1252,7 +1252,7 @@ func (job *reqJob) OnMsg(msg *planet.Msg) error {
 		}
 	}
 
-	return planet.planet.ErrCode_ClientNotResponding.Err()
+	return pxr.pxr.ErrCode_ClientNotResponding.Err()
 }
 
 // Debugf prints output to the output log
@@ -1322,7 +1322,7 @@ func (job *reqJob) exeJob() {
 	// Check to see if this req is canceled before beginning
 	if err == nil {
 		if job.isCanceled() {
-			err = planet.ErrCode_ReqCanceled.Err()
+			err = pxr.ErrCode_ReqCanceled.Err()
 		}
 	}
 
@@ -1345,14 +1345,14 @@ func (job *reqJob) exeJob() {
 			}
 
 		default:
-			err = planet.ErrCode_UnsupportedOp.Err()
+			err = pxr.ErrCode_UnsupportedOp.Err()
 		}
 	}
 
 	// Send completion msg
 	{
 		if err == nil && job.isCanceled() {
-			err = planet.ErrCode_ReqCanceled.Err()
+			err = pxr.ErrCode_ReqCanceled.Err()
 		}
 
 		if err != nil {
@@ -1373,14 +1373,14 @@ func (job *reqJob) exeJob() {
 
 func (req *Msg) newReqDiscard(err error) *Msg {
 	msg := &Msg{
-		Ops:   planet.MsgOp_ReqDiscard,
+		Ops:   pxr.MsgOp_ReqDiscard,
 		ReqID: req.ReqID,
 	}
 
 	if err != nil {
 		var reqErr *ReqErr
 		if reqErr, _ = err.(*ReqErr); reqErr == nil {
-			err = planet.ErrCode_UnnamedErr.Wrap(err)
+			err = pxr.ErrCode_UnnamedErr.Wrap(err)
 			reqErr = err.(*ReqErr)
 		}
 		msg.Buf = bufs.SmartMarshal(reqErr, msg.Buf)

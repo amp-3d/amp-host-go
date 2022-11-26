@@ -7,11 +7,11 @@ import (
 	"path"
 	"time"
 
-	"github.com/arcverse/go-arcverse/planet"
-	"github.com/arcverse/go-arcverse/planet/apps/filesys"
-	"github.com/arcverse/go-arcverse/planet/apps/vibe"
-	"github.com/arcverse/go-arcverse/planet/grpc_server"
-	"github.com/arcverse/go-arcverse/planet/host"
+	"github.com/arcverse/go-arcverse/pxr"
+	"github.com/arcverse/go-arcverse/pxr/apps/filesys"
+	"github.com/arcverse/go-arcverse/pxr/apps/vibe"
+	"github.com/arcverse/go-arcverse/pxr/grpc_server"
+	"github.com/arcverse/go-arcverse/pxr/host"
 	"github.com/arcverse/go-cedar/log"
 	"github.com/arcverse/go-cedar/process"
 	"github.com/arcverse/go-cedar/utils"
@@ -26,7 +26,7 @@ func main() {
 	}
 	defaultDataPath := path.Join(exePath, "phost.data")
 
-	hostPort := flag.Int("host-port", int(planet.Const_DefaultGrpcServicePort), "Sets the port used to bind HostGrpc service")
+	hostPort := flag.Int("host-port", int(pxr.Const_DefaultGrpcServicePort), "Sets the port used to bind HostGrpc service")
 	showTree := flag.Int("show-tree", 0, "Prints the process tree periodically, checking every given number of seconds")
 	dataPath := flag.String("data-path", defaultDataPath, "Specifies the path for all file access and storage")
 

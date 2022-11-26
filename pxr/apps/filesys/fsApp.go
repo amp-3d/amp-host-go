@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/arcverse/go-arcverse/planet"
+	"github.com/arcverse/go-arcverse/pxr"
 )
 
 type fsApp struct {
@@ -28,15 +28,15 @@ func (app *fsApp) DataModelURIs() []string {
 }
 
 // IssueEphemeralID issued a new ID that will persist
-func (app *fsApp) IssueCellID() planet.CellID {
-	return planet.CellID(atomic.AddUint64(&app.nextID, 1) + 100)
+func (app *fsApp) IssueCellID() pxr.CellID {
+	return pxr.CellID(atomic.AddUint64(&app.nextID, 1) + 100)
 }
 
-func (app *fsApp) ResolveRequest(req *planet.CellReq) error {
+func (app *fsApp) ResolveRequest(req *pxr.CellReq) error {
 
 	if req.PinCell == 0 {
 		if req.PinURI == "" {
-			return planet.ErrCode_InvalidCell.Error("invalid root URI")
+			return pxr.ErrCode_InvalidCell.Error("invalid root URI")
 		}
 
 		dir := &pinnedDir{
@@ -44,7 +44,7 @@ func (app *fsApp) ResolveRequest(req *planet.CellReq) error {
 		}
 		fi, err := os.Stat(dir.pathname)
 		if err != nil {
-			return planet.ErrCode_InvalidCell.Errorf("path not found: %q", dir.pathname)
+			return pxr.ErrCode_InvalidCell.Errorf("path not found: %q", dir.pathname)
 		}
 		req.PinCell = app.IssueCellID()
 		dir.fsItem.setFrom(fi)
@@ -53,17 +53,17 @@ func (app *fsApp) ResolveRequest(req *planet.CellReq) error {
 
 	} else {
 		if req.ParentReq == nil || req.ParentReq.PinnedCell == nil {
-			return planet.ErrCode_InvalidCell.Error("parent cell is nil")
+			return pxr.ErrCode_InvalidCell.Error("parent cell is nil")
 		}
 
 		parent, ok := req.ParentReq.PinnedCell.(*pinnedDir)
 		if !ok {
-			return planet.ErrCode_NotPinnable.Error("parent is not an pinnedDir")
+			return pxr.ErrCode_NotPinnable.Error("parent is not an pinnedDir")
 		}
 
 		item := parent.itemByID[req.PinCell]
 		if item == nil {
-			return planet.ErrCode_InvalidCell.Error("invalid target cell")
+			return pxr.ErrCode_InvalidCell.Error("invalid target cell")
 		}
 
 		//
@@ -90,11 +90,11 @@ type pinnedDir struct {
 
 	pathname string    // full pathname (couple be some other OS handle to a file system dir item)
 	items    []*fsItem // ordered
-	itemByID map[planet.CellID]*fsItem
+	itemByID map[pxr.CellID]*fsItem
 }
 
 type fsItem struct {
-	planet.CellID
+	pxr.CellID
 
 	lastRefresh time.Time
 	isHidden    bool
@@ -124,13 +124,13 @@ func (item *fsItem) Compare(oth *fsItem) int {
 	return 0
 }
 
-const crateURL = "crate-asset://crates.planet.tools/filesys.crate/"
+const crateURL = "crate-asset://crates.pxr.tools/filesys.crate/"
 
-func (dir *pinnedDir) readDir(req *planet.CellReq) error {
+func (dir *pinnedDir) readDir(req *pxr.CellReq) error {
 	app := req.ParentApp.(*fsApp)
 
 	{
-		//dir.subs = make(map[planet.CellID]os.DirEntry)
+		//dir.subs = make(map[pxr.CellID]os.DirEntry)
 		f, err := os.Open(dir.pathname)
 		if err != nil {
 			return err
@@ -149,7 +149,7 @@ func (dir *pinnedDir) readDir(req *planet.CellReq) error {
 		}
 
 		N := len(fsItems)
-		dir.itemByID = make(map[planet.CellID]*fsItem, N)
+		dir.itemByID = make(map[pxr.CellID]*fsItem, N)
 		dir.items = dir.items[:0]
 
 		var tmp *fsItem
@@ -186,7 +186,7 @@ func (dir *pinnedDir) readDir(req *planet.CellReq) error {
 
 }
 
-func (dir *pinnedDir) PushCellState(req *planet.CellReq) error {
+func (dir *pinnedDir) PushCellState(req *pxr.CellReq) error {
 
 	// Refresh if first time or too old
 	now := time.Now()
@@ -203,7 +203,7 @@ func (dir *pinnedDir) PushCellState(req *planet.CellReq) error {
 	return nil
 }
 
-func (item *fsItem) PushCellState(req *planet.CellReq) error {
+func (item *fsItem) PushCellState(req *pxr.CellReq) error {
 	return item.pushCellState(req, false)
 }
 
@@ -223,7 +223,7 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 	}
 }
 
-func (item *fsItem) pushCellState(req *planet.CellReq, asChild bool) error {
+func (item *fsItem) pushCellState(req *pxr.CellReq, asChild bool) error {
 	schema := req.PinCellSchema
 	if asChild {
 		schema = req.GetChildSchema(DataModels[item.model])
@@ -255,12 +255,12 @@ func (item *fsItem) pushCellState(req *planet.CellReq, asChild bool) error {
 
 		req.PushAttr(item.CellID, schema, attr_ByteSz, item.size)
 
-		req.PushAttr(item.CellID, schema, attr_LastModified, planet.ConvertToTimeFS(item.modTime))
+		req.PushAttr(item.CellID, schema, attr_LastModified, pxr.ConvertToTimeFS(item.modTime))
 	}
 	return nil
 }
 
-// // func (app *fsApp) ResolveRequest(req *planet.CellReq) error {
+// // func (app *fsApp) ResolveRequest(req *pxr.CellReq) error {
 // //     req.AppItem =
 // //     req.Target = app.IssueEphemeralID()
 // //     return nil

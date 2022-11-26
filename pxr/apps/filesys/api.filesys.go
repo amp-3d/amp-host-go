@@ -1,14 +1,14 @@
 package filesys
 
-import "github.com/arcverse/go-arcverse/planet"
+import "github.com/arcverse/go-arcverse/pxr"
 
-func NewApp() planet.App {
+func NewApp() pxr.App {
 	return &fsApp{}
 }
 
 const (
 	AppBaseName = "filesys"
-	AppURI      = "planet.tools/filesys.app/v1.2022.1"
+	AppURI      = "arcverse.systems/filesys.app/v1.2022.1"
 )
 
 type DataModel int

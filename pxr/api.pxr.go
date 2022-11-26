@@ -1,18 +1,18 @@
-package planet
+package pxr
 
 import "github.com/arcverse/go-cedar/process"
 
 /*
 packages
 
-	planet
-	    planet interfaces and support utils
-	planet/host
-	    an implementation of planet.Host & planet.HostSession
-	planet/grpc_server
-		implements a grpc server that consumes a planet.Host instance
-	planet/apps
-		implementations of planet.App
+	pxr
+	    planetXR interfaces and support utils
+	pxr/host
+	    an implementation of pxr.Host & pxr.HostSession
+	pxr/grpc_server
+		implements a grpc server that consumes a pxr.Host instance
+	pxr/apps
+		implementations of pxr.App
 
 
 	phost process.Context model:
@@ -148,10 +148,10 @@ type CellReq struct {
 }
 
 // Signals to use the default App for a given AttrSchema DataModelURI.
-// See AttrSchema.AppURI in planet.proto
+// See AttrSchema.AppURI in pxr.proto
 const DefaultAppForDataModel = "."
 
-// App creates a new Channel instance on demand when Planet.GetChannel() is called.
+// App creates a new Channel instance on demand when pxr.GetChannel() is called.
 // App and AppChannel consume the Planet and Channel interfaces to perform specialized functionality.
 // In general, a channel app should be specialized for a specific, taking inspiration from the legacy of unix util way-of-thinking.
 type App interface {

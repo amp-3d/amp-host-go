@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-// planet specifies an implementation-independent API and support for a distributed
+// package pxr is an implementation-independent API and support for a distributed
 // files, media, and communication system running a realtime 2D/3D/XR client.
-package planet;
+package pxr;
 
 // https://stackoverflow.com/questions/43026449/gogo-proto-file-not-found
 // import "github.com/gogo/protobuf/gogoproto/gogo.proto";
