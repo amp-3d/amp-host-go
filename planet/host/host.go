@@ -626,7 +626,7 @@ func (sess *hostSess) pinCell(msg *planet.Msg) error {
 
 	if pinReq.ParentReqID != 0 {
 		parentReq, _ := sess.getReq(pinReq.ParentReqID, getReq)
-		if parentReq != nil {
+		if parentReq == nil {
 			err = planet.ErrCode_InvalidReq.Error("invalid ParentReqID")
 			return err
 		}
