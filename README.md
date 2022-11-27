@@ -1,4 +1,7 @@
 # go-arcverse
+---
+### PlanetXR framework and runtime for Go
 
-### Official Go implementation for the arcverse UI framework & runtime
+---
 
+See [arcverse.unity-app](https://github.com/arcverse/arcverse.unity-app) to get started.
