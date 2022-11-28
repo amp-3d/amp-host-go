@@ -77,6 +77,11 @@ protos:
 	    --proto_path=. \
 		crates/crates.proto
 
+    # if [ -d "../go-arcgate" ]; then \
+    #     cp "crates/crates.pb.go"  "../go-arcgate/crates/" \
+    # fi
+
+
 		
 	# protoc \
 	# 	--go_out=./pxr/builtin_types \

@@ -41,10 +41,10 @@ message KVEntry {
 
 
 message AppVars {
-    // HostName is the domain name used for primary queries (e.g. "blockcities.plan.tools") 
-                string              HostDomain                  = 2;
+    // AppDomain is the domain name used for primary queries (e.g. "arcverse.systems") 
+                string              AppDomain                   = 2;
                 
-    // LinkDesc describes a link into this org and is for humans.
+    // AppDesc succinctly describes this org and is for humans.
                 string              AppDesc                     = 4;
                 
     // OrgHomeURL is the home link for this org (e.g. "https://blockcities.com")
