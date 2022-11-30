@@ -2,18 +2,21 @@ package host
 
 import "github.com/arcverse/go-arcverse/pxr"
 
-
-var DefaultHostOpts = HostOpts{
-    BasePath: "~/_.phost",
+type HostOpts struct {
+	Label     string // label of this host
+	StatePath string // local fs path where user and state data is stored
+	CachePath string // local fs path where purgeable data is stored
 }
 
-
-type HostOpts struct {
-	BasePath string // local file path where planet dbs are stored
+func DefaultHostOpts() HostOpts {
+	opts := HostOpts{
+		Label:     "Host",
+		StatePath: "~/_.archost",
+	}
+	return opts
 }
 
 // StartNewHost starts a new host with the given opts
 func StartNewHost(opts HostOpts) (pxr.Host, error) {
-	return newHost(opts)
+	return startNewHost(opts)
 }
-

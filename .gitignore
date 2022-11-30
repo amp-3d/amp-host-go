@@ -1,8 +1,9 @@
 
 
 .vscode/*.log
-cmd/phost/*.data
-cmd/phost/phost
+cmd/archost/*.data
+cmd/archost/*.archost
+cmd/archost/archost
 
 __debug_bin
 __debug_bin.exe

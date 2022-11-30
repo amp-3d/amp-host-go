@@ -1,6 +1,7 @@
 package host
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"sync"
@@ -31,9 +32,15 @@ const (
 	hackHostPlanetID = 66
 )
 
-func newHost(opts HostOpts) (pxr.Host, error) {
+func startNewHost(opts HostOpts) (pxr.Host, error) {
 	var err error
-	if opts.BasePath, err = utils.ExpandAndCheckPath(opts.BasePath, true); err != nil {
+	if opts.StatePath, err = utils.ExpandAndCheckPath(opts.StatePath, true); err != nil {
+		return nil, err
+	}
+	if opts.CachePath == "" {
+		opts.CachePath = path.Join(path.Dir(opts.StatePath), "_.archost-cache")
+	}
+	if opts.CachePath, err = utils.ExpandAndCheckPath(opts.CachePath, true); err != nil {
 		return nil, err
 	}
 
@@ -56,8 +63,11 @@ func newHost(opts HostOpts) (pxr.Host, error) {
 	// }
 
 	host.Context, err = process.Start(&process.Task{
-		Label:     "Host",
+		Label:     host.opts.Label,
 		IdleClose: time.Nanosecond,
+		OnClosed: func() {
+			host.Info(1, "pxr.Host shutdown complete")
+		},
 	})
 	if err != nil {
 		return nil, err
@@ -210,7 +220,7 @@ func (host *host) mountPlanet(
 
 	pl = &planetSess{
 		planetID: planetID,
-		dbPath:   path.Join(host.opts.BasePath, string(fsName)),
+		dbPath:   path.Join(host.opts.StatePath, string(fsName)),
 		cells:    make(map[pxr.CellID]*cellInst),
 		//newReqs:  make(chan *openReq, 1),
 	}
@@ -296,7 +306,7 @@ func (host *host) HostPlanet() pxr.Planet {
 	return host.home
 }
 
-func (host *host) StartNewSession() (pxr.HostSession, error) {
+func (host *host) StartNewSession(from pxr.HostService, via pxr.ServerStream) (pxr.HostSession, error) {
 	sess := &hostSess{
 		host:         host,
 		TypeRegistry: pxr.NewTypeRegistry(host.home.symTable),
@@ -307,7 +317,7 @@ func (host *host) StartNewSession() (pxr.HostSession, error) {
 
 	var err error
 	sess.Context, err = host.home.StartChild(&process.Task{
-		Label:     "hostSess",
+		Label:     "HostSession",
 		IdleClose: time.Nanosecond,
 		OnRun: func(ctx process.Context) {
 			sess.consumeInbox()
@@ -316,6 +326,76 @@ func (host *host) StartNewSession() (pxr.HostSession, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	hostSessDesc := fmt.Sprintf("%s(%d)", sess.ContextLabel(), sess.ContextID())
+
+	// Start a child contexts for send & recv that drives hostSess the inbox & outbox.
+	// We start them as children of the HostService, not the HostSession since we want to keep the stream running until hostSess completes closing.
+	//
+	// Possible paths:
+	//   - If stream returns ServerStreamClosed (or errors out), initiate hostSess.Close()
+	//   - If hostSess.Close() is called externally, when close is complete, <-sessDone (below) will close the steam.
+	from.StartChild(&process.Task{
+		Label:     fmt.Sprint(via.Desc(), " <- ", hostSessDesc),
+		IdleClose: time.Nanosecond,
+		OnRun: func(ctx process.Context) {
+			sessDone := sess.Done()
+
+			// Forward outgoing msgs from host to stream outlet until the host session says its completely done.
+			for running := true; running; {
+				select {
+				case msg := <-sess.msgsOut:
+					if msg != nil {
+						var err error
+						if msg.ValBufIsShared {
+							msg.ValBufIsShared = false
+							err = via.SendMsg(msg)
+							msg.ValBufIsShared = true
+						} else {
+							err = via.SendMsg(msg)
+						}
+						msg.Reclaim()
+						msg = nil
+						if err != nil /*&& err != ServerStreamClosed */ {
+							ctx.Warnf("ServerStream Send() err: %v", err)
+						}
+					}
+				case <-sessDone:
+					ctx.Info(2, "<-hostDone")
+					via.Close()
+					running = false
+				}
+			}
+		},
+	})
+
+	from.StartChild(&process.Task{
+		Label:     fmt.Sprint(via.Desc(), " -> ", hostSessDesc),
+		IdleClose: time.Nanosecond,
+		OnRun: func(ctx process.Context) {
+			sessDone := sess.Done()
+
+			for running := true; running; {
+				msg, err := via.RecvMsg()
+				if err != nil {
+					if err == pxr.ErrStreamClosed {
+						ctx.Info(2, "ServerStream closed")
+					} else {
+						ctx.Warnf("RecvMsg() error: %v", err)
+					}
+					sess.Context.Close()
+					running = false
+				} else if msg != nil {
+					select {
+					case sess.msgsIn <- msg:
+					case <-sessDone:
+						ctx.Info(2, "hostSession done")
+						running = false
+					}
+				}
+			}
+		},
+	})
 
 	return sess, nil
 }
@@ -327,8 +407,8 @@ type hostSess struct {
 
 	user       pxr.User
 	host       *host               // parent host
-	msgsIn     chan *pxr.Msg    // msgs inbound to this hostSess
-	msgsOut    chan *pxr.Msg    // msgs outbound from this hostSess
+	msgsIn     chan *pxr.Msg       // msgs inbound to this hostSess
+	msgsOut    chan *pxr.Msg       // msgs outbound from this hostSess
 	openReqs   map[uint64]*openReq // ReqID maps to an open request.
 	openReqsMu sync.Mutex          // protects openReqs
 }
@@ -337,12 +417,12 @@ type hostSess struct {
 type planetSess struct {
 	process.Context
 
-	symTable symbol.Table                // each planet has separate symbol tables
-	planetID uint64                      // symbol ID (as known by the host's symbol table)
-	dbPath   string                      // local pathname to db
-	db       *badger.DB                  // db access
+	symTable symbol.Table             // each planet has separate symbol tables
+	planetID uint64                   // symbol ID (as known by the host's symbol table)
+	dbPath   string                   // local pathname to db
+	db       *badger.DB               // db access
 	cells    map[pxr.CellID]*cellInst // cells that recently have one or more active cells (subscriptions)
-	cellsMu  sync.Mutex                  // cells mutex
+	cellsMu  sync.Mutex               // cells mutex
 }
 
 type openReq struct {
@@ -457,14 +537,6 @@ func (sess *hostSess) pushMsg(reqID uint64, msgOp pxr.MsgOp, msgVal interface{})
 	case sess.msgsOut <- msg:
 	case <-sess.Closing():
 	}
-}
-
-func (sess *hostSess) Outbox() chan *pxr.Msg {
-	return sess.msgsOut
-}
-
-func (sess *hostSess) Inbox() chan *pxr.Msg {
-	return sess.msgsIn
 }
 
 func (sess *hostSess) LoggedIn() pxr.User {
@@ -805,7 +877,7 @@ func (sess *hostSess) pinAttrRange(msg *pxr.Msg) error {
 
 
 
-OLD phost era stuff...
+OLD archost era stuff...
 
 
 func (host *host) GetPlanet(planetID pxr.TID, fromID pxr.TID) (pxr.Planet, error) {

@@ -1,6 +1,8 @@
 package pxr
 
-import "github.com/arcverse/go-cedar/process"
+import (
+	"github.com/arcverse/go-cedar/process"
+)
 
 /*
 packages
@@ -15,20 +17,14 @@ packages
 		implementations of pxr.App
 
 
-	phost process.Context model:
-		* Host
-		    * HostHomePlanet
-		        * hostSess
-		        * cell_101
-		        * cell_104
-		    * GrpcServer
-		        * grpcSess
-		            * grpc <- hostSess.Outbox
-		            * grpc -> hostSess.Inbox
-		        * grpcSess
-		            * grpc <- hostSess.Outbox
-		            * grpc -> hostSess.Inbox
-
+	archost process.Context model:
+		001 Host
+		    002 HostHomePlanet
+		        004 HostSession
+		        007 cell_101
+		    003 grpc.HostService
+		        005 grpc <- HostSession(4)
+		        006 grpc -> HostSession(4)
 
 	May this project be dedicated to God, for all other things are darkness or imperfection.
 	May these hands and this mind be blessed with Holy Spirit and Holy Purpose.
@@ -80,32 +76,62 @@ type Host interface {
 	// The given schema is READ ONLY.
 	SelectAppForSchema(schema *AttrSchema) (App, error)
 
-	StartNewSession() (HostSession, error)
-}
-
-// HostEndpoint offers Msg pipe endpoint access, allowing it to be lifted over any Msg transport layer.
-type HostEndpoint interface {
-	Context
-
-	// This provides Msg pipe endpoint access for lifting over a Msg transport layer.
-	// This is intended to be consumed by a grpc (or other io layer).
-	Inbox() chan *Msg
-	Outbox() chan *Msg
+	// StartNewSession creates a new HostSession and binds its Msg transport to the given steam.
+	StartNewSession(parent HostService, via ServerStream) (HostSession, error)
 }
 
 // HostSession in an open session instance with a Host.
-// HostSession is intended to be consumed by a Msg transport layer that in turn is intended
-// to be consumed by an implementation of a client.HostSession.
+// Closing is initiated via Context.Close().
 type HostSession interface {
-	HostEndpoint
+	Context
 
 	// Threadsafe
 	TypeRegistry
 
 	LoggedIn() User
+}
 
-	//UserPlanet() Planet
+// HostService attaches to a pxr.Host as a child process, extending host functionality (e.g. Grpc Msg transport).
+type HostService interface {
+	Context
 
+	// Returns short string identifying this service
+	ServiceURI() string
+
+	// Returns the parent Host this extension is attached to.
+	Host() Host
+
+	// StartService attaches a child process to the given host and starts this HostService.
+	StartService(on Host) error
+
+	// GracefulStop initiates a polite stop of this extension and blocks until it's in a "soft" closed state,
+	//    meaning that its service has effectively stopped but its Context is still open.
+	// Note this could any amount of time (e.g. until all open requests are closed)
+	// Typically, GracefulStop() is called (blocking) and then Context.Close().
+	// To stop immediately, Context.Close() is always available.
+	GracefulStop()
+}
+
+var ErrStreamClosed = ErrCode_Disconnected.Error("stream closed")
+
+// ServerStream wraps a Msg transport abstraction, allowing a Host to connect over any data transport layer.
+// This is intended to be implemented by a grpc and other transport layers.
+type ServerStream interface {
+
+	// Describes this stream
+	Desc() string
+
+	// Called when this stream to be closed because the associated parent host session is closing or has closed.
+	Close()
+
+	// SendMsg sends a Msg to the remote client.
+	// ErrStreamClosed is used to denote normal stream close.
+	// Like grpc.ServerStream.SendMsg(), on exit, the Msg has been copied and so can be reused.
+	SendMsg(m *Msg) error
+
+	// RecvMsg blocks until it receives a Msg or the stream is done.
+	// ErrStreamClosed is used to denote normal stream close.
+	RecvMsg() (*Msg, error)
 }
 
 // Planet is content and governance enclosure.

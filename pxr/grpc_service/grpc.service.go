@@ -1,12 +1,14 @@
-package grpc_server
+package grpc_service
 
 import (
+	"fmt"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
-	grpc_codes "google.golang.org/grpc/codes"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/arcverse/go-arcverse/pxr"
@@ -16,18 +18,24 @@ import (
 // grpcServer is the GRPC implementation of repo.proto
 type grpcServer struct {
 	process.Context
-
-	host pxr.Host
-	//shutdown      <-chan struct{}
 	server *grpc.Server
+	host   pxr.Host
 	opts   GrpcServerOpts
 }
 
-func (srv *grpcServer) attachAndStart(label string) error {
+func (srv *grpcServer) ServiceURI() string {
+	return srv.opts.ServiceURI
+}
 
-	if srv.server != nil {
-		panic("GrpcServer already started")
+func (srv *grpcServer) Host() pxr.Host {
+	return srv.host
+}
+
+func (srv *grpcServer) StartService(on pxr.Host) error {
+	if srv.host != nil || srv.server != nil || srv.Context != nil {
+		panic("already started")
 	}
+	srv.host = on
 
 	lis, err := net.Listen(srv.opts.ListenNetwork, srv.opts.ListenAddr)
 	if err != nil {
@@ -41,7 +49,7 @@ func (srv *grpcServer) attachAndStart(label string) error {
 	pxr.RegisterHostGrpcServer(srv.server, srv)
 
 	srv.Context, err = srv.host.StartChild(&process.Task{
-		Label:     label,
+		Label:     fmt.Sprint(srv.ServiceURI(), ".HostService"),
 		IdleClose: time.Nanosecond,
 		OnRun: func(ctx process.Context) {
 			srv.Infof(0, "Serving on \x1b[1;32m%v %v\x1b[0m", srv.opts.ListenNetwork, srv.opts.ListenAddr)
@@ -67,116 +75,76 @@ func (srv *grpcServer) GracefulStop() {
 	if srv.server != nil {
 		srv.Info(0, "GracefulStop")
 		srv.server.GracefulStop()
-		srv.Info(2, "GracefulStop COMPLETE")
 	}
-}
-
-type grpcSess struct {
-	process.Context
-
-	srv      *grpcServer
-	rpc      pxr.HostGrpc_HostSessionServer
-	hostSess pxr.HostSession
 }
 
 // HostSession is a callback for when a new grpc session instance a client opens.
 // Multiple pipes can be open at any time by the same client or multiple clients.
 func (srv *grpcServer) HostSession(rpc pxr.HostGrpc_HostSessionServer) error {
 	sess := &grpcSess{
-		srv: srv,
-		rpc: rpc,
+		srv:     srv,
+		rpc:     rpc,
+		closing: make(chan struct{}),
 	}
 
 	var err error
-	sess.hostSess, err = srv.host.StartNewSession()
+	sess.hostSess, err = srv.host.StartNewSession(srv, sess)
 	if err != nil {
 		return err
 	}
 
-	// Possible paths:
-	//   - If the grpcSess is closing, initiate hostSess.Close()
-	//   - If the grpcSess (rpc) is cancelled, initiate hostSess.Close()
-	//   - On when the hostSess is done, close and exit the rpc stream
-	sess.Context, _ = srv.Context.StartChild(&process.Task{
-		Label:     "grpcSess",
-		IdleClose: time.Nanosecond,
-		OnClosing: func() {
-			sess.Info(2, "sess.hostSess.Close()")
-			sess.hostSess.Close()
-		},
-	})
+	// sess.Context, err = sess.hostSess.StartTransport(srv.Context, sess)
+	// if err != nil {
+	// 	return err
+	// }
 
-	sess.Context.StartChild(&process.Task{
-		Label:     "grpc <- hostSess.Outbox",
-		IdleClose: time.Nanosecond,
-		OnRun: func(ctx process.Context) {
-			sessOutbox := sess.hostSess.Outbox()
-			sessDone := sess.hostSess.Done()
-
-			// Forward outgoing msgs from the host to the grpc outlet until the host session says its completely done.
-			for running := true; running; {
-				select {
-				case msg := <-sessOutbox:
-					if msg != nil {
-						if msg.ValBufIsShared {
-							msg.ValBufIsShared = false
-							err = sess.rpc.Send(msg)
-							msg.ValBufIsShared = true
-						} else {
-							err = sess.rpc.Send(msg)
-						}
-						msg.Reclaim()
-						msg = nil
-						if err != nil {
-							ctx.Warnf("sess.rpc.Send() err: %v", err)
-						}
-					}
-				case <-sessDone:
-					ctx.Info(2, "<-hostDone")
-					running = false
-				}
-			}
-		},
-	})
-
-	sess.Context.StartChild(&process.Task{
-		Label:     "grpc -> hostSess.Inbox",
-		IdleClose: time.Nanosecond,
-		OnRun: func(ctx process.Context) {
-			sessInbox := sess.hostSess.Inbox()
-			sessDone := sess.hostSess.Done()
-
-			for running := true; running; {
-				msg := pxr.NewMsg()
-				err := sess.rpc.RecvMsg(msg)
-				if err != nil {
-					msg.Reclaim()
-					msg = nil
-					if status.Code(err) == grpc_codes.Canceled {
-						ctx.Info(2, "grpc_codes.Canceled")
-						sess.Context.Close()
-						running = false
-					} else {
-						ctx.Warnf("sess.rpc.Recv() err: %v", err)
-					}
-				}
-
-				// Forward incoming Msgs to the host or until the host session says its done
-				if msg != nil {
-					select {
-					case sessInbox <- msg:
-					case <-sessDone:
-						ctx.Info(2, "hostSession done")
-						running = false
-					}
-				}
-			}
-		},
-	})
-
-	<-sess.Done()
-
+	// Block until the associated host session enters a closing state
+	select {
+	case <-sess.hostSess.Closing():
+	case <-sess.closing:
+	}
 	return nil
+}
+
+type grpcSess struct {
+	closed   int32
+	closing  chan struct{}
+	srv      *grpcServer
+	rpc      pxr.HostGrpc_HostSessionServer
+	hostSess pxr.HostSession
+}
+
+func (sess *grpcSess) Desc() string {
+	return sess.srv.ServiceURI()
+}
+
+func (sess *grpcSess) Close() {
+	if atomic.CompareAndSwapInt32(&sess.closed, 0, 1) {
+		close(sess.closing)
+	}
+}
+
+func (sess *grpcSess) SendMsg(msg *pxr.Msg) error {
+	err := sess.rpc.SendMsg(msg)
+	if err == nil {
+		return nil
+	}
+	if status.Code(err) == codes.Canceled {
+		err = pxr.ErrStreamClosed
+	}
+	return err
+}
+
+func (sess *grpcSess) RecvMsg() (*pxr.Msg, error) {
+	msg := pxr.NewMsg()
+	err := sess.rpc.RecvMsg(msg)
+	if err == nil {
+		return msg, nil
+	}
+	if status.Code(err) == codes.Canceled {
+		err = pxr.ErrStreamClosed
+	}
+	return msg, err
 }
 
 /*

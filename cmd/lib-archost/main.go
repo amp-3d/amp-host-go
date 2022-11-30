@@ -1,4 +1,4 @@
-// go/cmd/lib-phost/main.go
+// go/cmd/lib-archost/main.go
 package main
 
 import "C"
@@ -10,7 +10,106 @@ import (
 	"sync"
 
 	"github.com/arcverse/go-arcverse/pxr"
+	"github.com/arcverse/go-arcverse/pxr/archost"
+	"github.com/arcverse/go-arcverse/pxr/host"
+	"github.com/arcverse/go-arcverse/pxr/lib_service"
 )
+
+var (
+	gLibSession lib_service.LibSession
+	gLibService lib_service.LibService
+)
+
+//export Call_SessionBegin
+func Call_SessionBegin(UserID string) int64 {
+	if gLibSession != nil {
+		return -1
+	}
+
+	hostOpts := host.DefaultHostOpts()
+	hostOpts.CachePath = "/Users/aomeara/_drew/_cache"
+	hostOpts.StatePath = "/Users/aomeara/_drew"
+	h := archost.StartNewHost(hostOpts)
+
+	opts := lib_service.DefaultLibServiceOpts()
+	gLibService = opts.NewLibService()
+	err := gLibService.StartService(h)
+	if err != nil {
+		h.Fatalf("failed to start LibService: %v", err)
+		return -2
+	}
+
+	gLibSession, err = gLibService.NewLibSession()
+	if err != nil {
+		h.Fatalf("failed to start LibSession: %v", err)
+		return -3
+	}
+
+	return int64(12345)
+}
+
+//export Call_SessionEnd
+func Call_SessionEnd(sessID int64) {
+	sess := gLibSession
+	if sess == nil {
+		return
+	}
+
+	sess.Close()
+	gLibSession = nil
+}
+
+//export Call_Shutdown
+func Call_Shutdown() {
+	srv := gLibService
+	if srv == nil {
+		return
+	}
+
+	gLibService = nil
+	gLibSession = nil
+
+	// Closing the host will cause the lib server to detach
+	srv.Host().Close()
+	<-srv.Done()
+}
+
+//export Call_PushMsg
+func Call_PushMsg(msg_pb []byte) int64 {
+	sess := gLibSession
+	if sess == nil {
+		return -1
+	}
+
+	msg := pxr.NewMsg()
+	if err := msg.Unmarshal(msg_pb); err != nil {
+		panic(err)
+	}
+	sess.EnqueueIncoming(msg)
+	return 0
+}
+
+//export Call_WaitOnMsg
+func Call_WaitOnMsg(msg_pb *[]byte) int64 {
+	sess := gLibSession
+	if sess == nil {
+		return -1
+	}
+
+	sess.DequeueOutgoing(msg_pb)
+	return 0
+}
+
+//export Call_Realloc
+func Call_Realloc(buf *[]byte, newLen int64) int64 {
+	sess := gLibSession
+	if sess == nil {
+		return -1
+	}
+
+	sess.Realloc(buf, newLen)
+	return 0
+}
 
 type UnityRenderingExtEventType int32
 
@@ -136,115 +235,10 @@ func LogPtr(msg *string) int {
 	return Log(*msg)
 }
 
-
-//export Call_SessionBegin
-func Call_SessionBegin() int {
-	return 55
-}
-
-var sessOpen = make(chan struct{})
-
-//export Call_SessionEnd
-func Call_SessionEnd(sessID int) int {
-	select {
-	case <-sessOpen:
-	default:
-		close(sessOpen)
-	}
-
-	return 0
-}
-
-// mallocs retains allocations so they are not GCed
-var mallocs = make(map[*byte]struct{})
-
-// //export Call_Malloc2
-// func Call_Malloc2(numBytes int) { //, dst **int32) {
-// 	buf := make([]byte, numBytes)
-// 	ptr := &buf[0]
-// 	mallocs[ptr] = struct{}{}
-
-// 	//*dst = (*int32)(unsafe.Pointer(&buf[0]))
-
-// 	//return buf
-// 	//return 0
-// }
-
-//export Call_Realloc
-func Call_Realloc(buf *[]byte, numBytes int) {
-	if numBytes < 0 {
-		numBytes = 0
-	}
-	
-	// No-op if no size change
-	curSz := cap(*buf)
-	capSz := (numBytes + 0x3FF) &^ 0x3FF
-	if curSz == capSz {
-		*buf = (*buf)[:numBytes]
-		return
-	}
-	
-	// Free prev buffer (if allocated)
-	if curSz > 0 {
-		ptr := &(*buf)[0]
-		delete(mallocs, ptr)
-	}
-	
-	// Allocate new buf and place it in our tracker map so to the GC doesn't taketh away
-	newBuf := make([]byte, capSz)
-	ptr := &newBuf[0]
-	mallocs[ptr] = struct{}{}
-	*buf = newBuf[:numBytes]
-}
-
-
-var gOutbox = make(chan *pxr.Msg, 10)
-
-//export Call_PushMsg
-func Call_PushMsg(msgBuf []byte) int {
-	msg := pxr.NewMsg()
-	err := msg.Unmarshal(msgBuf)
-	if err != nil {
-		return -1
-	}
-	
-	fmt.Printf("Call_PushMsg: ReqID: %d,   %-10s", msg.ReqID, msg.ValBuf)
-
-	go func() {
-		msg.ValBuf = []byte(string(msg.ValBuf) + " -- REPLY")
-		gOutbox <- msg
-	}()
-
-	return 0
-}
-
-
-
-//export Call_WaitOnMsg
-func Call_WaitOnMsg(msgBuf *[]byte) int {
-
-	select {
-	case msg := <-gOutbox:
-		//msg.IsClosed = true
-		sz := msg.Size()
-		Call_Realloc(msgBuf, sz)
-		n, err := msg.MarshalToSizedBuffer(*msgBuf)
-		msg.Reclaim()
-		if err != nil || n != 0 {
-			return -1005
-		}
-		return 0
-	case <-sessOpen:
-	}
-
-	//*out, _ = gMsg.Marshal()
-	return -1006
-}
-
 func main() {
 
-	//params := phost.DefaultHostParams
-	// host, err := phost.NewHost(params)
+	//params := archost.DefaultHostParams
+	// host, err := archost.NewHost(params)
 	// if err != nil {
 	// 	log.Fatal(err)
 	// }

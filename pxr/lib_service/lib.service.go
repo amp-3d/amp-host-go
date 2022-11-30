@@ -1,0 +1,328 @@
+package lib_service
+
+import (
+	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/arcverse/go-arcverse/pxr"
+	"github.com/arcverse/go-cedar/process"
+)
+
+// libService offers Msg transport over direct dll calls.
+type libService struct {
+	process.Context
+	host pxr.Host
+	opts LibServiceOpts
+	//sess   *LibSession
+}
+
+func (srv *libService) ServiceURI() string {
+	return srv.opts.ServiceURI
+}
+
+func (srv *libService) Host() pxr.Host {
+	return srv.host
+}
+
+func (srv *libService) StartService(on pxr.Host) error {
+	if srv.host != nil || srv.Context != nil {
+		panic("already attached")
+	}
+	srv.host = on
+
+	var err error
+	srv.Context, err = srv.host.StartChild(&process.Task{
+		Label:     fmt.Sprint(srv.ServiceURI(), ".HostService"),
+		IdleClose: time.Nanosecond,
+		OnRun: func(ctx process.Context) {
+			srv.Infof(0, "service started")
+		},
+		OnClosing: func() {
+
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (srv *libService) NewLibSession() (LibSession, error) {
+	sess := &libSession{
+		srv:        srv,
+		mallocs:    make(map[*byte]struct{}),
+		fromClient: make(chan *pxr.Msg),
+		toClient:   make(chan []byte),
+		free:       make(chan []byte, 1),
+		closing:    make(chan struct{}),
+	}
+	var err error
+	sess.hostSess, err = srv.host.StartNewSession(srv, sess)
+	if err != nil {
+		return nil, err
+	}
+
+	return sess, nil
+}
+
+func (srv *libService) GracefulStop() {
+	if srv.Context != nil {
+		srv.Info(0, "GracefulStop")
+		srv.Context.Close()
+	}
+}
+
+type libSession struct {
+	srv       *libService
+	hostSess  pxr.HostSession
+	closed    int32
+	mallocs   map[*byte]struct{} // retains allocations so they are not GCed
+	mallocsMu sync.Mutex
+
+	// TODO: reimplement below using sync.Cond
+	//xfer     sync.Cond
+	//xferMu   sync.Mutex
+	fromClient chan *pxr.Msg
+	toClient   chan []byte
+	closing    chan struct{}
+	free       chan []byte
+	// //outgoing   []byte
+	// //idk sync.Mutex
+	// outgoing  [2][]byte
+
+	// bufFree atomic.Value
+}
+
+func (sess *libSession) Desc() string {
+	return sess.srv.ServiceURI()
+}
+
+func (sess *libSession) Close() {
+	if atomic.CompareAndSwapInt32(&sess.closed, 0, 1) {
+		close(sess.closing)
+	}
+}
+
+// Resizes the given buffer to the requested length.
+// If newLen == 0, the buffer is freed and *buf zeroed
+func (sess *libSession) Realloc(buf *[]byte, newLen int64) {
+	if newLen < 0 {
+		newLen = 0
+	}
+
+	// only change the len if the buffer is big enough
+	capSz := int64(cap(*buf))
+	if newLen > 0 && newLen <= capSz {
+		*buf = (*buf)[:newLen]
+		return
+	}
+
+	sess.mallocsMu.Lock()
+	{
+		// Free prev buffer if allocated
+		if capSz > 0 {
+			ptr := &(*buf)[0]
+			delete(sess.mallocs, ptr)
+		}
+
+		// Allocate new buf and place it in our tracker map so to the GC doesn't taketh away
+		if newLen > 0 {
+			dimSz := (newLen + 0x3FF) &^ 0x3FF
+			newBuf := make([]byte, dimSz)
+			ptr := &newBuf[0]
+			sess.mallocs[ptr] = struct{}{}
+			*buf = newBuf[:newLen]
+		} else {
+			*buf = []byte{}
+		}
+	}
+	sess.mallocsMu.Unlock()
+}
+
+///////////////////////// client -> host /////////////////////////
+
+// Executed on a host thread
+func (sess *libSession) RecvMsg() (*pxr.Msg, error) {
+	select {
+	case msg := <-sess.fromClient:
+		return msg, nil
+	case <-sess.closing:
+		return nil, pxr.ErrStreamClosed
+	}
+}
+
+// Executed on a client thread
+func (sess *libSession) EnqueueIncoming(msg *pxr.Msg) error {
+	select {
+	case sess.fromClient <- msg:
+		return nil
+	case <-sess.closing:
+		return pxr.ErrStreamClosed
+	}
+}
+
+///////////////////////// host -> client /////////////////////////
+
+// Executed on a host thread
+func (sess *libSession) SendMsg(msg *pxr.Msg) error {
+
+	// Serialize the outgoing msg into an existing buffer (or allocate a new one)
+	sz := msg.Size()
+	var msg_pb []byte
+	select {
+	case msg_pb = <-sess.free:
+	default:
+	}
+	sess.Realloc(&msg_pb, int64(sz))
+	msg.MarshalToSizedBuffer(msg_pb)
+
+	select {
+	case sess.toClient <- msg_pb:
+		return nil
+	case <-sess.closing:
+		return pxr.ErrStreamClosed
+	}
+}
+
+// Executed on a client thread
+func (sess *libSession) DequeueOutgoing(msg_pb *[]byte) error {
+
+	// 1) Retain the given ready (free) buffer
+	// If the free pool is full, reclaim the buffer now
+	if len(sess.free) == 0 {
+		sess.free <- *msg_pb
+	} else {
+		sess.Realloc(msg_pb, 0)
+	}
+
+	// 2) Block until the next outgoing msg appears (or stream is closed)
+	select {
+	case *msg_pb = <-sess.toClient:
+		return nil
+	case <-sess.closing:
+		return pxr.ErrStreamClosed
+	}
+}
+
+/*
+
+	select {
+	case sess.free <- *msg_pb:
+	default:
+
+	}
+	sess.waitingForMsg.L.Lock()
+	for sess.free == nil {
+		sess.waitingForMsg.Wait()
+	}
+	sess.free = msg_pb
+	for sess.outgoing != nil {
+		sess.waitingForMsg.Wait()
+	}
+	msg_pb = sess.outgoing
+	sess.outgoing = nil
+	sess.waitingForMsg.L.Unlock()
+	sess.waitingForMsg.Signal()
+
+	// sess.dequeueNext <- *msg_pb
+	// *msg_pb <- sess.nextOutgoing
+
+	/*
+	next := sess.bufFree.Swap(nil)
+
+	sess.bufFree.LoadAndStore()
+	sess.Realloc(next, int64(sz))
+	m.MarshalToSizedBuffer(*next)
+
+	sess.waitingForMsg.L.Lock()
+	for sess.free == nil {
+		sess.waitingForMsg.Wait()
+	}
+	next := sess.free
+	sess.Realloc(next, int64(sz))
+	m.MarshalToSizedBuffer(*next)
+	for sess.outgoing == nil {
+		sess.waitingForMsg.Wait()
+	}
+	sess.outgoing = next
+	sess.waitingForMsg.L.Unlock()
+	sess.waitingForMsg.Signal()
+
+	outgoing := next
+	sess.next =
+	sess.free = nil
+	sess.Realloc(outgoing, int64(sz))
+	m.MarshalToSizedBuffer(*outgoing)
+
+
+	sess.outgoing
+	m.MarshalToSizedBuffer(*next)
+	sess.outgoing
+
+	empty := 0
+	next := &sess.outgoing[empty]
+	sess.Realloc(next, int64(sz))
+	m.MarshalToSizedBuffer(*next)
+	empty = 1 - empty
+
+
+	// if closed
+
+
+	sess.idk.Lock()
+	if sz <= cap(sess.outgoing) {
+		sess.outgoing = sess.outgoing[:sz]
+	} else {
+		sess.outgoing = make([]byte, sz, (sz + 0x3FF) &^ 0x3FF)
+	}
+	m.MarshalToSizedBuffer(sess.outgoing)
+	sess.idk.Unlock()
+
+	select {
+	case sess.toClient <- m:
+		return nil
+	case <-sess.closing:
+		return pxr.ErrStreamClosed
+	}
+
+
+func (srv *libServer) NewLibSession() (LibSession, error) {
+	sess := &libSess{
+
+	}
+
+	var err error
+	sess.hostSess, err = srv.host.StartNewSession()
+	if err != nil {
+		return nil, err
+	}
+
+	sess.Context, err = sess.hostSess.StartTransport(srv.Context, sess)
+	if err != nil {
+		return err
+	}
+
+}
+
+
+type libSess struct {
+	process.Context
+	hostSess pxr.HostSession
+}
+
+func (sess *libSess) Desc() string {
+    return "lib"
+}
+
+func (sess *libSess) SendMsg(m *pxr.Msg) error {
+
+}
+
+func (sess *libSess) RecvMsg(m *pxr.Msg) error {
+
+}
+
+*/

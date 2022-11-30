@@ -1,4 +1,4 @@
-package grpc_server
+package grpc_service
 
 import (
 	"fmt"
@@ -6,16 +6,9 @@ import (
 	"github.com/arcverse/go-arcverse/pxr"
 )
 
-// HostGrpcServer attaches to a pxr.Host as a child process, offering grpc-based connections.
-type HostGrpcServer interface {
-	pxr.Context
-
-	// Blocks until the server has copmpeted a graceful stop (which could be a any amount of time)
-	GracefulStop()
-}
-
 // GrpcServerOpts exposes grpc server options and params
 type GrpcServerOpts struct {
+	ServiceURI    string
 	ListenNetwork string
 	ListenAddr    string
 }
@@ -25,19 +18,14 @@ type GrpcServerOpts struct {
 // Until then, we want to need to accept incoming outside connections, go by default 0.0.0.0 will accept all incoming connections.
 func DefaultGrpcServerOpts(listenPort int) GrpcServerOpts {
 	return GrpcServerOpts{
+		ServiceURI:    "grpc",
 		ListenNetwork: "tcp",
 		ListenAddr:    fmt.Sprintf("0.0.0.0:%v", listenPort),
 	}
 }
 
-// AttachNewGrpcServer attaches a child process to the given host, providing grpc-based sessions.
-func (opts GrpcServerOpts) AttachNewGrpcServer(host pxr.Host) (HostGrpcServer, error) {
-	srv := &grpcServer{
-		host: host,
+func (opts GrpcServerOpts) NewGrpcServer() pxr.HostService {
+	return &grpcServer{
 		opts: opts,
 	}
-	if err := srv.attachAndStart("GrpcServer"); err != nil {
-		return nil, err
-	}
-	return srv, nil
 }

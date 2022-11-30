@@ -2,11 +2,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "phost",
+            "name": "archost",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/cmd/phost",
+            "program": "${workspaceFolder}/cmd/archost",
             "args": [
                 "-show-tree", "6"
             ]
