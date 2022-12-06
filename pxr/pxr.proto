@@ -145,7 +145,7 @@ enum MsgOp {
     // MsgOp_ResolveAndRegister allows a client to send the host a set of Defs to the Host, defining all session CellTypes and identifiers.
     //
     // Params: 
-    //      Msg.ReqID:      newly client-generated (unique) request ID 
+    //      Msg.ReqID:      client-generated (unique) request ID 
     //      Msg.ValType:    ValType_Defs
     //      Msg.ValBuf:     Defs (serialized) 
     MsgOp_ResolveAndRegister = 5;
@@ -156,7 +156,7 @@ enum MsgOp {
     // Note that the same cell pinned multiple times may not have child cells with matching cell IDs.
     //
     // Params: 
-    //      Msg.ReqID:      newly client-generated (unique) request ID 
+    //      Msg.ReqID:      client-generated (unique) request ID 
     //      Msg.CellID:     CellID being pinned     (host to client, otherwise 0)
     //      Msg.ValType:    ValType_PinReq          (client to host, otherwise nil)
     //      Msg.ValBuf:     PinReq                  (client to host, otherwise nil)
@@ -165,7 +165,7 @@ enum MsgOp {
     // Requests a given CellID to be pinned under a client-generated PinID
     //
     // Params: 
-    //      Msg.ReqID:      newly client-generated (unique) request ID 
+    //      Msg.ReqID:      client-generated (unique) request ID 
     //      Msg.CellID:     which cell
     //      Msg.ValType:    ValType_AttrRange
     //      Msg.ValInt:     cell type ID specifying the AttrSchema (the expected cell and format)
@@ -184,14 +184,16 @@ enum MsgOp {
     //      Msg.Val*:       attr value
     MsgOp_PushAttr = 10;
     
-    // Signals the insertion of a new cell as a child of the pinned cell (with MsgOp_PushAttr and MsgOp_Checkpoint to follow). 
+    // This MsgOp signals the insertion of a new cell inside / within a pinned cell.
+    // This message is also sent for the pinned / parent cell (detected via Msg.CellID == MsgOp_PinCell.CellID).
+    // After this message, one or more MsgOp_PushAttr msgs can follow etc.
     //
     // Params: 
     //      Msg.ReqID:      originating request ID
-    //      Msg.CellID:     the child cell being added
+    //      Msg.CellID:     new cell being added
     //      Msg.ValType:    ValType_SchemaID
-    //      Msg.ValInt:     cell type ID being pushed (specifies which Cell attribs are expected to follow)
-    MsgOp_InsertChildCell = 14;
+    //      Msg.ValInt:     cell schema ID being pushed (specifies which Cell attribs are expected to follow)
+    MsgOp_InsertCell = 14;
     
     // Used by the Host to signal that the request associated with ReqID is up to date and in a state to be processed by the client.
     // This msg is typically used to drive UI updates or other aggregate cell dependencies.

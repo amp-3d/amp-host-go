@@ -18,12 +18,12 @@ type cellInst struct {
 	pxr.CellID
 	process.Context // TODO: make custom lightweight later
 
-	pl       *planetSess           // parent planet
-	subsHead *openReq              // single linked list of open reqs on this cell
-	subsMu   sync.Mutex            // mutex for subs
-	newReqs  chan *openReq         // new requests waiting for state
+	pl       *planetSess        // parent planet
+	subsHead *openReq           // single linked list of open reqs on this cell
+	subsMu   sync.Mutex         // mutex for subs
+	newReqs  chan *openReq      // new requests waiting for state
 	newTxns  chan *pxr.MsgBatch // txns to be pushed to subs
-	idleSecs int32                 // ticks up as time passes when there are no subs
+	idleSecs int32              // ticks up as time passes when there are no subs
 }
 
 func (pl *planetSess) onStart(opts symbol.TableOpts) error {
@@ -131,6 +131,8 @@ func (pl *planetSess) getCell(ID pxr.CellID) (cell *cellInst, err error) {
 					if req.PinnedCell == nil {
 						err = pxr.ErrCode_InternalErr.Errorf("parent pxr.App instance %q did not assign an AppCell", req.ParentApp.AppURI())
 					} else {
+						req.PushBeginPin(cell.CellID)
+
 						// TODO: verify that a cell pushing state doesn't escape idle or close analysis
 						err = req.PinnedCell.PushCellState(&req.CellReq)
 					}

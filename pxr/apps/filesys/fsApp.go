@@ -232,11 +232,7 @@ func (item *fsItem) pushCellState(req *pxr.CellReq, asChild bool) error {
 	if schema == nil {
 		return nil
 	}
-	if asChild {
-		req.PushInsertChildCell(item.CellID, schema)
-	} else {
-		req.PushBeginPin(item.CellID)
-	}
+	req.PushInsertCell(item.CellID, schema)
 
 	req.PushAttr(item.CellID, schema, attr_ItemName, item.name)
 

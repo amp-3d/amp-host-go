@@ -233,11 +233,11 @@ func (req *CellReq) PushBeginPin(target CellID) {
 	req.PushMsg(m)
 }
 
-func (req *CellReq) PushInsertChildCell(target CellID, schema *AttrSchema) {
+func (req *CellReq) PushInsertCell(target CellID, schema *AttrSchema) {
 	if schema != nil {
 		m := NewMsg()
 		m.CellID = target.U64()
-		m.Op = MsgOp_InsertChildCell
+		m.Op = MsgOp_InsertCell
 		m.ValType = uint64(ValType_SchemaID)
 		m.ValInt = int64(schema.SchemaID)
 		req.PushMsg(m)
