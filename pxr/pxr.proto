@@ -60,49 +60,48 @@ enum Const {
 
 // ValType describes the type of a Cell, an Attr literal, or Attr set collection element type. 
 enum ValType {
-    ValType_nil                = 0;
+    ValType_nil                 = 0;
         
     // ValType_AttrSet            = 4; // .ValInt is a AttrSet CellID
     // ValType_NameSet            = 5; // CellID+AttrID+NameID     => Msg.(Type)          Values only 
     // ValType_CellSet            = 6; // CellID+AttrID+CellID     => Cell_NID            AttrSet NIDs only 
     // ValType_Series             = 8; // CellID+AttrID+TSI+FromID => Msg.(Type)          Values only
-
+    // ValType_CellRef            = 20; // .FromID and .SI together identify a cell
+    // ValType_CellSetID          = 21; // .ValInt is a CellSet ID (used for SetValType_CellSet)
     
-    // Primitive (atomic) literals
-    //ValType_Delete             = 1; // Denotes item deletion
-    ValType_int                = 4; // .ValInt is an untyped int64
-    ValType_float              = 5; // .ValFloat is an untyped double
-    ValType_bytes              = 6; // .ValBuf is an untyped buffer
-    ValType_string             = 7; // .ValBuf is an untyped UTF8 string
+    /******     Untyped primitives      ******/
     
+    ValType_int                 = 4; // .ValInt is an untyped int64
+    ValType_bytes               = 6; // .ValBuf is an untyped buffer
+    ValType_string              = 7; // .ValBuf is an untyped UTF8 string
     
-    // Primitive internal types (not generally exposed to at the app level)
+    /******     Typed primitives        ******/
+    
     ValType_TID                 = 16; // .ValBuf is a binary TxID
-    ValType_LoginReq            = 20; // .ValBuf is a LoginReq
-    ValType_SchemaID            = 21; // .ValInt is a SchemaID
-
-    //ValType_CellRef            = 20; // .FromID and .SI together identify a cell
-    //ValType_CellSetID          = 21; // .ValInt is a CellSet ID (used for SetValType_CellSet)
-    ValType_Blob               = 22; // .ValInt is a Blob ID 
-    ValType_DateTime           = 23; // .ValInt is UTC TimeFS value (1 sec == 1<<16 ticks)
-    ValType_Duration           = 24; // .ValInt is time duration (1 sec == 1<<16 ticks)
-    ValType_AssetURI           = 25; // .ValBuf is a UTF8 asset URI and/or .ValInt is a BlobID 
-    ValType_URL                = 26; // .ValBuf is a UTF8 URL
+    ValType_SchemaID            = 18; // .ValInt is a SchemaID
+    ValType_Blob                = 22; // .ValInt is a Blob ID 
+    ValType_DateTime            = 23; // .ValInt is a TimeFS value (1 sec == 1<<16 ticks)
+    ValType_Duration            = 24; // .ValInt is a TimeFS delta (1 sec == 1<<16 ticks)
+    ValType_AssetURI            = 25; // .ValBuf is a UTF8 asset URI
+    ValType_URL                 = 26; // .ValBuf is a UTF8 URL
     
-    // Protobuf (atomic) literals
-    ValType_Err                = 34; // .ValBuf is a Err 
-    ValType_AttrRange          = 39; // .ValBuf is a AttrRange
-    ValType_PinReq             = 40; // .ValBuf is a PinReq
-    ValType_CryptoKey          = 41; // .ValBuf is a CryptoKey
-    ValType_Link               = 42; // .ValBuf is a Link
-    ValType_Defs               = 43; // .ValBuf is a Defs
-    ValType_Content            = 44; // .ValBuf is an Content
-    ValType_DataSegment        = 45; // .ValBuf is an DataSegment
-    ValType_Txn                = 50; // .ValBuf is a Txn
-    ValType_GeoFix             = 46; // .ValBuf is an GeoFix
-    ValType_TRS                = 47; // .ValBuf is a TRS
+    /******     Builtin protobufs       ******/
+    
+    ValType_Err                 = 50; // .ValBuf is a Err 
+    ValType_DataSegment         = 52; // .ValBuf is an DataSegment
+    ValType_Content             = 54; // .ValBuf is an Content
+    ValType_CryptoKey           = 56; // .ValBuf is a CryptoKey
+    ValType_Txn                 = 58; // .ValBuf is a Txn
+    ValType_LoginReq            = 60; // .ValBuf is a LoginReq
+    ValType_Defs                = 62; // .ValBuf is a Defs
+    ValType_PinReq              = 64; // .ValBuf is a PinReq
+    ValType_AttrRange           = 66; // .ValBuf is a AttrRange
+    ValType_Link                = 80; // .ValBuf is a Link
+    ValType_GeoFix              = 82; // .ValBuf is an GeoFix
+    ValType_TRS                 = 84; // .ValBuf is a TRS
 
-    ValType_LiteralMax         = 299;
+    // Clients have above this value to bind their own ValTypeIDs
+    ValType_BuiltinMax          = 999;
 }
 
 
@@ -180,13 +179,13 @@ enum MsgOp {
     //      Msg.ReqID:      originating request ID
     //      Msg.CellID:     which cell is being updated
     //      Msg.AttrID:     which attr is being updated
-    //      Msg.ValType:    format of Msg.ValInt / .ValFloat / .ValBuf 
+    //      Msg.ValType:    format of Msg.ValInt / .ValBuf 
     //      Msg.Val*:       attr value
     MsgOp_PushAttr = 10;
     
-    // This MsgOp signals the insertion of a new cell inside / within a pinned cell.
-    // This message is also sent for the pinned / parent cell (detected via Msg.CellID == MsgOp_PinCell.CellID).
-    // After this message, one or more MsgOp_PushAttr msgs can follow etc.
+    // This MsgOp signals the insertion of a new cell.
+    // The new cell is either as a child cell or the "content" of the cell being pinned (detected via Msg.CellID == MsgOp_PinCell.CellID).
+    // After this message, zero or more MsgOp_PushAttr msgs follow.
     //
     // Params: 
     //      Msg.ReqID:      originating request ID
@@ -215,6 +214,23 @@ enum MsgOp {
 }
 
 
+enum MsgFlags {
+
+    MsgFlags_None = 0;
+    
+    // CellCheckpoint signals that the cell referenced by this Msg is at a stable state "checkpoint", 
+    MsgFlags_CellCheckpoint = 0x001;
+    
+    // // ReqCheckpoint signals that the request referenced ReqID is at a stable state "checkpoint",
+    // MsgFlags_ReqCheckpoint = 0x02;
+    
+    // ValBufShared signals that this Msg's ValBuf referenced elsewhere and is therefore READ ONLY.
+    // This used internally to support Msg pooling / recycling. 
+    // When marshaling, this flag is always cleared!
+    MsgFlags_ValBufShared = 0x100;
+}
+
+
 
 message Msg {
     
@@ -239,17 +255,15 @@ message Msg {
     // When naming an absolute timestamp, unix UTC is assumed (0x10000 corresponds to 00:00:01, Jan 1 1970 GMT)
     int64               SI              = 16;    
 
-    // ValType how to interpret ValBuf, ValInt, and ValFloat
-    uint64              ValType         = 20;
+    // ValType how to interpret ValBuf / ValInt
+    int32               ValType         = 20;
     
-    // Value / payload data
+    // ValBuf and/or ValInt are interpreted according to ValType 
     bytes               ValBuf          = 21;
     int64               ValInt          = 22;
-    double              ValFloat        = 23;
 
-    // ValBufIsShared signals that Msg.ValBuf is referenced elsewhere and is READ ONLY.
-    // This is intended to be used internally for Msg pooling / recycling, so when marshaling, this value is cleared.
-    bool                ValBufIsShared  = 31;
+    // Flags contains MsgFlags
+    MsgFlags            Flags           = 24;
     
     // Allows a sequence of Msgs to be chained together.
     Msg                 Next            = 32;
@@ -266,7 +280,7 @@ enum SeriesType {
     SeriesType_Fixed = 0;
     
     // SeriesType_I64 denotes that SI values are int64
-    SeriesType_I64 = 4;
+    SeriesType_I64 = 2;
     
     // SeriesType_Time16 denotes that SI values are signed 48.16 bit time offsets (1 second == 2^16 ticks).
     SeriesType_Time16 = 5;
@@ -275,8 +289,8 @@ enum SeriesType {
     SeriesType_UTC16 = 6;
     
     // SeriesType_CellSet denotes that Msg.SI are CellIDs.
-    SeriesType_NameSet = 10;
-    SeriesType_CellSet = 11;
+    //SeriesType_NameSet = 10;
+    //SeriesType_CellSet = 11;
 
 }
 
@@ -356,7 +370,7 @@ message Defs {
 message AttrSchema {
     
     // AppURI specifies which specific app and optional version should handle requests with this schema.
-    // The reserved value "." tells the host to choose the default app registered to handle the below DataModelURI (common).
+    // The reserved value "." tells the host to choose the default app registered to handle the below AttrModelURI (common).
     // e.g. 
     //      "."
     //      "planet.tools/vibe.app"
@@ -364,7 +378,7 @@ message AttrSchema {
     //      "planet.tools/hfs.app/v1.2.3"
     string              AppURI = 1;
     
-    // DataModelURI names a particular data model used by this schema, in effect specifying a namespace / scope for the attached Attrs.
+    // AttrModelURI names a particular data model used by this schema, in effect specifying a namespace / scope for the attached Attrs.
     // This URI names a complete data protocol / specification that this collection of AttrSpecs conforms to (and is a subset of).
     // To an implementing app on the Go side, this URI implies a family of valid possible AttrSpecs to choose from. 
     // e.g.
@@ -373,10 +387,10 @@ message AttrSchema {
     //      "spotify/v1/track"
     //      "filesys/dir"
     //      "filesys/fil"
-    string              DataModelURI = 3;
+    string              AttrModelURI = 3;
 
-    // This describes this *particular* AttrSchema, a particular collection of AttrSpecs (and is implicitly scoped within DataModelURI).
-    // The host (and its apps) generally don't even look at this field since "{DataModelURI}/{Attrs[i].AttrURI}" fully specifies each attr's data model URI.
+    // This describes this *particular* AttrSchema, a particular collection of AttrSpecs (and is implicitly scoped within AttrModelURI).
+    // The host (and its apps) generally don't even look at this field since "{AttrModelURI}/{Attrs[i].AttrURI}" fully specifies each attr's data model URI.
     // The can use this for internal identification, usually to link this schema to particular cell view binding.
     string              SchemaName = 4;
 
@@ -398,10 +412,10 @@ message AttrSchema {
 message AttrSpec {
 
 
-    // AttrURI is a self-describing URI scoped within the parent's DataModelURI.
+    // AttrURI is a self-describing URI scoped within the parent's AttrModelURI.
     // It communicates a purpose or role, for a particular usage context of the attr.
     // It originates from an app data model spec and allows the host to associate an app attr to a client-provided AttrID (and SI when SeriesType == Fixed).
-    // e.g. for AttrSchema.DataModelURI == "hfs1/directory"
+    // e.g. for AttrSchema.AttrModelURI == "hfs1/directory"
     //      "v1/creation-time"
     //      "v1/thumbnail.glyph"
     //      "v1/detailed.glyph"
@@ -419,20 +433,17 @@ message AttrSpec {
     // Scalar (non-array-like) attrs are typically SeriesType_Fixed since a particular SI value is fixed or "hard-wired" to the given AttrURI.
     SeriesType          SeriesType = 6;
     
-    // Fixed_SI specifies which SI value this fixed attr is "hard-wired" to, meaning that a PushAttr Msg has its SI field set to this value. 
+    // BoundSI specifies which SI value this fixed attr is "hard-wired" to, meaning that a PushAttr Msg has its SI field set to this value. 
     // Only used / applicable when SeriesType == SeriesType_Fixed.
-    int64               Fixed_SI = 7;
+    int64               BoundSI = 7;
     
-    // bool                IsImmutable     = 7;
-    // bool                IsPrivate       = 8;
-
     // Specifies the attr item / element value type (this is what shows up in Msg.ValType)
-    // Can be any primitive, pb literal, or attr set scheme (i.e. "Cell")..
-    string              ValTypeURI = 22;
+    // If omitted, ValTypeID is assumed to be a built-in type (ValType_XXX). 
+    //string              ValTypeURI = 12;
     
-    // ValTypeID is a non-zero, client-generated ID that is bound to the given ValTypeURI during RegisterAndResolve.
-    // This ID is used in Msg.ValType in a MsgOp_PushAttr msg.
-    //uint32              ValTypeID = 23;
+    // ValTypeID is standard ValType enum or a client-generated ID that is bound to the given ValTypeURI.
+    // This ID is placed in Msg.ValType in a MsgOp_PushAttr msg.
+    int32               ValTypeID = 13;
     
 }
 
@@ -452,7 +463,7 @@ message PinReq {
     uint64              PinCell = 5;
     
     // AttrSchema ID to apply on the cell being pinned, specifying which attrs of the target cell will be pushed to the client.
-    int32               PinCellSchema = 7; 
+    int32               ContentSchema = 7; 
     
     // Specifies which child cell types should be pushed (and which attr schema they should be pushed with).
     // If empty, no child cells are pushed.

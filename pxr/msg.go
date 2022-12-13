@@ -64,7 +64,7 @@ func (batch *MsgBatch) Reclaim() {
 
 func NewMsg() *Msg {
 	msg := gMsgPool.Get().(*Msg)
-	if msg.ValBufIsShared {
+	if msg.Flags & MsgFlags_ValBufShared  != 0 {
 		panic("Msg discarded as shared")
 	}
 	return msg
@@ -77,12 +77,12 @@ func CopyMsg(src *Msg) *Msg {
 		// If the src buffer is big share it instead of copy it
 		if len(src.ValBuf) > MsgValBufCopyLimit {
 			*msg = *src
-			msg.ValBufIsShared = true
-			src.ValBufIsShared = true
+			msg.Flags |= MsgFlags_ValBufShared
+			src.Flags |= MsgFlags_ValBufShared
 		} else {
 			valBuf := append(msg.ValBuf[:0], src.ValBuf...)
 			*msg = *src
-			msg.ValBufIsShared = false
+			msg.Flags &^= MsgFlags_ValBufShared
 			msg.ValBuf = valBuf
 		}
 	}
@@ -90,7 +90,7 @@ func CopyMsg(src *Msg) *Msg {
 }
 
 func (msg *Msg) Init() {
-	if msg.ValBufIsShared {
+	if msg.Flags & MsgFlags_ValBufShared != 0 {
 		*msg = Msg{}
 	} else {
 		valBuf := msg.ValBuf[:0]
@@ -108,14 +108,14 @@ func (msg *Msg) Reclaim() {
 }
 
 func (msg *Msg) SetValInt(valType ValType, valInt int64) {
-	msg.ValType = uint64(valType)
+	msg.ValType = int32(valType)
 	msg.ValInt = valInt
 	msg.ValBuf = msg.ValBuf[:0]
 }
 
 func (msg *Msg) SetValBuf(valType ValType, sz int) {
 	msg.ValInt = int64(sz)
-	msg.ValType = uint64(valType)
+	msg.ValType = int32(valType)
 	if sz > cap(msg.ValBuf) {
 		msg.ValBuf = make([]byte, sz, (sz+0x3FF)&^0x3FF)
 	} else {
@@ -186,7 +186,7 @@ func (msg *Msg) LoadVal(dst interface{}) error {
 	//             ok = true
 	//         }
 	//     }
-	case uint64(ValType_PinReq):
+	case int32(ValType_PinReq):
 		if v, match := dst.(*PinReq); match {
 			tmp := PinReq{}
 			if tmp.Unmarshal(msg.ValBuf) == nil {
@@ -195,7 +195,7 @@ func (msg *Msg) LoadVal(dst interface{}) error {
 			}
 		}
 
-	case uint64(ValType_Defs):
+	case int32(ValType_Defs):
 		if v, match := dst.(*Defs); match {
 			tmp := Defs{}
 			if tmp.Unmarshal(msg.ValBuf) == nil {
@@ -204,7 +204,7 @@ func (msg *Msg) LoadVal(dst interface{}) error {
 			}
 		}
 
-	case uint64(ValType_LoginReq):
+	case int32(ValType_LoginReq):
 		if v, match := dst.(*LoginReq); match {
 			tmp := LoginReq{}
 			if tmp.Unmarshal(msg.ValBuf) == nil {

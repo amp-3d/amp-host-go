@@ -274,7 +274,7 @@ func (host *host) RegisterApp(app pxr.App) error {
 	}
 	host.appsByURI[appURI] = app
 
-	for _, modelURI := range app.DataModelURIs() {
+	for _, modelURI := range app.AttrModelURIs() {
 		if modelURI != "" {
 			host.appsByModel[modelURI] = app
 		}
@@ -294,7 +294,7 @@ func (host *host) SelectAppForSchema(schema *pxr.AttrSchema) (pxr.App, error) {
 		}
 	}
 
-	app := host.appsByModel[schema.DataModelURI]
+	app := host.appsByModel[schema.AttrModelURI]
 	if app == nil {
 		return nil, pxr.ErrCode_AppNotFound.Errorf("App not found for schema: %s", schema.SchemaDesc())
 	}
@@ -347,10 +347,10 @@ func (host *host) StartNewSession(from pxr.HostService, via pxr.ServerStream) (p
 				case msg := <-sess.msgsOut:
 					if msg != nil {
 						var err error
-						if msg.ValBufIsShared {
-							msg.ValBufIsShared = false
+						if flags := msg.Flags; flags&pxr.MsgFlags_ValBufShared != 0 {
+							msg.Flags = flags &^ pxr.MsgFlags_ValBufShared
 							err = via.SendMsg(msg)
-							msg.ValBufIsShared = true
+							msg.Flags = flags
 						} else {
 							err = via.SendMsg(msg)
 						}
@@ -705,12 +705,12 @@ func (sess *hostSess) pinCell(msg *pxr.Msg) error {
 		req.ParentReq = &parentReq.CellReq
 	}
 
-	req.PinCellSchema, err = sess.TypeRegistry.GetSchemaByID(pinReq.PinCellSchema)
+	req.ContentSchema, err = sess.TypeRegistry.GetSchemaByID(pinReq.ContentSchema)
 	if err != nil {
 		return err
 	}
 
-	req.ParentApp, err = sess.host.SelectAppForSchema(req.PinCellSchema)
+	req.ParentApp, err = sess.host.SelectAppForSchema(req.ContentSchema)
 	if err != nil {
 		return err
 	}

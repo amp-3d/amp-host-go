@@ -23,7 +23,7 @@ func (app *fsApp) AppURI() string {
 	return AppURI
 }
 
-func (app *fsApp) DataModelURIs() []string {
+func (app *fsApp) AttrModelURIs() []string {
 	return DataModels[1:]
 }
 
@@ -33,23 +33,22 @@ func (app *fsApp) IssueCellID() pxr.CellID {
 }
 
 func (app *fsApp) ResolveRequest(req *pxr.CellReq) error {
+	item := fsItem{}
 
 	if req.PinCell == 0 {
 		if req.PinURI == "" {
 			return pxr.ErrCode_InvalidCell.Error("invalid root URI")
 		}
 
-		dir := &pinnedDir{
-			pathname: path.Clean(req.PinURI),
-		}
-		fi, err := os.Stat(dir.pathname)
+		item.pathname = path.Clean(req.PinURI)
+
+		fi, err := os.Stat(item.pathname)
 		if err != nil {
-			return pxr.ErrCode_InvalidCell.Errorf("path not found: %q", dir.pathname)
+			return pxr.ErrCode_InvalidCell.Errorf("path not found: %q", item.pathname)
 		}
 		req.PinCell = app.IssueCellID()
-		dir.fsItem.setFrom(fi)
-		dir.fsItem.CellID = req.PinCell
-		req.PinnedCell = dir
+		item.setFrom(fi)
+		item.CellID = req.PinCell
 
 	} else {
 		if req.ParentReq == nil || req.ParentReq.PinnedCell == nil {
@@ -58,37 +57,32 @@ func (app *fsApp) ResolveRequest(req *pxr.CellReq) error {
 
 		parent, ok := req.ParentReq.PinnedCell.(*pinnedDir)
 		if !ok {
-			return pxr.ErrCode_NotPinnable.Error("parent is not an pinnedDir")
+			return pxr.ErrCode_NotPinnable.Error("parent is not a pinned dir")
 		}
 
-		item := parent.itemByID[req.PinCell]
-		if item == nil {
+		itemRef := parent.itemByID[req.PinCell]
+		if itemRef == nil {
 			return pxr.ErrCode_InvalidCell.Error("invalid target cell")
 		}
 
-		//
-		switch item.model {
-		case DirItem:
-			pinned := &pinnedDir{
-				pathname: path.Join(parent.pathname, item.name),
-			}
-			pinned.fsItem = *item
-			req.PinnedCell = pinned
-		// case PlayableItem:
-		// 	playable := &hfsPlayable{}
-		// 	req.AppCell = playable
-		case FileItem:
-			req.PinnedCell = item
-		}
+		item = *itemRef
+		item.pathname = path.Join(parent.pathname, item.name)
+	}
+
+	switch item.model {
+	case DirItem:
+		pinned := &pinnedDir{}
+		pinned.fsItem = item
+		req.PinnedCell = pinned
+	case FileItem:
+		req.PinnedCell = &item
 	}
 
 	return nil
 }
 
 type pinnedDir struct {
-	fsItem
-
-	pathname string    // full pathname (couple be some other OS handle to a file system dir item)
+	fsItem             // base file info
 	items    []*fsItem // ordered
 	itemByID map[pxr.CellID]*fsItem
 }
@@ -96,9 +90,10 @@ type pinnedDir struct {
 type fsItem struct {
 	pxr.CellID
 
+	name        string // base file name
+	pathname    string // only set for pinned items  (could be alternative OS handle)
 	lastRefresh time.Time
 	isHidden    bool
-	name        string // base file name
 	mode        os.FileMode
 	size        int64
 	model       DataModel
@@ -123,8 +118,6 @@ func (item *fsItem) Compare(oth *fsItem) int {
 	}
 	return 0
 }
-
-const crateURL = "crate-asset://crates.pxr.tools/filesys.crate/"
 
 func (dir *pinnedDir) readDir(req *pxr.CellReq) error {
 	app := req.ParentApp.(*fsApp)
@@ -224,7 +217,7 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 }
 
 func (item *fsItem) pushCellState(req *pxr.CellReq, asChild bool) error {
-	schema := req.PinCellSchema
+	schema := req.ContentSchema
 	if asChild {
 		schema = req.GetChildSchema(DataModels[item.model])
 	}
@@ -236,28 +229,19 @@ func (item *fsItem) pushCellState(req *pxr.CellReq, asChild bool) error {
 
 	req.PushAttr(item.CellID, schema, attr_ItemName, item.name)
 
-	url := crateURL
-	switch {
-	case item.model == DirItem:
-		url += "generic-dir"
-	default:
-		url += "generic-file"
+	if !asChild {
+		req.PushAttr(item.CellID, schema, attr_Pathname, item.pathname)
 	}
-	req.PushAttr(item.CellID, schema, attr_ThumbGlyphURL, url)
 
-	if item.model == FileItem {
-		mimeType := mime.TypeByExtension(filepath.Ext(item.name))
-		req.PushAttr(item.CellID, schema, attr_MimeType, mimeType)
-
+	switch item.model {
+	case DirItem:
+		req.PushAttr(item.CellID, schema, attr_MimeType, "filesys/directory")
+	case FileItem:
+		if mimeType := mime.TypeByExtension(filepath.Ext(item.name)); len(mimeType) > 1 {
+			req.PushAttr(item.CellID, schema, attr_MimeType, mimeType)
+		}
 		req.PushAttr(item.CellID, schema, attr_ByteSz, item.size)
-
 		req.PushAttr(item.CellID, schema, attr_LastModified, pxr.ConvertToTimeFS(item.modTime))
 	}
 	return nil
 }
-
-// // func (app *fsApp) ResolveRequest(req *pxr.CellReq) error {
-// //     req.AppItem =
-// //     req.Target = app.IssueEphemeralID()
-// //     return nil
-// // }

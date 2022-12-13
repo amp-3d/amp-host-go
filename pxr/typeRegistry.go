@@ -99,8 +99,8 @@ func cleanURI(uri *string) bool {
 
 func (reg *typeRegistry) resolveSchema(schema *AttrSchema) error {
 
-	if !cleanURI(&schema.DataModelURI) {
-		return ErrCode_BadSchema.Error("DataModelURI missing")
+	if !cleanURI(&schema.AttrModelURI) {
+		return ErrCode_BadSchema.Error("AttrModelURI missing")
 	}
 
 	if !cleanURI(&schema.SchemaName) {
@@ -121,13 +121,13 @@ func (reg *typeRegistry) resolveSchema(schema *AttrSchema) error {
 			return ErrCode_BadSchema.Errorf("missing Attrs[%d].AttrID in schema %s for attr %s", i, schema.SchemaDesc(), attr.AttrURI)
 		}
 
-		if attr.SeriesType != SeriesType_Fixed && attr.Fixed_SI != 0 {
+		if attr.SeriesType != SeriesType_Fixed && attr.BoundSI != 0 {
 			return ErrCode_BadSchema.Errorf("Attrs[%d].Fixed_SI is set but is ignored in schema %s for attr %s", i, schema.SchemaDesc(), attr.AttrURI)
 		}
 
-		if !cleanURI(&attr.ValTypeURI) {
-			return ErrCode_BadSchema.Errorf("missing Attrs[%d].ValTypeURI in schema %s for attr %s", i, schema.SchemaDesc(), attr.AttrURI)
-		}
+		// if !cleanURI(&attr.ValTypeURI) {
+		// 	return ErrCode_BadSchema.Errorf("missing Attrs[%d].ValTypeURI in schema %s for attr %s", i, schema.SchemaDesc(), attr.AttrURI)
+		// }
 
 		// if attr.ValTypeID == 0 {
 		// 	attr.ValTypeID = uint64(reg.table.GetSymbolID([]byte(attr.ValTypeURI), true))

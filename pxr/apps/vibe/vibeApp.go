@@ -14,7 +14,7 @@ func (app *vibeApp) AppURI() string {
 	return AppURI
 }
 
-func (app *vibeApp) DataModelURIs() []string {
+func (app *vibeApp) AttrModelURIs() []string {
 	return []string{
 		PinAppHome,
 		pinAppSettings,

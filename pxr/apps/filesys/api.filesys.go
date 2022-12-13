@@ -21,8 +21,8 @@ const (
 
 var DataModels = []string{
 	"",
-	"filesys.v1.dir",
-	"filesys.v1.file",
+	"filesys.dir.v1",
+	"filesys.file.v1",
 }
 
 // AttrURIs
@@ -30,7 +30,6 @@ const (
 	attr_LastModified  = "modified.DateTime"
 	attr_ByteSz        = "size.bytes.int"
 	attr_ItemName      = "name.string"
-	attr_ThumbGlyphURL = "thumb.glyph.URL"
-	attr_BadgeGlyphURL = "badge.glyph.URL"
-	attr_MimeType      = "playable.mimetype.string"
+	attr_MimeType      = "mimetype.string"
+	attr_Pathname      = "pathname.string"
 )

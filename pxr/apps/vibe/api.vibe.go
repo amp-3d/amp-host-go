@@ -5,7 +5,7 @@ import "github.com/arcverse/go-arcverse/pxr"
 const (
 	AppURI = "vibe.pxr.tools/vibe.app/v1.2022.1"
 
-	// DataModelURIs
+	// AttrModelURIs
 	PinAppHome     = "pin/app/home"
 	pinAppSettings = "pin/home/settings"
 	pinAppFiles    = "pin/home/files" //invokes hfs app

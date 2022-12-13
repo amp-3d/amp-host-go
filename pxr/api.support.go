@@ -205,7 +205,7 @@ func (tid TID) CopyNext(inTID TID) {
 }
 
 func (schema *AttrSchema) SchemaDesc() string {
-	return path.Join(schema.AppURI, schema.DataModelURI, schema.SchemaName)
+	return path.Join(schema.AppURI, schema.AttrModelURI, schema.SchemaName)
 }
 
 func (schema *AttrSchema) LookupAttr(attrURI string) *AttrSpec {
@@ -219,7 +219,7 @@ func (schema *AttrSchema) LookupAttr(attrURI string) *AttrSpec {
 
 func (req *CellReq) GetChildSchema(modelURI string) *AttrSchema {
 	for _, schema := range req.ChildSchemas {
-		if schema.DataModelURI == modelURI {
+		if schema.AttrModelURI == modelURI {
 			return schema
 		}
 	}
@@ -238,7 +238,7 @@ func (req *CellReq) PushInsertCell(target CellID, schema *AttrSchema) {
 		m := NewMsg()
 		m.CellID = target.U64()
 		m.Op = MsgOp_InsertCell
-		m.ValType = uint64(ValType_SchemaID)
+		m.ValType = int32(ValType_SchemaID)
 		m.ValInt = int64(schema.SchemaID)
 		req.PushMsg(m)
 	}
@@ -255,9 +255,12 @@ func (req *CellReq) PushAttr(target CellID, schema *AttrSchema, attrURI string, 
 	m.Op = MsgOp_PushAttr
 	m.AttrID = attr.AttrID
 	if attr.SeriesType == SeriesType_Fixed {
-		m.SI = attr.Fixed_SI
+		m.SI = attr.BoundSI
 	}
 	m.SetVal(attrVal)
+	if attr.ValTypeID != 0 {
+		m.ValType = int32(attr.ValTypeID)
+	}
 	req.PushMsg(m)
 }
 

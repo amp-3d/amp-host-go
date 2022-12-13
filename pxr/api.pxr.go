@@ -69,10 +69,10 @@ type Host interface {
 
 	HostPlanet() Planet
 
-	// Registers an App for invocation by its AppURI and DataModelURIs.
+	// Registers an App for invocation by its AppURI and AttrModelURIs.
 	RegisterApp(app App) error
 
-	// Selects an App, typically based on schema.DataModelURI (or schema.AppURI if given).
+	// Selects an App, typically based on schema.AttrModelURI (or schema.AppURI if given).
 	// The given schema is READ ONLY.
 	SelectAppForSchema(schema *AttrSchema) (App, error)
 
@@ -169,11 +169,11 @@ type CellReq struct {
 	PlanetID      uint64
 	PinURI        string
 	PinCell       CellID
-	PinCellSchema *AttrSchema
+	ContentSchema *AttrSchema
 	ChildSchemas  []*AttrSchema
 }
 
-// Signals to use the default App for a given AttrSchema DataModelURI.
+// Signals to use the default App for a given AttrSchema AttrModelURI.
 // See AttrSchema.AppURI in pxr.proto
 const DefaultAppForDataModel = "."
 
@@ -185,9 +185,9 @@ type App interface {
 	// Identifies this App and usually has the form: "{domain_name}/{app_identifier}/v{MAJOR}.{MINOR}.{REV}"
 	AppURI() string
 
-	// DataModelURIs lists data model URIs that this app handles.
+	// AttrModelURIs lists data models that this app handles.
 	// When the host session receives a client request with a specific data model URI, it will route it to the app that registered for it here.
-	DataModelURIs() []string
+	AttrModelURIs() []string
 
 	// Resolves the given request to final target Planet, CellID, and AppCell.
 	ResolveRequest(req *CellReq) error
