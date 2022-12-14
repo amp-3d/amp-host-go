@@ -3,7 +3,7 @@ package grpc_service
 import (
 	"fmt"
 
-	"github.com/arcverse/go-arcverse/pxr"
+	"github.com/arcspace/go-arcspace/pxr"
 )
 
 // GrpcServerOpts exposes grpc server options and params

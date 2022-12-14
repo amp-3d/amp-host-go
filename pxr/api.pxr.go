@@ -1,7 +1,7 @@
 package pxr
 
 import (
-	"github.com/arcverse/go-cedar/process"
+	"github.com/arcspace/go-cedar/process"
 )
 
 /*

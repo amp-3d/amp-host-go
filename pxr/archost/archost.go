@@ -3,10 +3,10 @@ package archost
 import (
 	"log"
 
-	"github.com/arcverse/go-arcverse/pxr"
-	"github.com/arcverse/go-arcverse/pxr/apps/filesys"
-	"github.com/arcverse/go-arcverse/pxr/apps/vibe"
-	"github.com/arcverse/go-arcverse/pxr/host"
+	"github.com/arcspace/go-arcspace/pxr"
+	"github.com/arcspace/go-arcspace/pxr/apps/filesys"
+	"github.com/arcspace/go-arcspace/pxr/apps/vibe"
+	"github.com/arcspace/go-arcspace/pxr/host"
 )
 
 // StartNewHost starts a new host with the given opts

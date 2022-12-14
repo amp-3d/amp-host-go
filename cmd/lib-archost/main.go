@@ -9,10 +9,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/arcverse/go-arcverse/pxr"
-	"github.com/arcverse/go-arcverse/pxr/archost"
-	"github.com/arcverse/go-arcverse/pxr/host"
-	"github.com/arcverse/go-arcverse/pxr/lib_service"
+	"github.com/arcspace/go-arcspace/pxr"
+	"github.com/arcspace/go-arcspace/pxr/archost"
+	"github.com/arcspace/go-arcspace/pxr/host"
+	"github.com/arcspace/go-arcspace/pxr/lib_service"
 )
 
 var (

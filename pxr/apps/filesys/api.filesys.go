@@ -1,6 +1,6 @@
 package filesys
 
-import "github.com/arcverse/go-arcverse/pxr"
+import "github.com/arcspace/go-arcspace/pxr"
 
 func NewApp() pxr.App {
 	return &fsApp{}
@@ -8,7 +8,7 @@ func NewApp() pxr.App {
 
 const (
 	AppBaseName = "filesys"
-	AppURI      = "arcverse.systems/filesys.app/v1.2022.1"
+	AppURI      = "arcspace.systems/filesys.app/v1.2022.1"
 )
 
 type DataModel int

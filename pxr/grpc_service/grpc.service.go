@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/arcverse/go-arcverse/pxr"
-	"github.com/arcverse/go-cedar/process"
+	"github.com/arcspace/go-arcspace/pxr"
+	"github.com/arcspace/go-cedar/process"
 )
 
 // grpcServer is the GRPC implementation of repo.proto

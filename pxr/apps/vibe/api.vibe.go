@@ -1,6 +1,6 @@
 package vibe
 
-import "github.com/arcverse/go-arcverse/pxr"
+import "github.com/arcspace/go-arcspace/pxr"
 
 const (
 	AppURI = "vibe.pxr.tools/vibe.app/v1.2022.1"

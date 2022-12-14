@@ -1,6 +1,6 @@
 package lib_service
 
-import "github.com/arcverse/go-arcverse/pxr"
+import "github.com/arcspace/go-arcspace/pxr"
 
 // LibServiceOpts exposes options and settings
 type LibServiceOpts struct {

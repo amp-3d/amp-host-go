@@ -3,16 +3,16 @@ SHELL = /bin/bash -o nounset -o errexit -o pipefail
 .DEFAULT_GOAL = build
 BUILD_DIR  := $(patsubst %/,%,$(abspath $(dir $(lastword $(MAKEFILE_LIST)))))
 PARENT_DIR := $(patsubst %/,%,$(dir $(BUILD_DIR)))
-UNITY_ASSETS_DIR = ${PARENT_DIR}/arcverse.unity-app/Assets
-ARCVERSE_UNITY_SDK_DIR = ${UNITY_ASSETS_DIR}/arcverse.unity-sdk
+UNITY_ASSETS_DIR = ${PARENT_DIR}/arcspace.unity-app/Assets
+ARCVERSE_UNITY_SDK_DIR = ${UNITY_ASSETS_DIR}/Arcspace.unity-sdk
 PXR_SDK_DIR = ${ARCVERSE_UNITY_SDK_DIR}/pxr
-BUILD_OUTPUT = ${UNITY_ASSETS_DIR}/Plugins/arcverse.unity-sdk/pxr
+BUILD_OUTPUT = ${UNITY_ASSETS_DIR}/Plugins/Arcspace.unity-sdk/pxr
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
 
 ## display this help message
 help:
 	@echo -e "\033[32m"
-	@echo "go-arcverse"
+	@echo "go-arcspace"
 	@echo "  BUILD_DIR:       ${BUILD_DIR}"
 	@echo "  PARENT_DIR:      ${PARENT_DIR}"
 	@echo "  BUILD_OUTPUT:    ${BUILD_OUTPUT}"

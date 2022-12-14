@@ -3,7 +3,7 @@ package vibe
 import (
 	"sync/atomic"
 
-	"github.com/arcverse/go-arcverse/pxr"
+	"github.com/arcspace/go-arcspace/pxr"
 )
 
 type vibeApp struct {

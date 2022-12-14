@@ -1,7 +1,7 @@
 syntax = "proto3";
 package crates;
 
-option csharp_namespace = "arcverse.crates";
+option csharp_namespace = "arcspace.crates";
 
 
 
@@ -41,7 +41,7 @@ message KVEntry {
 
 
 message AppVars {
-    // AppDomain is the domain name used for primary queries (e.g. "arcverse.systems") 
+    // AppDomain is the domain name used for primary queries (e.g. "arcspace.systems") 
                 string              AppDomain                   = 2;
                 
     // AppDesc succinctly describes this org and is for humans.

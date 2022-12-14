@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"sync"
 
-	"github.com/arcverse/go-cedar/bufs"
+	"github.com/arcspace/go-cedar/bufs"
 	"github.com/dgraph-io/badger/v3"
 )
 

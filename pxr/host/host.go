@@ -8,11 +8,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/arcverse/go-arcverse/pxr"
-	"github.com/arcverse/go-arcverse/symbol"
-	"github.com/arcverse/go-cedar/bufs"
-	"github.com/arcverse/go-cedar/process"
-	"github.com/arcverse/go-cedar/utils"
+	"github.com/arcspace/go-arcspace/pxr"
+	"github.com/arcspace/go-arcspace/symbol"
+	"github.com/arcspace/go-cedar/bufs"
+	"github.com/arcspace/go-cedar/process"
+	"github.com/arcspace/go-cedar/utils"
 	"github.com/dgraph-io/badger/v3"
 )
 

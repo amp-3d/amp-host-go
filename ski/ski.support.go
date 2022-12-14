@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/arcverse/go-cedar/bufs"
+	"github.com/arcspace/go-cedar/bufs"
 	"golang.org/x/crypto/sha3"
 
 	"golang.org/x/crypto/blake2b"

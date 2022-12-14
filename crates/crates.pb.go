@@ -158,7 +158,7 @@ func (m *KVEntry) GetValue() string {
 }
 
 type AppVars struct {
-	// AppDomain is the domain name used for primary queries (e.g. "arcverse.systems")
+	// AppDomain is the domain name used for primary queries (e.g. "arcspace.systems")
 	AppDomain string `protobuf:"bytes,2,opt,name=AppDomain,proto3" json:"AppDomain,omitempty"`
 	// AppDesc succinctly describes this org and is for humans.
 	AppDesc string `protobuf:"bytes,4,opt,name=AppDesc,proto3" json:"AppDesc,omitempty"`

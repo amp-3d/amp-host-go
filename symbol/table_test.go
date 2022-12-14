@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/arcverse/go-arcverse/symbol"
+	"github.com/arcspace/go-arcspace/symbol"
 	"github.com/dgraph-io/badger/v3"
 )
 

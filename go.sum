@@ -35,8 +35,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/OneOfOne/xxhash v1.2.2 h1:KMrpdQIwFcEqXDklaen+P1axHaj9BSKzvpUUfnHldSE=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
-github.com/arcverse/go-cedar v1.2022.2 h1:oRuCC+RLqqgPazHU1d9Pikao/m5JHeSDFnPxp4CynFc=
-github.com/arcverse/go-cedar v1.2022.2/go.mod h1:Ii4pHPUqEyLMhvNm9jkqzsmgJszbsk/844HNo+adB30=
+github.com/arcspace/go-cedar v1.2022.3 h1:Gz+Qfts7EAkNqYPGOnVgNGOvOHveAMWN9RXNEX1gLVo=
+github.com/arcspace/go-cedar v1.2022.3/go.mod h1:fPwGCC6eyxcX3svlo42bZzUiUrxxlyyknJokGBEPHiw=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/brynbellomy/klog v0.0.0-20200414031930-87fbf2e555ae h1:FO8VxsnMvWNRzx3vGjBmS2kotWl9f455Yj0H+9k01zk=
 github.com/brynbellomy/klog v0.0.0-20200414031930-87fbf2e555ae/go.mod h1:ZecQZYfGLYeVNx5ooyrBwTVsXx+7mi7bpuQLgTxClfQ=

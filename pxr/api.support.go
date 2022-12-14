@@ -5,7 +5,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/arcverse/go-cedar/bufs"
+	"github.com/arcspace/go-cedar/bufs"
 )
 
 // Byte size of a TID, a hash with a leading embedded big endian binary time index.

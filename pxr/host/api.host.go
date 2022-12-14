@@ -1,6 +1,6 @@
 package host
 
-import "github.com/arcverse/go-arcverse/pxr"
+import "github.com/arcspace/go-arcspace/pxr"
 
 type HostOpts struct {
 	Label     string // label of this host

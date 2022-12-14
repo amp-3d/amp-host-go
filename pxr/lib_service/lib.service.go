@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/arcverse/go-arcverse/pxr"
-	"github.com/arcverse/go-cedar/process"
+	"github.com/arcspace/go-arcspace/pxr"
+	"github.com/arcspace/go-cedar/process"
 )
 
 // libService offers Msg transport over direct dll calls.

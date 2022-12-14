@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/arcverse/go-arcverse/shoutcast"
-	"github.com/arcverse/go-cedar/utils"
+	"github.com/arcspace/go-arcspace/shoutcast"
+	"github.com/arcspace/go-cedar/utils"
 )
 
 

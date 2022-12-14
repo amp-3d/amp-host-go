@@ -3,7 +3,7 @@ package pxr
 import (
 	"sync"
 
-	"github.com/arcverse/go-arcverse/symbol"
+	"github.com/arcspace/go-arcspace/symbol"
 )
 
 type schemaDef struct {
