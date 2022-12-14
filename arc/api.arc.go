@@ -1,4 +1,4 @@
-package pxr
+package arc
 
 import (
 	"github.com/arcspace/go-cedar/process"
@@ -10,11 +10,11 @@ packages
 	pxr
 	    planetXR interfaces and support utils
 	pxr/host
-	    an implementation of pxr.Host & pxr.HostSession
+	    an implementation of arc.Host & arc.HostSession
 	pxr/grpc_server
-		implements a grpc server that consumes a pxr.Host instance
+		implements a grpc server that consumes a arc.Host instance
 	pxr/apps
-		implementations of pxr.App
+		implementations of arc.App
 
 
 	archost process.Context model:
@@ -91,7 +91,7 @@ type HostSession interface {
 	LoggedIn() User
 }
 
-// HostService attaches to a pxr.Host as a child process, extending host functionality (e.g. Grpc Msg transport).
+// HostService attaches to a arc.Host as a child process, extending host functionality (e.g. Grpc Msg transport).
 type HostService interface {
 	Context
 
@@ -174,10 +174,10 @@ type CellReq struct {
 }
 
 // Signals to use the default App for a given AttrSchema AttrModelURI.
-// See AttrSchema.AppURI in pxr.proto
+// See AttrSchema.AppURI in arc.proto
 const DefaultAppForDataModel = "."
 
-// App creates a new Channel instance on demand when pxr.GetChannel() is called.
+// App creates a new Channel instance on demand when arc.GetChannel() is called.
 // App and AppChannel consume the Planet and Channel interfaces to perform specialized functionality.
 // In general, a channel app should be specialized for a specific, taking inspiration from the legacy of unix util way-of-thinking.
 type App interface {

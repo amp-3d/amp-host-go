@@ -9,10 +9,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/arcspace/go-arcspace/pxr"
-	"github.com/arcspace/go-arcspace/pxr/archost"
-	"github.com/arcspace/go-arcspace/pxr/host"
-	"github.com/arcspace/go-arcspace/pxr/lib_service"
+	"github.com/arcspace/go-arcspace/arc"
+	"github.com/arcspace/go-arcspace/arc/archost"
+	"github.com/arcspace/go-arcspace/arc/host"
+	"github.com/arcspace/go-arcspace/arc/lib_service"
 )
 
 var (
@@ -81,7 +81,7 @@ func Call_PushMsg(msg_pb []byte) int64 {
 		return -1
 	}
 
-	msg := pxr.NewMsg()
+	msg := arc.NewMsg()
 	if err := msg.Unmarshal(msg_pb); err != nil {
 		panic(err)
 	}

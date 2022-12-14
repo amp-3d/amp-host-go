@@ -1,4 +1,4 @@
-package pxr
+package arc
 
 import (
 	"reflect"

@@ -6,10 +6,10 @@ import (
 	"path"
 	"time"
 
-	"github.com/arcspace/go-arcspace/pxr"
-	"github.com/arcspace/go-arcspace/pxr/archost"
-	"github.com/arcspace/go-arcspace/pxr/grpc_service"
-	"github.com/arcspace/go-arcspace/pxr/host"
+	"github.com/arcspace/go-arcspace/arc"
+	"github.com/arcspace/go-arcspace/arc/archost"
+	"github.com/arcspace/go-arcspace/arc/grpc_service"
+	"github.com/arcspace/go-arcspace/arc/host"
 	"github.com/arcspace/go-cedar/log"
 	"github.com/arcspace/go-cedar/process"
 	"github.com/arcspace/go-cedar/utils"
@@ -24,7 +24,7 @@ func main() {
 	}
 	defaultDataPath := path.Join(exePath, "archost.data")
 
-	hostPort := flag.Int("host-port", int(pxr.Const_DefaultGrpcServicePort), "Sets the port used to bind HostGrpc service")
+	hostPort := flag.Int("host-port", int(arc.Const_DefaultGrpcServicePort), "Sets the port used to bind HostGrpc service")
 	showTree := flag.Int("show-tree", 0, "Prints the process tree periodically, checking every given number of seconds")
 	dataPath := flag.String("data-path", defaultDataPath, "Specifies the path for all file access and storage")
 

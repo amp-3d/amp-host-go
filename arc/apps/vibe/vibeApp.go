@@ -3,7 +3,7 @@ package vibe
 import (
 	"sync/atomic"
 
-	"github.com/arcspace/go-arcspace/pxr"
+	"github.com/arcspace/go-arcspace/arc"
 )
 
 type vibeApp struct {
@@ -24,15 +24,15 @@ func (app *vibeApp) AttrModelURIs() []string {
 }
 
 // IssueEphemeralID issued a new ID that will persist
-func (app *vibeApp) IssueEphemeralID() pxr.CellID {
-	return pxr.CellID(atomic.AddUint64(&app.nextID, 1) + 100)
+func (app *vibeApp) IssueEphemeralID() arc.CellID {
+	return arc.CellID(atomic.AddUint64(&app.nextID, 1) + 100)
 }
 
-func (app *vibeApp) ResolveRequest(req *pxr.CellReq) error {
+func (app *vibeApp) ResolveRequest(req *arc.CellReq) error {
 	req.PinCell = app.IssueEphemeralID()
 	return nil
 }
 
-func (app *vibeApp) PushCellState(sub pxr.CellSub) error {
+func (app *vibeApp) PushCellState(sub arc.CellSub) error {
 	return nil
 }

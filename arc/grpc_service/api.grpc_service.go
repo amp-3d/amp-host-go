@@ -3,7 +3,7 @@ package grpc_service
 import (
 	"fmt"
 
-	"github.com/arcspace/go-arcspace/pxr"
+	"github.com/arcspace/go-arcspace/arc"
 )
 
 // GrpcServerOpts exposes grpc server options and params
@@ -24,7 +24,7 @@ func DefaultGrpcServerOpts(listenPort int) GrpcServerOpts {
 	}
 }
 
-func (opts GrpcServerOpts) NewGrpcServer() pxr.HostService {
+func (opts GrpcServerOpts) NewGrpcServer() arc.HostService {
 	return &grpcServer{
 		opts: opts,
 	}

@@ -1,8 +1,8 @@
 package filesys
 
-import "github.com/arcspace/go-arcspace/pxr"
+import "github.com/arcspace/go-arcspace/arc"
 
-func NewApp() pxr.App {
+func NewApp() arc.App {
 	return &fsApp{}
 }
 

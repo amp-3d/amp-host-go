@@ -1,9 +1,9 @@
 package vibe
 
-import "github.com/arcspace/go-arcspace/pxr"
+import "github.com/arcspace/go-arcspace/arc"
 
 const (
-	AppURI = "vibe.pxr.tools/vibe.app/v1.2022.1"
+	AppURI = "vibe.arc.tools/vibe.app/v1.2022.1"
 
 	// AttrModelURIs
 	PinAppHome     = "pin/app/home"
@@ -15,6 +15,6 @@ const (
 	// childPlaylist = "child/vibe/playlist"
 )
 
-func NewApp() pxr.App {
+func NewApp() arc.App {
 	return &vibeApp{}
 }

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/arcspace/go-arcspace/pxr"
+	"github.com/arcspace/go-arcspace/arc"
 	"github.com/arcspace/go-arcspace/symbol"
 	"github.com/arcspace/go-cedar/process"
 	"github.com/dgraph-io/badger/v3"
@@ -15,14 +15,14 @@ import (
 // This can be thought of as the controller for one or more active cell pins.
 // cellService?  cellSupe?
 type cellInst struct {
-	pxr.CellID
+	arc.CellID
 	process.Context // TODO: make custom lightweight later
 
 	pl       *planetSess        // parent planet
 	subsHead *openReq           // single linked list of open reqs on this cell
 	subsMu   sync.Mutex         // mutex for subs
 	newReqs  chan *openReq      // new requests waiting for state
-	newTxns  chan *pxr.MsgBatch // txns to be pushed to subs
+	newTxns  chan *arc.MsgBatch // txns to be pushed to subs
 	idleSecs int32              // ticks up as time passes when there are no subs
 }
 
@@ -101,7 +101,7 @@ func (pl *planetSess) closeIdleCells(deltaSecs int32) {
 	}
 }
 
-func (pl *planetSess) getCell(ID pxr.CellID) (cell *cellInst, err error) {
+func (pl *planetSess) getCell(ID arc.CellID) (cell *cellInst, err error) {
 	pl.cellsMu.Lock()
 	defer pl.cellsMu.Unlock()
 
@@ -115,7 +115,7 @@ func (pl *planetSess) getCell(ID pxr.CellID) (cell *cellInst, err error) {
 		pl:      pl,
 		CellID:  ID,
 		newReqs: make(chan *openReq),
-		newTxns: make(chan *pxr.MsgBatch),
+		newTxns: make(chan *arc.MsgBatch),
 	}
 
 	cell.Context, err = pl.Context.StartChild(&process.Task{
@@ -129,7 +129,7 @@ func (pl *planetSess) getCell(ID pxr.CellID) (cell *cellInst, err error) {
 				case req := <-cell.newReqs:
 					var err error
 					if req.PinnedCell == nil {
-						err = pxr.ErrCode_InternalErr.Errorf("parent pxr.App instance %q did not assign an AppCell", req.ParentApp.AppURI())
+						err = arc.ErrCode_InternalErr.Errorf("parent arc.App instance %q did not assign an AppCell", req.ParentApp.AppURI())
 					} else {
 						req.PushBeginPin(cell.CellID)
 
@@ -233,7 +233,7 @@ func (cell *cellInst) idleTick(deltaSecs int32) int32 {
 	return cell.idleSecs
 }
 
-func (cell *cellInst) pushToSubs(tx *pxr.MsgBatch) {
+func (cell *cellInst) pushToSubs(tx *arc.MsgBatch) {
 	cell.subsMu.Lock()
 	defer cell.subsMu.Unlock()
 
@@ -251,14 +251,14 @@ func (cell *cellInst) pushToSubs(tx *pxr.MsgBatch) {
 
 // This will be replaced in the future with generic use of GetCell() with a "user" App type.
 // For now, just make a table with user IDs their respective user record.
-func (pl *planetSess) getUser(req pxr.LoginReq, autoCreate bool) (seat pxr.UserSeat, err error) {
+func (pl *planetSess) getUser(req arc.LoginReq, autoCreate bool) (seat arc.UserSeat, err error) {
 	var buf [128]byte
 
 	uid := append(buf[:0], "/UID/"...)
 	uid = append(uid, req.UserUID...)
 	userID := pl.symTable.GetSymbolID(uid, autoCreate)
 	if userID == 0 {
-		return pxr.UserSeat{}, pxr.ErrCode_InvalidLogin.Error("unknown user")
+		return arc.UserSeat{}, arc.ErrCode_InvalidLogin.Error("unknown user")
 	}
 
 	dbTx := pl.db.NewTransaction(true)
@@ -298,7 +298,7 @@ func (pl *planetSess) getUser(req pxr.LoginReq, autoCreate bool) (seat pxr.UserS
 
 		item, err := dbTx.Get(csess.keyPrefix[:])
 		if err != nil {
-			return nil, pxr.ErrCode_CellNotFound.Err()
+			return nil, arc.ErrCode_CellNotFound.Err()
 		}
 
 		err = item.Value(func(val []byte) error {
@@ -306,7 +306,7 @@ func (pl *planetSess) getUser(req pxr.LoginReq, autoCreate bool) (seat pxr.UserS
 		})
 
 		if err != nil {
-			return nil, pxr.ErrCode_DataFailure.ErrWithMsgf("error starting Node %v", csess.NodeInfo.cellID)
+			return nil, arc.ErrCode_DataFailure.ErrWithMsgf("error starting Node %v", csess.NodeInfo.cellID)
 		}
 
 		// csess.NodeInfo.PlanetID = pl.NodeInfo.cellID
@@ -314,7 +314,7 @@ func (pl *planetSess) getUser(req pxr.LoginReq, autoCreate bool) (seat pxr.UserS
 
 		// NodeSpec := csess.pl.host.getNodeSpec(csess.NodeInfo.ItemTypeID)
 		// if NodeSpec == nil {
-		// 	return nil, pxr.ErrCode_NodeCorrupted.ErrWithMsgf("NodeSpec %v not found", csess.NodeInfo.ItemTypeID)
+		// 	return nil, arc.ErrCode_NodeCorrupted.ErrWithMsgf("NodeSpec %v not found", csess.NodeInfo.ItemTypeID)
 		// }
 
 		// csess.NodeSpec = *NodeSpec // TODO: unpack into attr map inst
@@ -332,10 +332,10 @@ func (pl *planetSess) getUser(req pxr.LoginReq, autoCreate bool) (seat pxr.UserS
 }
 
 
-// func (pl *planetSess) getNode(nodeTID pxr.TID, autoCreate bool) (pxr.Node, error) {
+// func (pl *planetSess) getNode(nodeTID arc.TID, autoCreate bool) (arc.Node, error) {
 // 	cellID := pl.Table.GetSymbolID(nodeTID, false)
 // 	if cellID == 9 {
-// 		return nil, pxr.ErrCode_NodeNotFound.ErrWithMsgf("Node %s", chTID.Base32())
+// 		return nil, arc.ErrCode_NodeNotFound.ErrWithMsgf("Node %s", chTID.Base32())
 // 	}
 
 // }
@@ -379,8 +379,8 @@ func (csess *cellInst) serveState(req *nodeReq) error {
 	baseKey := append(keyBuf[:0], csess.keyPrefix[:]...)
 
 	// Announce the new node (send SetTypeID, ItemTypeID, map mode etc)
-	msg := pxr.NewMsg()
-	msg.Op = pxr.MsgOp_AnnounceNode
+	msg := arc.NewMsg()
+	msg.Op = arc.MsgOp_AnnounceNode
 	msg.SetValue(&req.target)
 	err := req.pushMsg(msg)
 	if err == nil {
@@ -396,7 +396,7 @@ func (csess *cellInst) serveState(req *nodeReq) error {
 
 		attrKey := symbol.ID(attr.AttrID).WriteTo(baseKey)
 
-		if attr.SeriesType == pxr.SeriesType_0 {
+		if attr.SeriesType == arc.SeriesType_0 {
 			item, getErr := dbTx.Get(attrKey)
 			if getErr == nil {
 				err = req.unmarshalAndPush(item)
@@ -404,7 +404,7 @@ func (csess *cellInst) serveState(req *nodeReq) error {
 					csess.Error(err)
 				}
 			}
-		} else if attr.AutoPin == pxr.AutoPin_All {
+		} else if attr.AutoPin == arc.AutoPin_All {
 
 			switch attr.SeriesType {
 
@@ -414,7 +414,7 @@ func (csess *cellInst) serveState(req *nodeReq) error {
 
 		}
 
-		// case pxr.
+		// case arc.
 
 		// case SeriesType_U16:
 
@@ -425,27 +425,27 @@ func (csess *cellInst) serveState(req *nodeReq) error {
 			return err
 		}
 		// autoMap := attr.AutoMap
-		// if autoMap == pxr.AutoMap_ForType {
+		// if autoMap == arc.AutoMap_ForType {
 
-		// 	switch pxr.Type(attr.SetTypeID) {
-		// 	case pxr.Type_TimeSeries:
+		// 	switch arc.Type(attr.SetTypeID) {
+		// 	case arc.Type_TimeSeries:
 
-		// 	case pxr.Type_AttrSet,
-		// 		pxr.Type_TimeSeries:
-		// 		autoMap = pxr.AutoMap_No
-		// 	case pxr.Type_NameSet:
+		// 	case arc.Type_AttrSet,
+		// 		arc.Type_TimeSeries:
+		// 		autoMap = arc.AutoMap_No
+		// 	case arc.Type_NameSet:
 		// 	}
 		// }
 
 		switch attr.AutoPin {
-		case pxr.AutoPin_All:
+		case arc.AutoPin_All:
 
 		}
 	}
 
 	// Send break when done
-	msg = pxr.NewMsg()
-	msg.Op = pxr.MsgOp_NodeUpdated
+	msg = arc.NewMsg()
+	msg.Op = arc.MsgOp_NodeUpdated
 	err = req.pushMsg(msg)
 	if err != nil {
 		return err
@@ -454,7 +454,7 @@ func (csess *cellInst) serveState(req *nodeReq) error {
 	return nil
 }
 
-func (sub *cellSub) pinAttrRange(attrID uint64, add pxr.AttrRange) error {
+func (sub *cellSub) pinAttrRange(attrID uint64, add arc.AttrRange) error {
 
 	for i, attr := range sub.attrs {
 		if attr.def.AttrID != attrID {
@@ -476,7 +476,7 @@ func (sub *cellSub) unmarshalAndPush(item *badger.Item) error {
 
 	//ch.Infof(2, "GET: %s", item.Key())
 
-	msg := pxr.NewMsg()
+	msg := arc.NewMsg()
 
 	err := item.Value(func(val []byte) error {
 		return msg.Unmarshal(val)
@@ -484,13 +484,13 @@ func (sub *cellSub) unmarshalAndPush(item *badger.Item) error {
 
 	if err != nil {
 		//ch.Errorf("failed to read entry %v: %v", string(msg.Keypath), err)
-		return pxr.ErrCode_DataFailure.Err()
+		return arc.ErrCode_DataFailure.Err()
 	}
 
 	return sub.pushMsg(msg)
 }
 
-func (sub *cellSub) pushMsg(msg *pxr.Msg) error {
+func (sub *cellSub) pushMsg(msg *arc.Msg) error {
 	var err error
 
 	//msg.ReqID = req.pinReq.PinID
@@ -502,9 +502,9 @@ func (sub *cellSub) pushMsg(msg *pxr.Msg) error {
 	select {
 	case sub.sess.msgsOut <- msg:
 	// case <-sub.reqCancel:
-	// 	err = pxr.ErrCode_ShuttingDown.ErrWithMsg("client closing")
+	// 	err = arc.ErrCode_ShuttingDown.ErrWithMsg("client closing")
 	case <-sub.sess.Closing():
-		err = pxr.ErrCode_ShuttingDown.ErrWithMsg("planet closing")
+		err = arc.ErrCode_ShuttingDown.ErrWithMsg("planet closing")
 	}
 
 	return err

@@ -6,14 +6,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/arcspace/go-arcspace/pxr"
+	"github.com/arcspace/go-arcspace/arc"
 	"github.com/arcspace/go-cedar/process"
 )
 
 // libService offers Msg transport over direct dll calls.
 type libService struct {
 	process.Context
-	host pxr.Host
+	host arc.Host
 	opts LibServiceOpts
 	//sess   *LibSession
 }
@@ -22,11 +22,11 @@ func (srv *libService) ServiceURI() string {
 	return srv.opts.ServiceURI
 }
 
-func (srv *libService) Host() pxr.Host {
+func (srv *libService) Host() arc.Host {
 	return srv.host
 }
 
-func (srv *libService) StartService(on pxr.Host) error {
+func (srv *libService) StartService(on arc.Host) error {
 	if srv.host != nil || srv.Context != nil {
 		panic("already attached")
 	}
@@ -54,7 +54,7 @@ func (srv *libService) NewLibSession() (LibSession, error) {
 	sess := &libSession{
 		srv:        srv,
 		mallocs:    make(map[*byte]struct{}),
-		fromClient: make(chan *pxr.Msg),
+		fromClient: make(chan *arc.Msg),
 		toClient:   make(chan []byte),
 		free:       make(chan []byte, 1),
 		closing:    make(chan struct{}),
@@ -77,7 +77,7 @@ func (srv *libService) GracefulStop() {
 
 type libSession struct {
 	srv       *libService
-	hostSess  pxr.HostSession
+	hostSess  arc.HostSession
 	closed    int32
 	mallocs   map[*byte]struct{} // retains allocations so they are not GCed
 	mallocsMu sync.Mutex
@@ -85,7 +85,7 @@ type libSession struct {
 	// TODO: reimplement below using sync.Cond
 	//xfer     sync.Cond
 	//xferMu   sync.Mutex
-	fromClient chan *pxr.Msg
+	fromClient chan *arc.Msg
 	toClient   chan []byte
 	closing    chan struct{}
 	free       chan []byte
@@ -145,29 +145,29 @@ func (sess *libSession) Realloc(buf *[]byte, newLen int64) {
 ///////////////////////// client -> host /////////////////////////
 
 // Executed on a host thread
-func (sess *libSession) RecvMsg() (*pxr.Msg, error) {
+func (sess *libSession) RecvMsg() (*arc.Msg, error) {
 	select {
 	case msg := <-sess.fromClient:
 		return msg, nil
 	case <-sess.closing:
-		return nil, pxr.ErrStreamClosed
+		return nil, arc.ErrStreamClosed
 	}
 }
 
 // Executed on a client thread
-func (sess *libSession) EnqueueIncoming(msg *pxr.Msg) error {
+func (sess *libSession) EnqueueIncoming(msg *arc.Msg) error {
 	select {
 	case sess.fromClient <- msg:
 		return nil
 	case <-sess.closing:
-		return pxr.ErrStreamClosed
+		return arc.ErrStreamClosed
 	}
 }
 
 ///////////////////////// host -> client /////////////////////////
 
 // Executed on a host thread
-func (sess *libSession) SendMsg(msg *pxr.Msg) error {
+func (sess *libSession) SendMsg(msg *arc.Msg) error {
 
 	// Serialize the outgoing msg into an existing buffer (or allocate a new one)
 	sz := msg.Size()
@@ -183,7 +183,7 @@ func (sess *libSession) SendMsg(msg *pxr.Msg) error {
 	case sess.toClient <- msg_pb:
 		return nil
 	case <-sess.closing:
-		return pxr.ErrStreamClosed
+		return arc.ErrStreamClosed
 	}
 }
 
@@ -203,7 +203,7 @@ func (sess *libSession) DequeueOutgoing(msg_pb *[]byte) error {
 	case *msg_pb = <-sess.toClient:
 		return nil
 	case <-sess.closing:
-		return pxr.ErrStreamClosed
+		return arc.ErrStreamClosed
 	}
 }
 
@@ -285,7 +285,7 @@ func (sess *libSession) DequeueOutgoing(msg_pb *[]byte) error {
 	case sess.toClient <- m:
 		return nil
 	case <-sess.closing:
-		return pxr.ErrStreamClosed
+		return arc.ErrStreamClosed
 	}
 
 
@@ -310,18 +310,18 @@ func (srv *libServer) NewLibSession() (LibSession, error) {
 
 type libSess struct {
 	process.Context
-	hostSess pxr.HostSession
+	hostSess arc.HostSession
 }
 
 func (sess *libSess) Desc() string {
     return "lib"
 }
 
-func (sess *libSess) SendMsg(m *pxr.Msg) error {
+func (sess *libSess) SendMsg(m *arc.Msg) error {
 
 }
 
-func (sess *libSess) RecvMsg(m *pxr.Msg) error {
+func (sess *libSess) RecvMsg(m *arc.Msg) error {
 
 }
 

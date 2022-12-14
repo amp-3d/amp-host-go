@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/arcspace/go-arcspace/pxr"
+	"github.com/arcspace/go-arcspace/arc"
 	"github.com/arcspace/go-cedar/process"
 )
 
@@ -19,7 +19,7 @@ import (
 type grpcServer struct {
 	process.Context
 	server *grpc.Server
-	host   pxr.Host
+	host   arc.Host
 	opts   GrpcServerOpts
 }
 
@@ -27,11 +27,11 @@ func (srv *grpcServer) ServiceURI() string {
 	return srv.opts.ServiceURI
 }
 
-func (srv *grpcServer) Host() pxr.Host {
+func (srv *grpcServer) Host() arc.Host {
 	return srv.host
 }
 
-func (srv *grpcServer) StartService(on pxr.Host) error {
+func (srv *grpcServer) StartService(on arc.Host) error {
 	if srv.host != nil || srv.server != nil || srv.Context != nil {
 		panic("already started")
 	}
@@ -46,7 +46,7 @@ func (srv *grpcServer) StartService(on pxr.Host) error {
 	// 		grpc.StreamInterceptor(srv.StreamServerInterceptor()),
 	// 		grpc.UnaryInterceptor(srv.UnaryServerInterceptor()),
 	)
-	pxr.RegisterHostGrpcServer(srv.server, srv)
+	arc.RegisterHostGrpcServer(srv.server, srv)
 
 	srv.Context, err = srv.host.StartChild(&process.Task{
 		Label:     fmt.Sprint(srv.ServiceURI(), ".HostService"),
@@ -80,7 +80,7 @@ func (srv *grpcServer) GracefulStop() {
 
 // HostSession is a callback for when a new grpc session instance a client opens.
 // Multiple pipes can be open at any time by the same client or multiple clients.
-func (srv *grpcServer) HostSession(rpc pxr.HostGrpc_HostSessionServer) error {
+func (srv *grpcServer) HostSession(rpc arc.HostGrpc_HostSessionServer) error {
 	sess := &grpcSess{
 		srv:     srv,
 		rpc:     rpc,
@@ -110,8 +110,8 @@ type grpcSess struct {
 	closed   int32
 	closing  chan struct{}
 	srv      *grpcServer
-	rpc      pxr.HostGrpc_HostSessionServer
-	hostSess pxr.HostSession
+	rpc      arc.HostGrpc_HostSessionServer
+	hostSess arc.HostSession
 }
 
 func (sess *grpcSess) Desc() string {
@@ -124,25 +124,25 @@ func (sess *grpcSess) Close() {
 	}
 }
 
-func (sess *grpcSess) SendMsg(msg *pxr.Msg) error {
+func (sess *grpcSess) SendMsg(msg *arc.Msg) error {
 	err := sess.rpc.SendMsg(msg)
 	if err == nil {
 		return nil
 	}
 	if status.Code(err) == codes.Canceled {
-		err = pxr.ErrStreamClosed
+		err = arc.ErrStreamClosed
 	}
 	return err
 }
 
-func (sess *grpcSess) RecvMsg() (*pxr.Msg, error) {
-	msg := pxr.NewMsg()
+func (sess *grpcSess) RecvMsg() (*arc.Msg, error) {
+	msg := arc.NewMsg()
 	err := sess.rpc.RecvMsg(msg)
 	if err == nil {
 		return msg, nil
 	}
 	if status.Code(err) == codes.Canceled {
-		err = pxr.ErrStreamClosed
+		err = arc.ErrStreamClosed
 	}
 	return msg, err
 }

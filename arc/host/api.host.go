@@ -1,6 +1,6 @@
 package host
 
-import "github.com/arcspace/go-arcspace/pxr"
+import "github.com/arcspace/go-arcspace/arc"
 
 type HostOpts struct {
 	Label     string // label of this host
@@ -17,6 +17,6 @@ func DefaultHostOpts() HostOpts {
 }
 
 // StartNewHost starts a new host with the given opts
-func StartNewHost(opts HostOpts) (pxr.Host, error) {
+func StartNewHost(opts HostOpts) (arc.Host, error) {
 	return startNewHost(opts)
 }

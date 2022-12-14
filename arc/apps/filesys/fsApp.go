@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/arcspace/go-arcspace/pxr"
+	"github.com/arcspace/go-arcspace/arc"
 )
 
 type fsApp struct {
@@ -28,23 +28,23 @@ func (app *fsApp) AttrModelURIs() []string {
 }
 
 // IssueEphemeralID issued a new ID that will persist
-func (app *fsApp) IssueCellID() pxr.CellID {
-	return pxr.CellID(atomic.AddUint64(&app.nextID, 1) + 100)
+func (app *fsApp) IssueCellID() arc.CellID {
+	return arc.CellID(atomic.AddUint64(&app.nextID, 1) + 100)
 }
 
-func (app *fsApp) ResolveRequest(req *pxr.CellReq) error {
+func (app *fsApp) ResolveRequest(req *arc.CellReq) error {
 	item := fsItem{}
 
 	if req.PinCell == 0 {
 		if req.PinURI == "" {
-			return pxr.ErrCode_InvalidCell.Error("invalid root URI")
+			return arc.ErrCode_InvalidCell.Error("invalid root URI")
 		}
 
 		item.pathname = path.Clean(req.PinURI)
 
 		fi, err := os.Stat(item.pathname)
 		if err != nil {
-			return pxr.ErrCode_InvalidCell.Errorf("path not found: %q", item.pathname)
+			return arc.ErrCode_InvalidCell.Errorf("path not found: %q", item.pathname)
 		}
 		req.PinCell = app.IssueCellID()
 		item.setFrom(fi)
@@ -52,17 +52,17 @@ func (app *fsApp) ResolveRequest(req *pxr.CellReq) error {
 
 	} else {
 		if req.ParentReq == nil || req.ParentReq.PinnedCell == nil {
-			return pxr.ErrCode_InvalidCell.Error("parent cell is nil")
+			return arc.ErrCode_InvalidCell.Error("parent cell is nil")
 		}
 
 		parent, ok := req.ParentReq.PinnedCell.(*pinnedDir)
 		if !ok {
-			return pxr.ErrCode_NotPinnable.Error("parent is not a pinned dir")
+			return arc.ErrCode_NotPinnable.Error("parent is not a pinned dir")
 		}
 
 		itemRef := parent.itemByID[req.PinCell]
 		if itemRef == nil {
-			return pxr.ErrCode_InvalidCell.Error("invalid target cell")
+			return arc.ErrCode_InvalidCell.Error("invalid target cell")
 		}
 
 		item = *itemRef
@@ -84,11 +84,11 @@ func (app *fsApp) ResolveRequest(req *pxr.CellReq) error {
 type pinnedDir struct {
 	fsItem             // base file info
 	items    []*fsItem // ordered
-	itemByID map[pxr.CellID]*fsItem
+	itemByID map[arc.CellID]*fsItem
 }
 
 type fsItem struct {
-	pxr.CellID
+	arc.CellID
 
 	name        string // base file name
 	pathname    string // only set for pinned items  (could be alternative OS handle)
@@ -119,11 +119,11 @@ func (item *fsItem) Compare(oth *fsItem) int {
 	return 0
 }
 
-func (dir *pinnedDir) readDir(req *pxr.CellReq) error {
+func (dir *pinnedDir) readDir(req *arc.CellReq) error {
 	app := req.ParentApp.(*fsApp)
 
 	{
-		//dir.subs = make(map[pxr.CellID]os.DirEntry)
+		//dir.subs = make(map[arc.CellID]os.DirEntry)
 		f, err := os.Open(dir.pathname)
 		if err != nil {
 			return err
@@ -142,7 +142,7 @@ func (dir *pinnedDir) readDir(req *pxr.CellReq) error {
 		}
 
 		N := len(fsItems)
-		dir.itemByID = make(map[pxr.CellID]*fsItem, N)
+		dir.itemByID = make(map[arc.CellID]*fsItem, N)
 		dir.items = dir.items[:0]
 
 		var tmp *fsItem
@@ -179,7 +179,7 @@ func (dir *pinnedDir) readDir(req *pxr.CellReq) error {
 
 }
 
-func (dir *pinnedDir) PushCellState(req *pxr.CellReq) error {
+func (dir *pinnedDir) PushCellState(req *arc.CellReq) error {
 
 	// Refresh if first time or too old
 	now := time.Now()
@@ -196,7 +196,7 @@ func (dir *pinnedDir) PushCellState(req *pxr.CellReq) error {
 	return nil
 }
 
-func (item *fsItem) PushCellState(req *pxr.CellReq) error {
+func (item *fsItem) PushCellState(req *arc.CellReq) error {
 	return item.pushCellState(req, false)
 }
 
@@ -216,7 +216,7 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 	}
 }
 
-func (item *fsItem) pushCellState(req *pxr.CellReq, asChild bool) error {
+func (item *fsItem) pushCellState(req *arc.CellReq, asChild bool) error {
 	schema := req.ContentSchema
 	if asChild {
 		schema = req.GetChildSchema(DataModels[item.model])
@@ -241,7 +241,7 @@ func (item *fsItem) pushCellState(req *pxr.CellReq, asChild bool) error {
 			req.PushAttr(item.CellID, schema, attr_MimeType, mimeType)
 		}
 		req.PushAttr(item.CellID, schema, attr_ByteSz, item.size)
-		req.PushAttr(item.CellID, schema, attr_LastModified, pxr.ConvertToTimeFS(item.modTime))
+		req.PushAttr(item.CellID, schema, attr_LastModified, arc.ConvertToTimeFS(item.modTime))
 	}
 	return nil
 }
