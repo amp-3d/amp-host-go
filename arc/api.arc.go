@@ -7,13 +7,13 @@ import (
 /*
 packages
 
-	pxr
-	    planetXR interfaces and support utils
-	pxr/host
+	arc
+	    ArcXR interfaces and support utils
+	arc/host
 	    an implementation of arc.Host & arc.HostSession
-	pxr/grpc_server
+	arc/grpc_service
 		implements a grpc server that consumes a arc.Host instance
-	pxr/apps
+	arc/apps
 		implementations of arc.App
 
 

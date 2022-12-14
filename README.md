@@ -1,6 +1,6 @@
 # go-arcspace
 ---
-### PlanetXR framework and runtime for Go
+### ArcXR framework and runtime for Go
 
 ---
 
