@@ -5,8 +5,10 @@ BUILD_DIR  := $(patsubst %/,%,$(abspath $(dir $(lastword $(MAKEFILE_LIST)))))
 PARENT_DIR := $(patsubst %/,%,$(dir $(BUILD_DIR)))
 UNITY_ASSETS_DIR = ${PARENT_DIR}/arcspace.unity-app/Assets
 ARCXR_UNITY_DIR = ${UNITY_ASSETS_DIR}/ArcXR
-BUILD_OUTPUT = ${UNITY_ASSETS_DIR}/Plugins/ArcXR/Arc
+BUILD_OUTPUT = ${ARCXR_UNITY_DIR}/Plugins
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
+LIB_DIR := ${BUILD_DIR}/cmd/archost-lib
+GO_BUILD_LIB := cd "${LIB_DIR}" && rm -rf tmp ||: && mkdir tmp && touch main.go && CGO_ENABLED=1 go build -trimpath -buildmode=c-shared 
 
 ## display this help message
 help:
@@ -25,8 +27,8 @@ GOFILES = $(shell find . -type f -name '*.go')
 	
 .PHONY: build protos
 
-## build archost and lib-archost
-build:  archost lib-archost
+## build archost and archost-lib
+build:  archost archost-lib
 
 
 #
@@ -36,23 +38,36 @@ build:  archost lib-archost
 #
 
 
+## build archost.dylib for OS X
+archost-lib-osx:
+# Beware of a Unity bug where *not* selecting "Any CPU" causes the app builder to not add the .dylib to the app bundle!
+# Also note that a .dylib is identical to the binary in an OS X .bundle.  Also: https://stackoverflow.com/questions/2339679/what-are-the-differences-between-so-and-dylib-on-macos 
+# Info on cross-compiling Go: https://freshman.tech/snippets/go/cross-compile-go-programs/
+	GOOS=darwin    GOARCH=amd64  \
+	${GO_BUILD_LIB} -o tmp/archost.amd64.dylib . && \
+	mv tmp/archost.amd64.dylib "${BUILD_OUTPUT}/macOS/archost.dylib"
+#   lipo archost.amd64.dylib archost.arm64.dylib -create -output archost.dylib
 
+## build archost.dylib for iOS
+archost-lib-ios:
+	GOOS=darwin    GOARCH=arm64  \
+	SDK=iphoneos   CC="${LIB_DIR}/clangwrap.sh" \
+	${GO_BUILD_LIB} -o tmp/archost.arm64.dylib -tags ios . && \
+	mv tmp/archost.arm64.dylib "${BUILD_OUTPUT}/iOS/archost.dylib"
 
-## build archost.so (for embedding clients such as Unity and Unreal)
-lib-archost: $(GOFILES)
-#   Info on cross-compiling Go: https://freshman.tech/snippets/go/cross-compile-go-programs/
-	touch cmd/lib-archost/main.go
-	cd cmd/lib-archost && \
-		GOOS=darwin GOARCH=amd64 \
-		go build -trimpath -o "${BUILD_OUTPUT}/lib-archost.so" -buildmode=c-shared main.go
-	rm "${BUILD_OUTPUT}/lib-archost.h"
+## build archost.dylib for Android
+archost-lib-android:
+
+	
+## build archost.dylib/DLL for all platforms
+archost-lib:  archost-lib-osx archost-lib-ios archost-lib-android
+
 
 ## build archost ("headless" daemon)
 archost: $(GOFILES)
-	touch cmd/archost/main.go
-	cd cmd/archost && \
-		GOOS=darwin GOARCH=amd64 \
-		go build .
+	cd cmd/archost && touch main.go && \
+	go build -trimpath .
+
 	
 ## install tools
 tools:

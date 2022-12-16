@@ -5,5 +5,7 @@ cmd/archost/*.data
 cmd/archost/*.archost
 cmd/archost/archost
 
+cmd/archost-lib/tmp
+
 __debug_bin
 __debug_bin.exe

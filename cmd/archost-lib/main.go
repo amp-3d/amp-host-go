@@ -1,4 +1,4 @@
-// go/cmd/lib-archost/main.go
+// go/cmd/archost-lib/main.go
 package main
 
 import "C"
@@ -236,11 +236,5 @@ func LogPtr(msg *string) int {
 }
 
 func main() {
-
-	//params := archost.DefaultHostParams
-	// host, err := archost.NewHost(params)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
 
 }
