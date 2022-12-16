@@ -5,7 +5,7 @@ BUILD_DIR  := $(patsubst %/,%,$(abspath $(dir $(lastword $(MAKEFILE_LIST)))))
 PARENT_DIR := $(patsubst %/,%,$(dir $(BUILD_DIR)))
 UNITY_ASSETS_DIR = ${PARENT_DIR}/arcspace.unity-app/Assets
 ARCXR_UNITY_DIR = ${UNITY_ASSETS_DIR}/ArcXR
-BUILD_OUTPUT = ${ARCXR_UNITY_DIR}/Plugins
+BUILD_OUTPUT = ${UNITY_ASSETS_DIR}/Plugins/ArcXR/Plugins
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
 LIB_DIR := ${BUILD_DIR}/cmd/archost-lib
 GO_BUILD_LIB := cd "${LIB_DIR}" && rm -rf tmp ||: && mkdir tmp && touch main.go && CGO_ENABLED=1 go build -trimpath -buildmode=c-shared 
@@ -43,10 +43,12 @@ archost-lib-osx:
 # Beware of a Unity bug where *not* selecting "Any CPU" causes the app builder to not add the .dylib to the app bundle!
 # Also note that a .dylib is identical to the binary in an OS X .bundle.  Also: https://stackoverflow.com/questions/2339679/what-are-the-differences-between-so-and-dylib-on-macos 
 # Info on cross-compiling Go: https://freshman.tech/snippets/go/cross-compile-go-programs/
+# Note: for the time being, we are x86_64 (amd64) only, the archost.dylib should only be compiled on an x86_64 machine!
 	GOOS=darwin    GOARCH=amd64  \
 	${GO_BUILD_LIB} -o tmp/archost.amd64.dylib . && \
-	mv tmp/archost.amd64.dylib "${BUILD_OUTPUT}/macOS/archost.dylib"
+	mv tmp/archost.amd64.dylib "${BUILD_OUTPUT}/OSX/archost.dylib"
 #   lipo archost.amd64.dylib archost.arm64.dylib -create -output archost.dylib
+	otool -hv                  "${BUILD_OUTPUT}/OSX/archost.dylib"
 
 ## build archost.dylib for iOS
 archost-lib-ios:
@@ -54,6 +56,7 @@ archost-lib-ios:
 	SDK=iphoneos   CC="${LIB_DIR}/clangwrap.sh" \
 	${GO_BUILD_LIB} -o tmp/archost.arm64.dylib -tags ios . && \
 	mv tmp/archost.arm64.dylib "${BUILD_OUTPUT}/iOS/archost.dylib"
+	otool -hv                  "${BUILD_OUTPUT}/iOS/archost.dylib"
 
 ## build archost.dylib for Android
 archost-lib-android:
