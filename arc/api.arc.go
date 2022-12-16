@@ -161,16 +161,16 @@ func (ID CellID) U64() uint64 { return uint64(ID) }
 // See api.support.go for CellReq helper methods such as PushMsg.
 type CellReq struct {
 	CellSub
-
-	ParentApp     App     // App responding to this request
-	PinnedCell    AppCell // Assigned during App.ResolveRequest()
-	ReqID         uint64
-	ParentReq     *CellReq
-	PlanetID      uint64
-	PinURI        string
-	PinCell       CellID
-	ContentSchema *AttrSchema
-	ChildSchemas  []*AttrSchema
+	
+	ReqID         uint64        // Client-set request ID
+	PinURI        string        // Client-set cell URI to pin (optional if PinCell provided)
+	PinCell       CellID        // Client-set cell ID to pin (nil if PinURI is sufficient)
+	ContentSchema *AttrSchema   // Client-set schema for cell being pinned
+	ChildSchemas  []*AttrSchema // Client-set schemas specifying what child cells (and attrs) are expected to be pushed	ParentApp     App           // Runtime-set via SelectAppForSchema()
+	ParentApp     App           // Runtime-set via SelectAppForSchema()
+	ParentReq     *CellReq      // Runtime-set so App.ResolveRequest() has access the parent context
+	PinnedCell    AppCell       // App-set during App.ResolveRequest()
+	PlanetID      uint64        // Persistent storage binding
 }
 
 // Signals to use the default App for a given AttrSchema AttrModelURI.
