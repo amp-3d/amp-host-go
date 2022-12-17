@@ -4,12 +4,18 @@
 
 rm -rf tmp ||: && mkdir tmp
 
+NAME="archost"
+
 if [ "$PLATFORM" == "iOS" ]; then
     SDK="iphoneos"
     GOOS="darwin"
+    BUILDMODE="c-archive"
+    NAME="${NAME}.a"
 elif [ "$PLATFORM" == "OSX" ]; then
     SDK="macosx"
     GOOS="darwin"
+    BUILDMODE="c-shared"
+    NAME="${NAME}.dylib"
 fi
 
 CGO_ENABLED=1 \
@@ -18,9 +24,9 @@ GOARCH=${GOARCH} \
 GOOS=${GOOS} \
 CC=/Users/aomeara/git.arcspace/go-arcspace/cmd/archost-lib/clangwrap.sh \
 CGO_CFLAGS="-fembed-bitcode" \
-go build -buildmode=c-shared -o tmp/archost.dylib ./cmd/archost-lib
+go build -buildmode=${BUILDMODE} -o tmp/archost.bin ./cmd/archost-lib
 
-mv tmp/archost.dylib "${OUT_DIR}/${PLATFORM}/archost.dylib"
-otool -hv            "${OUT_DIR}/${PLATFORM}/archost.dylib"
+mv tmp/archost.bin "${OUT_DIR}/${PLATFORM}/${NAME}"
+otool -hv          "${OUT_DIR}/${PLATFORM}/${NAME}"
 
 rm -rf tmp
