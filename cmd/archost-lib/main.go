@@ -21,14 +21,14 @@ var (
 )
 
 //export Call_SessionBegin
-func Call_SessionBegin(UserID string) int64 {
+func Call_SessionBegin(userID, userDataPath, sharedCachePath string) int64 {
 	if gLibSession != nil {
 		return -1
 	}
 
 	hostOpts := host.DefaultHostOpts()
-	hostOpts.CachePath = "/Users/aomeara/_drew/_cache"
-	hostOpts.StatePath = "/Users/aomeara/_drew"
+	hostOpts.CachePath = sharedCachePath
+	hostOpts.StatePath = userDataPath
 	h := archost.StartNewHost(hostOpts)
 
 	opts := lib_service.DefaultLibServiceOpts()
