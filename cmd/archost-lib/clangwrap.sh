@@ -2,11 +2,14 @@
 
 # clangwrap.sh
 
+
+
 SDK_PATH=`xcrun --sdk $SDK --show-sdk-path`
 CLANG=`xcrun --sdk $SDK --find clang`
 
 if [ "$SDK" == "iphoneos" ]; then
-    SDK_ARGS=" -mios-version-min=12.0 "
+    export IPHONEOS_DEPLOYMENT_TARGET=13.0
+    SDK_ARGS=" -mios-version-min=13.0 "
 elif [ "$SDK" == "macosx" ]; then
     SDK_ARGS=" -mmacosx-version-min=10.15 "
 fi

@@ -8,7 +8,7 @@ NAME="archost"
 
 if [ "$PLATFORM" == "iOS" ]; then
     SDK="iphoneos"
-    GOOS="darwin"
+    GOOS="ios"
     BUILDMODE="c-archive"
     NAME="${NAME}.a"
 elif [ "$PLATFORM" == "OSX" ]; then
