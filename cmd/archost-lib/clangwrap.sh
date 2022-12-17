@@ -3,12 +3,12 @@
 # clangwrap.sh
 
 SDK_PATH=`xcrun --sdk $SDK --show-sdk-path`
-CLANG=   `xcrun --sdk $SDK --find clang`
+CLANG=`xcrun --sdk $SDK --find clang`
 
 if [ "$SDK" == "iphoneos" ]; then
-    SDK_ARGS="-isysroot $SDK_PATH -mios-version-min=12.0 "
+    SDK_ARGS=" -mios-version-min=12.0 "
 elif [ "$SDK" == "macosx" ]; then
-    SDK_ARGS="-isysroot  $SDK_PATH -mmacosx-version-min=10.15 "
+    SDK_ARGS=" -mmacosx-version-min=10.15 "
 fi
 
 if [ "$GOARCH" == "amd64" ]; then
@@ -17,4 +17,4 @@ elif [ "$GOARCH" == "arm64" ]; then
     CARCH="arm64"
 fi
 
-exec $CLANG -arch $CARCH $SDK_ARGS "$@"
+exec $CLANG -arch $CARCH -isysroot $SDK_PATH $SDK_ARGS "$@"
