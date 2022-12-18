@@ -1,23 +1,34 @@
 MAKEFLAGS += --warn-undefined-variables
 SHELL = /bin/bash -o nounset -o errexit -o pipefail
 .DEFAULT_GOAL = build
-BUILD_DIR  := $(patsubst %/,%,$(abspath $(dir $(lastword $(MAKEFILE_LIST)))))
-PARENT_DIR := $(patsubst %/,%,$(dir $(BUILD_DIR)))
-UNITY_ASSETS_DIR = ${PARENT_DIR}/arcspace.unity-app/Assets
-ARCXR_UNITY_DIR = ${UNITY_ASSETS_DIR}/ArcXR
-BUILD_OUTPUT = ${UNITY_ASSETS_DIR}/Plugins/ArcXR/Plugins
+BUILD_PATH  := $(patsubst %/,%,$(abspath $(dir $(lastword $(MAKEFILE_LIST)))))
+PARENT_PATH := $(patsubst %/,%,$(dir $(BUILD_PATH)))
+UNITY_PROJ := ${PARENT_PATH}/arcspace.unity-app
+ARCXR_LIBS = ${UNITY_PROJ}/Assets/Plugins/ArcXR/Plugins
+ARCXR_UNITY_PATH = ${UNITY_PROJ}/Assets/ArcXR
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
-LIB_DIR := ${BUILD_DIR}/cmd/archost-lib
+LIB_PROJ := ${BUILD_PATH}/cmd/archost-lib
+
+#UNITY_PATH = "${HOME}/Applications/2021.3.16f1"
+UNITY_PATH := $(shell python3 ${UNITY_PROJ}/arc-utils.py UNITY_PATH "${UNITY_PROJ}")
+
+ANDROID_NDK := ${UNITY_PATH}/PlaybackEngines/AndroidPlayer/NDK
+ANDROID_CC := ${ANDROID_NDK}/toolchains/llvm/prebuilt/darwin-x86_64/bin
+
 
 ## display this help message
 help:
 	@echo -e "\033[32m"
 	@echo "go-arcspace"
-	@echo "  BUILD_DIR:       ${BUILD_DIR}"
-	@echo "  PARENT_DIR:      ${PARENT_DIR}"
-	@echo "  BUILD_OUTPUT:    ${BUILD_OUTPUT}"
+	@echo "  PARENT_PATH:     ${PARENT_PATH}"
+	@echo "  BUILD_PATH:      ${BUILD_PATH}"
+	@echo "  UNITY_PROJ:      ${UNITY_PROJ}"
+	@echo "  ARCXR_LIBS:      ${ARCXR_LIBS}"
+	@echo "  UNITY_PATH:      ${UNITY_PATH}"
+	@echo "  ANDROID_NDK:     ${ANDROID_NDK}"
+	@echo "  ANDROID_CC:      ${ANDROID_CC}"
 	@echo
-	@awk '/^##.*$$/,/[a-zA-Z_-]+:/' $(MAKEFILE_LIST) | awk '!(NR%2){print $$0p}{p=$$0}' | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-16s\033[0m %s\n", $$1, $$2}' | sort
+	@awk '/^##.*$$/,/[a-zA-Z_-]+:/' $(MAKEFILE_LIST) | awk '!(NR%2){print $$0p}{p=$$0}' | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-32s\033[0m %s\n", $$1, $$2}' | sort
 
 # ----------------------------------------
 # build
@@ -37,39 +48,40 @@ build:  archost archost-lib
 #
 
 
-## build archost.dylib for OS X
+## build archost.dylib for OSX        ---> build on x86_64 mac!
 archost-lib-osx:
 # Beware of a Unity bug where *not* selecting "Any CPU" causes the app builder to not add the .dylib to the app bundle!
 # Also note that a .dylib is identical to the binary in an OS X .bundle.  Also: https://stackoverflow.com/questions/2339679/what-are-the-differences-between-so-and-dylib-on-macos 
 # Info on cross-compiling Go: https://freshman.tech/snippets/go/cross-compile-go-programs/
 # Note: for the time being, we are x86_64 (amd64) only, the archost.dylib should only be compiled on an x86_64 machine!
-	PLATFORM=OSX   GOARCH=amd64   OUT_DIR="${BUILD_OUTPUT}"     ./cmd/archost-lib/build.sh
+	OUT_DIR="${ARCXR_LIBS}"         CC="${LIB_PROJ}/clangwrap.sh" \
+	PLATFORM=OSX                    GOARCH=amd64        "${LIB_PROJ}/build.sh"
 
 
-## build archost.dylib for iOS
+## build archost.a for iOS            ---> build on x86_64 mac!
 archost-lib-ios:
-	PLATFORM=iOS   GOARCH=arm64   OUT_DIR="${BUILD_OUTPUT}"     ./cmd/archost-lib/build.sh
+	OUT_DIR="${ARCXR_LIBS}"         CC="${LIB_PROJ}/clangwrap.sh" \
+	PLATFORM=iOS                    GOARCH=arm64        "${LIB_PROJ}/build.sh"
 
 
-archost-lib-ios2:
-	CGO_ENABLED=1 \
-	GOOS=darwin \
-	GOARCH=arm64 \
-	SDK=iphoneos \
-	CC=$(PWD)/cmd/archost-lib/clangwrap.sh \
-	CGO_CFLAGS="-fembed-bitcode" \
-	go build -buildmode=c-archive -tags ios -o archost.arm64.dylib ./cmd/archost-lib
-	otool -hv                  archost.arm64.dylib
+
+## build archost-lib for arm64-v8a    ---> build on x86_64 mac!
+archost-lib-android-arm64-v8a:
+	OUT_DIR="${ARCXR_LIBS}"         CC="${ANDROID_CC}/aarch64-linux-android21-clang" \
+	PLATFORM=Android/arm64-v8a      GOARCH=arm64        "${LIB_PROJ}/build.sh"
+
+
+## build archost-lib for armeabi-v7a  ---> build on x86_64 mac!
+archost-lib-android-armeabi-v7a:
+	OUT_DIR="${ARCXR_LIBS}"         CC="${ANDROID_CC}/armv7a-linux-androideabi21-clang" \
+	PLATFORM=Android/armeabi-v7a    GOARCH=arm          "${LIB_PROJ}/build.sh"
 	
-## build archost.dylib for Android
-archost-lib-android:
 
-	
-## build archost.dylib/DLL for all platforms
-archost-lib:  archost-lib-osx archost-lib-ios archost-lib-android
+## build archost.dylib/so/.a for all platforms
+archost-lib:  archost-lib-osx archost-lib-ios archost-lib-android-arm64-v8a archost-lib-android-armeabi-v7a
 
 
-## build archost ("headless" daemon)
+## build archost "headless" daemon
 archost: $(GOFILES)
 	cd cmd/archost && touch main.go && \
 	go build -trimpath .
@@ -92,15 +104,15 @@ protos:
 #   Links: https://grpc.io/docs/languages/csharp/quickstart/
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
-	    --csharp_out "${ARCXR_UNITY_DIR}/Arc" \
-	    --grpc_out   "${ARCXR_UNITY_DIR}/Arc" \
+	    --csharp_out "${ARCXR_UNITY_PATH}/Arc" \
+	    --grpc_out   "${ARCXR_UNITY_PATH}/Arc" \
 	    --plugin=protoc-gen-grpc="${grpc_csharp_exe}" \
 	    --proto_path=. \
 		arc/arc.proto
 
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
-	    --csharp_out "${ARCXR_UNITY_DIR}/Crates" \
+	    --csharp_out "${ARCXR_UNITY_PATH}/Crates" \
 	    --proto_path=. \
 		crates/crates.proto
 
