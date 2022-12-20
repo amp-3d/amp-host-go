@@ -53,13 +53,18 @@ message AppVars {
     // AppHomeURL points to the home URL for the app 
                 string              AppHomeURL                  = 12;
                 
-    // CrateSnapshotURL specifies where to load this org's CrateSnapshot
-                string              CrateSnapshotURL            = 14;
-                
+    // CratesSnapshotURL specifies where to load this org's CratesSnapshot
+                string              CratesSnapshotURL           = 14;
+    
     // AppDownloadURLs are a download URL for a given platform.
     // A key of "" denotes an unknown platform
                 map<string, string> AppDownloadURLs             = 16;
                 
+    // URLSchemes declare URL schemes for this app's custom URL scheme (e.g. "arcspace://")
+    // The first entry is the primary scheme and the rest are alternately recognized schemes.
+    // URL schemas should always end with "://"
+    repeated    string              URLSchemes                  = 18;
+    
     // Overrides default settings
                 map<string, string> Settings                    = 20;
                 
@@ -221,8 +226,8 @@ message CrateManifest {
 
 
 
-// CrateSnapshot is a general purpose container to track a set crates and associated build IDs.
-message CrateSnapshot {
+// CratesSnapshot is a general purpose container to track multiple crates and associated build IDs.
+message CratesSnapshot {
 
                 int64               RevID                       = 1;
                 
