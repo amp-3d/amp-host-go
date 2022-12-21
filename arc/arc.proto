@@ -554,13 +554,12 @@ message CryptoKey {
 }
 
 message Link {
-    string              URL = 1;
-    
-    int64               PlanetID = 2;
-    int64               CellID = 3;
-    int64               CellType = 4;
-
-    double              ListOrder = 6;
+    string              ShapeURI      = 1;
+    string              SkinURI       = 2;
+    string              URL           = 5;
+    string              Label         = 7;
+    string              Desc          = 10;
+    string              Tags          = 12; //  Comma-delimited list of tags
 }
 
 
