@@ -8,6 +8,7 @@ NAME="archost"
 export CGO_ENABLED=1
 export BUILDMODE="c-shared"
 VERIFY="stat -l "
+GO_ARCHOST_LIB="./cmd/archost-lib"
 
 if [[ $PLATFORM =~ ^Android ]]; then
     export GOOS=android
@@ -30,12 +31,13 @@ elif [ $PLATFORM == Android/armeabi-v7a ]; then
     export GOARM=7
 fi
 
-
+# make sure the compiler doesn't say notihing new to do
+touch ${GO_ARCHOST_LIB}/main.go
 
 rm -f              "${OUT_DIR}/${PLATFORM}/${NAME}" || true
 
 CGO_CFLAGS="-fembed-bitcode" \
-go build -buildmode=${BUILDMODE} -o tmp/archost.bin ./cmd/archost-lib
+go build -buildmode=${BUILDMODE} -o tmp/archost.bin ${GO_ARCHOST_LIB}
 
 mv tmp/archost.bin "${OUT_DIR}/${PLATFORM}/${NAME}"
 $VERIFY            "${OUT_DIR}/${PLATFORM}/${NAME}"
