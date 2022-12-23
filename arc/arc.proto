@@ -311,13 +311,13 @@ enum SeriesType {
 message PlanetEpoch {
 
     // EpochTID is the genesis Tx ID and is only known after this PlanetEpoch is sealed.
-    bytes               EpochTID                    = 1;
+    bytes               EpochTID        = 1;
     
     // EpochEntries contains the entries that bootstrap this epoch
-    repeated Msg        EpochEntries                = 2;
+    repeated Msg        EpochEntries    = 2;
     
     // CommonName is the commonly used name for this planet
-    string              CommonName                  = 3;
+    string              CommonName      = 3;
     
     // Points to the next
     //PlanetEpoch         NextEpoch                   = 4;
@@ -326,8 +326,8 @@ message PlanetEpoch {
 
 
 message UserSeat {
-    uint64              UserID                  = 2;
-    uint64              HomePlanetID            = 4;
+    uint64              UserID          = 2;
+    uint64              HomePlanetID    = 4;
 }
 
 
@@ -335,7 +335,7 @@ message LoginReq {
 
     // A byte string identifying user who is logging in (lot limited to UTF8)
     // This is typically the persistent UID given by the device OS that only changes when the app is reinstalled. 
-    bytes               UserUID                 = 1;
+    bytes               UserUID         = 1;
 }
 
 
