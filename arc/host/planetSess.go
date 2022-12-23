@@ -67,7 +67,6 @@ func (pl *planetSess) onClosed() {
 		pl.db.Close()
 		pl.db = nil
 	}
-	pl.Info(2, "planet OnClosed")
 }
 
 func (pl *planetSess) PlanetID() uint64 {

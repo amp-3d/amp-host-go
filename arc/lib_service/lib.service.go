@@ -36,12 +36,6 @@ func (srv *libService) StartService(on arc.Host) error {
 	srv.Context, err = srv.host.StartChild(&process.Task{
 		Label:     fmt.Sprint(srv.ServiceURI(), ".HostService"),
 		IdleClose: time.Nanosecond,
-		OnRun: func(ctx process.Context) {
-			srv.Infof(0, "service started")
-		},
-		OnClosing: func() {
-
-		},
 	})
 	if err != nil {
 		return err

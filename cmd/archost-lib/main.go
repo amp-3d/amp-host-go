@@ -5,8 +5,6 @@ import "C"
 
 import (
 	"fmt"
-	"math"
-	"sort"
 	"sync"
 
 	"github.com/arcspace/go-arcspace/arc"
@@ -23,7 +21,7 @@ var (
 //export Call_SessionBegin
 func Call_SessionBegin(userID, userDataPath, sharedCachePath string) int64 {
 	if gLibSession != nil {
-		return -1
+		return 0
 	}
 
 	hostOpts := host.DefaultHostOpts()
@@ -34,15 +32,15 @@ func Call_SessionBegin(userID, userDataPath, sharedCachePath string) int64 {
 	opts := lib_service.DefaultLibServiceOpts()
 	gLibService = opts.NewLibService()
 	err := gLibService.StartService(h)
-	if err != nil {
-		h.Fatalf("failed to start LibService: %v", err)
-		return -2
+	if err == nil {
+		gLibSession, err = gLibService.NewLibSession()
 	}
 
-	gLibSession, err = gLibService.NewLibSession()
 	if err != nil {
-		h.Fatalf("failed to start LibSession: %v", err)
-		return -3
+		errMsg := fmt.Sprintf("failed to start LibService: %v", err)
+		h.Error(errMsg)
+		h.Close()
+		return 0
 	}
 
 	return int64(12345)
@@ -200,40 +198,6 @@ func RenderFrame(fbID int32) {
 
 var count int
 var mtx sync.Mutex
-
-//export Add
-func Add(a, b int) int {
-	return a + b
-}
-
-//export Cosine
-func Cosine(x float64) float64 {
-	return math.Cos(x)
-}
-
-//export Sort
-func Sort(vals []int) {
-	sort.Ints(vals)
-}
-
-//export SortPtr
-func SortPtr(vals *[]int) {
-	Sort(*vals)
-}
-
-//export Log
-func Log(msg string) int {
-	mtx.Lock()
-	defer mtx.Unlock()
-	fmt.Println(msg)
-	count++
-	return count
-}
-
-//export LogPtr
-func LogPtr(msg *string) int {
-	return Log(*msg)
-}
 
 func main() {
 
