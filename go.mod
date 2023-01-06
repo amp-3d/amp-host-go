@@ -16,8 +16,8 @@ require (
 	github.com/dgraph-io/badger/v3 v3.2103.4
 	github.com/gogo/protobuf v1.3.2
 	github.com/pkg/errors v0.9.1
-	github.com/zmb3/spotify/v2 v2.3.0
-	golang.org/x/crypto v0.4.0
+	github.com/zmb3/spotify/v2 v2.3.1
+	golang.org/x/crypto v0.5.0
 	google.golang.org/grpc v1.51.0
 )
 
@@ -31,15 +31,15 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v22.11.23+incompatible // indirect
-	github.com/klauspost/compress v1.15.13 // indirect
-	github.com/rs/cors v1.8.2 // indirect
+	github.com/klauspost/compress v1.15.14 // indirect
+	github.com/rs/cors v1.8.3 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/net v0.4.0 // indirect
-	golang.org/x/oauth2 v0.3.0 // indirect
+	golang.org/x/net v0.5.0 // indirect
+	golang.org/x/oauth2 v0.4.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.3.0 // indirect
-	golang.org/x/text v0.5.0 // indirect
+	golang.org/x/sys v0.4.0 // indirect
+	golang.org/x/text v0.6.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect
+	google.golang.org/genproto v0.0.0-20230104163317-caabf589fcbf // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 )
