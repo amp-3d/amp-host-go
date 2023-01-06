@@ -31,6 +31,10 @@ func (pl *planetSess) onStart(opts symbol.TableOpts) error {
 
 	dbOpts := badger.DefaultOptions(pl.dbPath)
 	dbOpts.Logger = nil
+
+	// Limit ValueLogFileSize to ~134mb since badger does a mmap size test on init, causing iOS 13 to error out.
+	// Also, massive value file sizes aren't appropriate for mobile.  TODO: make configurable.
+	dbOpts.ValueLogFileSize = 1 << 27
 	pl.db, err = badger.Open(dbOpts)
 	if err != nil {
 		return err
