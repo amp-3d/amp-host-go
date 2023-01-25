@@ -205,7 +205,7 @@ func (tid TID) CopyNext(inTID TID) {
 }
 
 func (schema *AttrSchema) SchemaDesc() string {
-	return path.Join(schema.AppURI, schema.AttrModelURI, schema.SchemaName)
+	return path.Join(schema.AppURI, schema.CellModelURI, schema.SchemaName)
 }
 
 func (schema *AttrSchema) LookupAttr(attrURI string) *AttrSpec {
@@ -219,7 +219,7 @@ func (schema *AttrSchema) LookupAttr(attrURI string) *AttrSpec {
 
 func (req *CellReq) GetChildSchema(modelURI string) *AttrSchema {
 	for _, schema := range req.ChildSchemas {
-		if schema.AttrModelURI == modelURI {
+		if schema.CellModelURI == modelURI {
 			return schema
 		}
 	}

@@ -4,8 +4,8 @@ import (
 	"log"
 
 	"github.com/arcspace/go-arcspace/arc"
+	"github.com/arcspace/go-arcspace/arc/apps/amp"
 	"github.com/arcspace/go-arcspace/arc/apps/filesys"
-	"github.com/arcspace/go-arcspace/arc/apps/vibe"
 	"github.com/arcspace/go-arcspace/arc/host"
 )
 
@@ -16,7 +16,7 @@ func StartNewHost(opts host.HostOpts) arc.Host {
 		log.Fatalf("failed to start new host: %v", err)
 	}
 
-	h.RegisterApp(vibe.NewApp())
+	h.RegisterApp(amp.NewApp())
 	h.RegisterApp(filesys.NewApp())
 
 	return h

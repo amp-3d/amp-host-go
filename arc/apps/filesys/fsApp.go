@@ -13,6 +13,14 @@ import (
 	"github.com/arcspace/go-arcspace/arc"
 )
 
+type dataModel int
+
+const (
+	dataModel_nil dataModel = iota
+	dataModel_Dir
+	dataModel_File
+)
+
 type fsApp struct {
 	// openMu  sync.Mutex
 	// openDirs map[string]*pinnedDir
@@ -23,8 +31,11 @@ func (app *fsApp) AppURI() string {
 	return AppURI
 }
 
-func (app *fsApp) AttrModelURIs() []string {
-	return DataModels[1:]
+func (app *fsApp) CellModelURIs() []string {
+	return []string{
+		CellModel_Dir,
+		CellModel_File,
+	}
 }
 
 // IssueEphemeralID issued a new ID that will persist
@@ -70,11 +81,11 @@ func (app *fsApp) ResolveRequest(req *arc.CellReq) error {
 	}
 
 	switch item.model {
-	case DirItem:
+	case dataModel_Dir:
 		pinned := &pinnedDir{}
 		pinned.fsItem = item
 		req.PinnedCell = pinned
-	case FileItem:
+	case dataModel_File:
 		req.PinnedCell = &item
 	}
 
@@ -96,7 +107,7 @@ type fsItem struct {
 	isHidden    bool
 	mode        os.FileMode
 	size        int64
-	model       DataModel
+	model       dataModel
 	modTime     time.Time
 }
 
@@ -119,6 +130,7 @@ func (item *fsItem) Compare(oth *fsItem) int {
 	return 0
 }
 
+// reads the pinnedDir's catalog and issues new items as needed. 
 func (dir *pinnedDir) readDir(req *arc.CellReq) error {
 	app := req.ParentApp.(*fsApp)
 
@@ -176,7 +188,6 @@ func (dir *pinnedDir) readDir(req *arc.CellReq) error {
 
 	}
 	return nil
-
 }
 
 func (dir *pinnedDir) PushCellState(req *arc.CellReq) error {
@@ -207,19 +218,29 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 	item.isHidden = strings.HasPrefix(item.name, ".")
 	switch {
 	case fi.IsDir():
-		item.model = DirItem
+		item.model = dataModel_Dir
 	// case strings.HasSuffix(sub.name, ".mp3"):
 	// 	sub.model = PlayableCell
 	default:
-		item.model = FileItem
+		item.model = dataModel_File
 		item.size = fi.Size()
 	}
 }
 
+func (item *fsItem) DataModelURI() string {
+	switch item.model {
+	case dataModel_Dir:
+		return CellModel_Dir
+	case dataModel_File:
+		return CellModel_File
+	}
+	return ""
+}
+
 func (item *fsItem) pushCellState(req *arc.CellReq, asChild bool) error {
 	schema := req.ContentSchema
-	if asChild {
-		schema = req.GetChildSchema(DataModels[item.model])
+	if asChild && item.model > 0 {
+		schema = req.GetChildSchema(item.DataModelURI())
 	}
 
 	if schema == nil {
@@ -234,9 +255,9 @@ func (item *fsItem) pushCellState(req *arc.CellReq, asChild bool) error {
 	}
 
 	switch item.model {
-	case DirItem:
+	case dataModel_Dir:
 		req.PushAttr(item.CellID, schema, attr_MimeType, "filesys/directory")
-	case FileItem:
+	case dataModel_File:
 		if mimeType := mime.TypeByExtension(filepath.Ext(item.name)); len(mimeType) > 1 {
 			req.PushAttr(item.CellID, schema, attr_MimeType, mimeType)
 		}

@@ -274,7 +274,7 @@ func (host *host) RegisterApp(app arc.App) error {
 	}
 	host.appsByURI[appURI] = app
 
-	for _, modelURI := range app.AttrModelURIs() {
+	for _, modelURI := range app.CellModelURIs() {
 		if modelURI != "" {
 			host.appsByModel[modelURI] = app
 		}
@@ -294,7 +294,7 @@ func (host *host) SelectAppForSchema(schema *arc.AttrSchema) (arc.App, error) {
 		}
 	}
 
-	app := host.appsByModel[schema.AttrModelURI]
+	app := host.appsByModel[schema.CellModelURI]
 	if app == nil {
 		return nil, arc.ErrCode_AppNotFound.Errorf("App not found for schema: %s", schema.SchemaDesc())
 	}
@@ -705,11 +705,13 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 		req.ParentReq = &parentReq.CellReq
 	}
 
+	// Recover the referenced cell model the client wants to pin
 	req.ContentSchema, err = sess.TypeRegistry.GetSchemaByID(pinReq.ContentSchema)
 	if err != nil {
 		return err
 	}
 
+	// Select the app that can handle the requested schema / model.
 	req.ParentApp, err = sess.host.SelectAppForSchema(req.ContentSchema)
 	if err != nil {
 		return err

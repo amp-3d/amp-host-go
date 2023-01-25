@@ -99,8 +99,8 @@ func cleanURI(uri *string) bool {
 
 func (reg *typeRegistry) resolveSchema(schema *AttrSchema) error {
 
-	if !cleanURI(&schema.AttrModelURI) {
-		return ErrCode_BadSchema.Error("AttrModelURI missing")
+	if !cleanURI(&schema.CellModelURI) {
+		return ErrCode_BadSchema.Error("CellModelURI missing")
 	}
 
 	if !cleanURI(&schema.SchemaName) {

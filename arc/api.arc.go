@@ -69,10 +69,10 @@ type Host interface {
 
 	HostPlanet() Planet
 
-	// Registers an App for invocation by its AppURI and AttrModelURIs.
+	// Registers an App for invocation by its AppURI and CellModelURIs.
 	RegisterApp(app App) error
 
-	// Selects an App, typically based on schema.AttrModelURI (or schema.AppURI if given).
+	// Selects an App, typically based on schema.CellModelURI (or schema.AppURI if given).
 	// The given schema is READ ONLY.
 	SelectAppForSchema(schema *AttrSchema) (App, error)
 
@@ -165,15 +165,15 @@ type CellReq struct {
 	ReqID         uint64        // Client-set request ID
 	PinURI        string        // Client-set cell URI to pin (optional if PinCell provided)
 	PinCell       CellID        // Client-set cell ID to pin (nil if PinURI is sufficient)
-	ContentSchema *AttrSchema   // Client-set schema for cell being pinned
-	ChildSchemas  []*AttrSchema // Client-set schemas specifying what child cells (and attrs) are expected to be pushed	ParentApp     App           // Runtime-set via SelectAppForSchema()
+	ContentSchema *AttrSchema   // Client-set schema specifying the cell attr model for the cell being pinned.
+	ChildSchemas  []*AttrSchema // Client-set schema(s) specifying which child cells (and attrs) should be pushed to the client.
 	ParentApp     App           // Runtime-set via SelectAppForSchema()
 	ParentReq     *CellReq      // Runtime-set so App.ResolveRequest() has access the parent context
 	PinnedCell    AppCell       // App-set during App.ResolveRequest()
 	PlanetID      uint64        // Persistent storage binding
 }
 
-// Signals to use the default App for a given AttrSchema AttrModelURI.
+// Signals to use the default App for a given AttrSchema CellModelURI.
 // See AttrSchema.AppURI in arc.proto
 const DefaultAppForDataModel = "."
 
@@ -185,9 +185,9 @@ type App interface {
 	// Identifies this App and usually has the form: "{domain_name}/{app_identifier}/v{MAJOR}.{MINOR}.{REV}"
 	AppURI() string
 
-	// AttrModelURIs lists data models that this app handles.
-	// When the host session receives a client request with a specific data model URI, it will route it to the app that registered for it here.
-	AttrModelURIs() []string
+	// CellModelURIs lists data models that this app supports / handles.
+	// When the host session receives a client request for a specific data model URI, it will route it to the app that registered for it here.
+	CellModelURIs() []string
 
 	// Resolves the given request to final target Planet, CellID, and AppCell.
 	ResolveRequest(req *CellReq) error

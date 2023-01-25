@@ -370,15 +370,15 @@ message Defs {
 message AttrSchema {
     
     // AppURI specifies which specific app and optional version should handle requests with this schema.
-    // The reserved value "." tells the host to choose the default app registered to handle the below AttrModelURI (common).
+    // The reserved value "." tells the host to choose the default app registered to handle the below CellModelURI (common).
     // e.g. 
     //      "."
-    //      "planet.tools/vibe.app"
-    //      "planet.tools/vibe.app/v1.2022.1"
+    //      "planet.tools/amp.app"
+    //      "planet.tools/amp.app/v1.2022.1"
     //      "planet.tools/hfs.app/v1.2.3"
     string              AppURI = 1;
     
-    // AttrModelURI names a particular data model used by this schema, in effect specifying a namespace / scope for the attached Attrs.
+    // CellModelURI names a particular data model used by this schema, in effect specifying a namespace / scope for the attached Attrs.
     // This URI names a complete data protocol / specification that this collection of AttrSpecs conforms to (and is a subset of).
     // To an implementing app on the Go side, this URI implies a family of valid possible AttrSpecs to choose from. 
     // e.g.
@@ -387,10 +387,10 @@ message AttrSchema {
     //      "spotify/v1/track"
     //      "filesys/dir"
     //      "filesys/fil"
-    string              AttrModelURI = 3;
+    string              CellModelURI = 3;
 
-    // This describes this *particular* AttrSchema, a particular collection of AttrSpecs (and is implicitly scoped within AttrModelURI).
-    // The host (and its apps) generally don't even look at this field since "{AttrModelURI}/{Attrs[i].AttrURI}" fully specifies each attr's data model URI.
+    // This describes this *particular* AttrSchema, a particular collection of AttrSpecs (and is implicitly scoped within CellModelURI).
+    // The host (and its apps) generally don't even look at this field since "{CellModelURI}/{Attrs[i].AttrURI}" fully specifies each attr's data model URI.
     // The can use this for internal identification, usually to link this schema to particular cell view binding.
     string              SchemaName = 4;
 
@@ -412,10 +412,10 @@ message AttrSchema {
 message AttrSpec {
 
 
-    // AttrURI is a self-describing URI scoped within the parent's AttrModelURI.
+    // AttrURI is a self-describing URI scoped within the parent's CellModelURI.
     // It communicates a purpose or role, for a particular usage context of the attr.
     // It originates from an app data model spec and allows the host to associate an app attr to a client-provided AttrID (and SI when SeriesType == Fixed).
-    // e.g. for AttrSchema.AttrModelURI == "hfs1/directory"
+    // e.g. for AttrSchema.CellModelURI == "hfs1/directory"
     //      "v1/creation-time"
     //      "v1/thumbnail.glyph"
     //      "v1/detailed.glyph"
