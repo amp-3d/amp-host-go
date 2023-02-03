@@ -13,6 +13,7 @@ import (
 	"github.com/arcspace/go-arcspace/arc"
 )
 
+// data model type of a fsItem
 type dataModel int
 
 const (
@@ -22,8 +23,6 @@ const (
 )
 
 type fsApp struct {
-	// openMu  sync.Mutex
-	// openDirs map[string]*pinnedDir
 	nextID uint64
 }
 
@@ -38,7 +37,7 @@ func (app *fsApp) CellModelURIs() []string {
 	}
 }
 
-// IssueEphemeralID issued a new ID that will persist
+// Issues a new and unique ID that will persist during runtime
 func (app *fsApp) IssueCellID() arc.CellID {
 	return arc.CellID(atomic.AddUint64(&app.nextID, 1) + 100)
 }
@@ -47,11 +46,11 @@ func (app *fsApp) ResolveRequest(req *arc.CellReq) error {
 	item := fsItem{}
 
 	if req.PinCell == 0 {
-		if req.PinURI == "" {
-			return arc.ErrCode_InvalidCell.Error("invalid root URI")
+		pinPath, _ := req.GetKwArg(KwArg_PinPath)
+		if pinPath == "" {
+			return arc.ErrCode_InvalidCell.Errorf("missing Cell ID or valid %q arg", KwArg_PinPath)
 		}
-
-		item.pathname = path.Clean(req.PinURI)
+		item.pathname = path.Clean(pinPath)
 
 		fi, err := os.Stat(item.pathname)
 		if err != nil {
@@ -63,7 +62,7 @@ func (app *fsApp) ResolveRequest(req *arc.CellReq) error {
 
 	} else {
 		if req.ParentReq == nil || req.ParentReq.PinnedCell == nil {
-			return arc.ErrCode_InvalidCell.Error("parent cell is nil")
+			return arc.ErrCode_InvalidCell.Error("missing parent")
 		}
 
 		parent, ok := req.ParentReq.PinnedCell.(*pinnedDir)
@@ -71,7 +70,7 @@ func (app *fsApp) ResolveRequest(req *arc.CellReq) error {
 			return arc.ErrCode_NotPinnable.Error("parent is not a pinned dir")
 		}
 
-		itemRef := parent.itemByID[req.PinCell]
+		itemRef := parent.itemsByID[req.PinCell]
 		if itemRef == nil {
 			return arc.ErrCode_InvalidCell.Error("invalid target cell")
 		}
@@ -93,9 +92,9 @@ func (app *fsApp) ResolveRequest(req *arc.CellReq) error {
 }
 
 type pinnedDir struct {
-	fsItem             // base file info
-	items    []*fsItem // ordered
-	itemByID map[arc.CellID]*fsItem
+	fsItem                 // base file info
+	items     []arc.CellID // ordered
+	itemsByID map[arc.CellID]*fsItem
 }
 
 type fsItem struct {
@@ -130,7 +129,7 @@ func (item *fsItem) Compare(oth *fsItem) int {
 	return 0
 }
 
-// reads the pinnedDir's catalog and issues new items as needed. 
+// reads the pinnedDir's catalog and issues new items as needed.
 func (dir *pinnedDir) readDir(req *arc.CellReq) error {
 	app := req.ParentApp.(*fsApp)
 
@@ -142,8 +141,8 @@ func (dir *pinnedDir) readDir(req *arc.CellReq) error {
 		}
 		defer f.Close()
 
-		lookup := make(map[string]*fsItem, len(dir.itemByID))
-		for _, sub := range dir.itemByID {
+		lookup := make(map[string]*fsItem, len(dir.itemsByID))
+		for _, sub := range dir.itemsByID {
 			lookup[sub.name] = sub
 		}
 
@@ -154,7 +153,7 @@ func (dir *pinnedDir) readDir(req *arc.CellReq) error {
 		}
 
 		N := len(fsItems)
-		dir.itemByID = make(map[arc.CellID]*fsItem, N)
+		dir.itemsByID = make(map[arc.CellID]*fsItem, N)
 		dir.items = dir.items[:0]
 
 		var tmp *fsItem
@@ -177,13 +176,15 @@ func (dir *pinnedDir) readDir(req *arc.CellReq) error {
 				sub = old
 			}
 
-			dir.itemByID[sub.CellID] = sub
-			dir.items = append(dir.items, sub)
+			dir.itemsByID[sub.CellID] = sub
+			dir.items = append(dir.items, sub.CellID)
 		}
 
 		items := dir.items
 		sort.Slice(items, func(i, j int) bool {
-			return items[i].Compare(items[j]) < 0
+			ii := dir.itemsByID[items[i]]
+			jj := dir.itemsByID[items[j]]
+			return ii.Compare(jj) < 0
 		})
 
 	}
@@ -199,9 +200,12 @@ func (dir *pinnedDir) PushCellState(req *arc.CellReq) error {
 		dir.readDir(req)
 	}
 
+	// Push the dir as the content item (vs child)
 	dir.pushCellState(req, false)
-	for _, item := range dir.items {
-		item.pushCellState(req, true)
+
+	// Push each dir item as a child cell
+	for _, itemID := range dir.items {
+		dir.itemsByID[itemID].pushCellState(req, true)
 	}
 
 	return nil
@@ -239,13 +243,13 @@ func (item *fsItem) DataModelURI() string {
 
 func (item *fsItem) pushCellState(req *arc.CellReq, asChild bool) error {
 	schema := req.ContentSchema
-	if asChild && item.model > 0 {
+	if asChild {
 		schema = req.GetChildSchema(item.DataModelURI())
 	}
-
 	if schema == nil {
 		return nil
 	}
+
 	req.PushInsertCell(item.CellID, schema)
 
 	req.PushAttr(item.CellID, schema, attr_ItemName, item.name)

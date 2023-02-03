@@ -10,6 +10,9 @@ const (
 	AppBaseName = "filesys"
 	AppURI      = "arcspace.systems/filesys.app/v1.2022.1"
 	
+	// KwArg names
+	KwArg_PinPath = "pin-path"
+	
 	// CellModelURIs
 	CellModel_Dir  = "filesys.dir.v1.model"
 	CellModel_File = "filesys.file.v1.model"
