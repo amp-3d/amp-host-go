@@ -1,6 +1,6 @@
 # go-arcspace
 ---
-### ArcXR framework and runtime for Go
+### Arcspace UI framework and runtime for Go
 
 ---
 

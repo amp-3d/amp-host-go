@@ -7,7 +7,7 @@ package arc;
 // https://stackoverflow.com/questions/43026449/gogo-proto-file-not-found
 // import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
-option csharp_namespace = "ArcXR.Arc";
+option csharp_namespace = "Arcspace";
 
 
 // High-level channel repository RPC.

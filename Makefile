@@ -4,8 +4,8 @@ SHELL = /bin/bash -o nounset -o errexit -o pipefail
 BUILD_PATH  := $(patsubst %/,%,$(abspath $(dir $(lastword $(MAKEFILE_LIST)))))
 PARENT_PATH := $(patsubst %/,%,$(dir $(BUILD_PATH)))
 UNITY_PROJ := ${PARENT_PATH}/arcspace.unity-app
-ARCXR_LIBS = ${UNITY_PROJ}/Assets/Plugins/ArcXR/Plugins
-ARCXR_UNITY_PATH = ${UNITY_PROJ}/Assets/ArcXR
+ARC_LIBS = ${UNITY_PROJ}/Assets/Plugins/Arcspace/Plugins
+ARC_UNITY_PATH = ${UNITY_PROJ}/Assets/Arcspace
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
 LIB_PROJ := ${BUILD_PATH}/cmd/archost-lib
 
@@ -23,7 +23,7 @@ help:
 	@echo "  PARENT_PATH:     ${PARENT_PATH}"
 	@echo "  BUILD_PATH:      ${BUILD_PATH}"
 	@echo "  UNITY_PROJ:      ${UNITY_PROJ}"
-	@echo "  ARCXR_LIBS:      ${ARCXR_LIBS}"
+	@echo "  ARC_LIBS:        ${ARC_LIBS}"
 	@echo "  UNITY_PATH:      ${UNITY_PATH}"
 	@echo "  ANDROID_NDK:     ${ANDROID_NDK}"
 	@echo "  ANDROID_CC:      ${ANDROID_CC}"
@@ -54,26 +54,26 @@ archost-lib-osx:
 # Also note that a .dylib is identical to the binary in an OS X .bundle.  Also: https://stackoverflow.com/questions/2339679/what-are-the-differences-between-so-and-dylib-on-macos 
 # Info on cross-compiling Go: https://freshman.tech/snippets/go/cross-compile-go-programs/
 # Note: for the time being, we are x86_64 (amd64) only, the archost.dylib should only be compiled on an x86_64 machine!
-	OUT_DIR="${ARCXR_LIBS}"         CC="${LIB_PROJ}/clangwrap.sh" \
+	OUT_DIR="${ARC_LIBS}"           CC="${LIB_PROJ}/clangwrap.sh" \
 	PLATFORM=OSX                    GOARCH=amd64        "${LIB_PROJ}/build.sh"
 
 
 ## build archost.a for iOS            ---> build on x86_64 mac!
 archost-lib-ios:
-	OUT_DIR="${ARCXR_LIBS}"         CC="${LIB_PROJ}/clangwrap.sh" \
+	OUT_DIR="${ARC_LIBS}"           CC="${LIB_PROJ}/clangwrap.sh" \
 	PLATFORM=iOS                    GOARCH=arm64        "${LIB_PROJ}/build.sh"
 
 
 
 ## build archost-lib for arm64-v8a    ---> build on x86_64 mac!
 archost-lib-android-arm64-v8a:
-	OUT_DIR="${ARCXR_LIBS}"         CC="${ANDROID_CC}/aarch64-linux-android21-clang" \
+	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/aarch64-linux-android21-clang" \
 	PLATFORM=Android/arm64-v8a      GOARCH=arm64        "${LIB_PROJ}/build.sh"
 
 
 ## build archost-lib for armeabi-v7a  ---> build on x86_64 mac!
 archost-lib-android-armeabi-v7a:
-	OUT_DIR="${ARCXR_LIBS}"         CC="${ANDROID_CC}/armv7a-linux-androideabi21-clang" \
+	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/armv7a-linux-androideabi21-clang" \
 	PLATFORM=Android/armeabi-v7a    GOARCH=arm          "${LIB_PROJ}/build.sh"
 	
 
@@ -104,15 +104,15 @@ protos:
 #   Links: https://grpc.io/docs/languages/csharp/quickstart/
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
-	    --csharp_out "${ARCXR_UNITY_PATH}/Arc" \
-	    --grpc_out   "${ARCXR_UNITY_PATH}/Arc" \
+	    --csharp_out "${ARC_UNITY_PATH}/Arc" \
+	    --grpc_out   "${ARC_UNITY_PATH}/Arc" \
 	    --plugin=protoc-gen-grpc="${grpc_csharp_exe}" \
 	    --proto_path=. \
 		arc/arc.proto
 
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
-	    --csharp_out "${ARCXR_UNITY_PATH}/Crates" \
+	    --csharp_out "${ARC_UNITY_PATH}/Crates" \
 	    --proto_path=. \
 		crates/crates.proto
 
