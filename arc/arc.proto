@@ -255,8 +255,8 @@ message Msg {
     // When naming an absolute timestamp, unix UTC is assumed (0x10000 corresponds to 00:00:01, Jan 1 1970 GMT)
     int64               SI              = 16;    
 
-    // ValType how to interpret ValBuf / ValInt
-    int32               ValType         = 20;
+    // ValType specifies how to interpret ValBuf / ValInt
+    ValType             ValType         = 20;
     
     // ValBuf and/or ValInt are interpreted according to ValType 
     bytes               ValBuf          = 21;
@@ -443,11 +443,16 @@ message AttrSpec {
     
     // ValTypeID is standard ValType enum or a client-generated ID that is bound to the given ValTypeURI.
     // This ID is placed in Msg.ValType in a MsgOp_PushAttr msg.
-    int32               ValTypeID = 13;
+    ValType             ValTypeID = 13;
     
 }
 
 
+message KwArg {
+    string              Key    = 1;
+    string              Val    = 5;
+    bytes               ValBuf = 6;
+}
 
 // PinReq is a client request to "pin" a cell, meaning selected attrs and child cells will be pushed to the client.  
 message PinReq {
@@ -456,8 +461,8 @@ message PinReq {
     // Set to 0 if PinCell and/or PinURI implies that no parent req exists.
     uint64              ParentReqID = 1;
     
-    // URI associated with this pin request (usually omitted since ParentReqID & PinCell specify the cell to be pinned) 
-    string              PinURI = 3;
+    // App-definable params can specify additional context.
+    repeated KwArg      Args = 4;
         
     // Cell ID to be pinned (or 0 if PinURI does not require a cell ID)
     uint64              PinCell = 5;

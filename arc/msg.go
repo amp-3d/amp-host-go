@@ -108,14 +108,14 @@ func (msg *Msg) Reclaim() {
 }
 
 func (msg *Msg) SetValInt(valType ValType, valInt int64) {
-	msg.ValType = int32(valType)
+	msg.ValType = valType
 	msg.ValInt = valInt
 	msg.ValBuf = msg.ValBuf[:0]
 }
 
 func (msg *Msg) SetValBuf(valType ValType, sz int) {
 	msg.ValInt = int64(sz)
-	msg.ValType = int32(valType)
+	msg.ValType = valType
 	if sz > cap(msg.ValBuf) {
 		msg.ValBuf = make([]byte, sz, (sz+0x3FF)&^0x3FF)
 	} else {
@@ -186,7 +186,7 @@ func (msg *Msg) LoadVal(dst interface{}) error {
 	//             ok = true
 	//         }
 	//     }
-	case int32(ValType_PinReq):
+	case ValType_PinReq:
 		if v, match := dst.(*PinReq); match {
 			tmp := PinReq{}
 			if tmp.Unmarshal(msg.ValBuf) == nil {
@@ -195,7 +195,7 @@ func (msg *Msg) LoadVal(dst interface{}) error {
 			}
 		}
 
-	case int32(ValType_Defs):
+	case ValType_Defs:
 		if v, match := dst.(*Defs); match {
 			tmp := Defs{}
 			if tmp.Unmarshal(msg.ValBuf) == nil {
@@ -204,7 +204,7 @@ func (msg *Msg) LoadVal(dst interface{}) error {
 			}
 		}
 
-	case int32(ValType_LoginReq):
+	case ValType_LoginReq:
 		if v, match := dst.(*LoginReq); match {
 			tmp := LoginReq{}
 			if tmp.Unmarshal(msg.ValBuf) == nil {

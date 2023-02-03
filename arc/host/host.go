@@ -718,7 +718,7 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 	}
 
 	req.PinCell = arc.CellID(pinReq.PinCell)
-	req.PinURI = pinReq.PinURI
+	req.Args = pinReq.Args
 	req.ChildSchemas = make([]*arc.AttrSchema, len(pinReq.ChildSchemas))
 	for i, child := range pinReq.ChildSchemas {
 		req.ChildSchemas[i], err = sess.TypeRegistry.GetSchemaByID(child)

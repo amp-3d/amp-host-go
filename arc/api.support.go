@@ -217,6 +217,18 @@ func (schema *AttrSchema) LookupAttr(attrURI string) *AttrSpec {
 	return nil
 }
 
+func (req *CellReq) GetKwArg(argKey string) (string, bool) {
+	for _, arg := range req.Args {
+		if arg.Key == argKey {
+			if arg.Val != "" {
+				return arg.Val, true
+			}
+			return string(arg.ValBuf), true
+		}
+	}
+	return "", false
+}
+
 func (req *CellReq) GetChildSchema(modelURI string) *AttrSchema {
 	for _, schema := range req.ChildSchemas {
 		if schema.CellModelURI == modelURI {
@@ -229,7 +241,7 @@ func (req *CellReq) GetChildSchema(modelURI string) *AttrSchema {
 func (req *CellReq) PushBeginPin(target CellID) {
 	m := NewMsg()
 	m.CellID = target.U64()
-	m.Op = MsgOp_PinCell;
+	m.Op = MsgOp_PinCell
 	req.PushMsg(m)
 }
 
@@ -238,7 +250,7 @@ func (req *CellReq) PushInsertCell(target CellID, schema *AttrSchema) {
 		m := NewMsg()
 		m.CellID = target.U64()
 		m.Op = MsgOp_InsertCell
-		m.ValType = int32(ValType_SchemaID)
+		m.ValType = ValType_SchemaID
 		m.ValInt = int64(schema.SchemaID)
 		req.PushMsg(m)
 	}
@@ -259,7 +271,7 @@ func (req *CellReq) PushAttr(target CellID, schema *AttrSchema, attrURI string, 
 	}
 	m.SetVal(attrVal)
 	if attr.ValTypeID != 0 {
-		m.ValType = int32(attr.ValTypeID)
+		m.ValType = attr.ValTypeID
 	}
 	req.PushMsg(m)
 }

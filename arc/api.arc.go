@@ -163,14 +163,14 @@ type CellReq struct {
 	CellSub
 	
 	ReqID         uint64        // Client-set request ID
-	PinURI        string        // Client-set cell URI to pin (optional if PinCell provided)
-	PinCell       CellID        // Client-set cell ID to pin (nil if PinURI is sufficient)
+	Args          []*KwArg      // Client-set args (optional if PinCell provided)
+	PinCell       CellID        // Client-set cell ID to pin (or nil if Args sufficient)
 	ContentSchema *AttrSchema   // Client-set schema specifying the cell attr model for the cell being pinned.
 	ChildSchemas  []*AttrSchema // Client-set schema(s) specifying which child cells (and attrs) should be pushed to the client.
-	ParentApp     App           // Runtime-set via SelectAppForSchema()
+	PlanetID      uint64        // Runtime-set persistent storage binding
 	ParentReq     *CellReq      // Runtime-set so App.ResolveRequest() has access the parent context
+	ParentApp     App           // Runtime-set via SelectAppForSchema()
 	PinnedCell    AppCell       // App-set during App.ResolveRequest()
-	PlanetID      uint64        // Persistent storage binding
 }
 
 // Signals to use the default App for a given AttrSchema CellModelURI.
@@ -192,18 +192,14 @@ type App interface {
 	// Resolves the given request to final target Planet, CellID, and AppCell.
 	ResolveRequest(req *CellReq) error
 
-	// Creates a new App instance that is bound to the given channel and starts it as a "child process" of the host / bound channel
-	// Blocks until the new AppChannel is in a valid and ready state.
-	// Typically, the returned AppChannel is upcast to the desired/presumed Channel interface.
-	//StartAppInstance(sess CellSession) (AppCell, error)
 }
 
 // AppCell is how an App offers a cell instance to the planet runtime.
 type AppCell interface {
 
-	// Called when the sub is pushing full cell state (IAW the specified schemas)
-	// Makes calls to sub.PushUpdate() to dispatch state.
-	// Called on the goroutine owned by the the target cell.
+	// Called when a cell is pinned and is to push its state (in accordance with req.ContentSchema & req.ChildSchemas supplied by the client).
+	// The implementation uses req.CellSub.PushMsg(...) to push attributes and child cells to the client.
+	// Called on the goroutine owned by the the target CellID.
 	PushCellState(req *CellReq) error
 }
 
