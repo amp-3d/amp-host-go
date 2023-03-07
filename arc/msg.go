@@ -64,7 +64,7 @@ func (batch *MsgBatch) Reclaim() {
 
 func NewMsg() *Msg {
 	msg := gMsgPool.Get().(*Msg)
-	if msg.Flags & MsgFlags_ValBufShared  != 0 {
+	if msg.Flags&MsgFlags_ValBufShared != 0 {
 		panic("Msg discarded as shared")
 	}
 	return msg
@@ -90,7 +90,7 @@ func CopyMsg(src *Msg) *Msg {
 }
 
 func (msg *Msg) Init() {
-	if msg.Flags & MsgFlags_ValBufShared != 0 {
+	if msg.Flags&MsgFlags_ValBufShared != 0 {
 		*msg = Msg{}
 	} else {
 		valBuf := msg.ValBuf[:0]
@@ -135,6 +135,10 @@ func (msg *Msg) SetVal(val interface{}) {
 	case time.Time:
 		msg.SetValInt(ValType_DateTime, int64(ConvertToTimeFS(v)))
 
+	case *AssetRef:
+		msg.SetValBuf(ValType_AssetRef, v.Size())
+		_, err = v.MarshalToSizedBuffer(msg.ValBuf)
+
 	case TimeFS:
 		msg.SetValInt(ValType_DateTime, int64(v))
 
@@ -178,14 +182,23 @@ func (msg *Msg) LoadVal(dst interface{}) error {
 
 	switch msg.ValType {
 
-	// case uint64(Type_CellInfo):
-	//     if v, ok := dst.(*CellInfo); ok {
-	//         info := CellInfo{}
-	//         if info.Unmarshal(msg.ValBuf) == nil {
-	//             *v = info
-	//             ok = true
-	//         }
-	//     }
+	case ValType_int:
+		ok = true
+		switch v := dst.(type) {
+		case *int64:
+			*v = int64(msg.ValInt)
+		case *uint64:
+			*v = uint64(msg.ValInt)
+		default:
+			ok = false
+		}
+
+	case ValType_string:
+		if v, match := dst.(*string); match {
+			*v = string(msg.ValBuf)
+			ok = true
+		}
+
 	case ValType_PinReq:
 		if v, match := dst.(*PinReq); match {
 			tmp := PinReq{}

@@ -69,10 +69,10 @@ type Host interface {
 
 	HostPlanet() Planet
 
-	// Registers an App for invocation by its AppURI and CellModelURIs.
+	// Registers an App for invocation based on its AppURI and CellDataModels.
 	RegisterApp(app App) error
 
-	// Selects an App, typically based on schema.CellModelURI (or schema.AppURI if given).
+	// Selects an App, typically based on schema.CellDataModel (or schema.AppURI if given).
 	// The given schema is READ ONLY.
 	SelectAppForSchema(schema *AttrSchema) (App, error)
 
@@ -147,6 +147,10 @@ type Planet interface {
 	GetSymbolID(value []byte, autoIssue bool) (ID uint64)
 	LookupID(ID uint64) []byte
 
+	// WIP
+	PushTx(tx *MsgBatch) error
+	ReadCell(cellKey []byte, schema *AttrSchema, msgs func(msg *Msg)) error
+
 	//GetCell(ID CellID) (CellInstance, error)
 
 	// BlobStore offers access to this planet's blob store (referenced via ValueType_BlobID).
@@ -156,24 +160,25 @@ type Planet interface {
 
 type CellID uint64
 
+// U64 is a convenience method that converts a CellID to a uint64.
 func (ID CellID) U64() uint64 { return uint64(ID) }
 
 // See api.support.go for CellReq helper methods such as PushMsg.
 type CellReq struct {
 	CellSub
-	
+
 	ReqID         uint64        // Client-set request ID
 	Args          []*KwArg      // Client-set args (optional if PinCell provided)
-	PinCell       CellID        // Client-set cell ID to pin (or nil if Args sufficient)
+	PinCell       CellID        // Client-set cell ID to pin (or 0 if Args sufficient).  Use PinnedCell().ID() for the CellID that was actually pinned.
 	ContentSchema *AttrSchema   // Client-set schema specifying the cell attr model for the cell being pinned.
 	ChildSchemas  []*AttrSchema // Client-set schema(s) specifying which child cells (and attrs) should be pushed to the client.
-	PlanetID      uint64        // Runtime-set persistent storage binding
-	ParentReq     *CellReq      // Runtime-set so App.ResolveRequest() has access the parent context
-	ParentApp     App           // Runtime-set via SelectAppForSchema()
-	PinnedCell    AppCell       // App-set during App.ResolveRequest()
+	User          User          // Runtime-set; the user that initiated this request
+	ParentReq     *CellReq      // Runtime-set; allows App.ResolveRequest() has access the parent context
+	ParentApp     App           // Runtime-set during SelectAppForSchema()
+	PinnedCell    AppPinnedCell // App-set during App.ResolveRequest()
 }
 
-// Signals to use the default App for a given AttrSchema CellModelURI.
+// Signals to use the default App for a given AttrSchema CellDataModel.
 // See AttrSchema.AppURI in arc.proto
 const DefaultAppForDataModel = "."
 
@@ -185,17 +190,19 @@ type App interface {
 	// Identifies this App and usually has the form: "{domain_name}/{app_identifier}/v{MAJOR}.{MINOR}.{REV}"
 	AppURI() string
 
-	// CellModelURIs lists data models that this app supports / handles.
+	// CellDataModels lists data models that this app supports / handles.
 	// When the host session receives a client request for a specific data model URI, it will route it to the app that registered for it here.
-	CellModelURIs() []string
+	CellDataModels() []string
 
 	// Resolves the given request to final target Planet, CellID, and AppCell.
 	ResolveRequest(req *CellReq) error
-
 }
 
 // AppCell is how an App offers a cell instance to the planet runtime.
-type AppCell interface {
+type AppPinnedCell interface {
+
+	// Returns the CellID of this cell
+	ID() CellID
 
 	// Called when a cell is pinned and is to push its state (in accordance with req.ContentSchema & req.ChildSchemas supplied by the client).
 	// The implementation uses req.CellSub.PushMsg(...) to push attributes and child cells to the client.
@@ -211,7 +218,19 @@ type CellSub interface {
 }
 
 type User interface {
+	Session() HostSession
+
 	HomePlanet() Planet
+
+	// Uses reflection to build an AttrSchema given a ptr to a struct.
+	MakeSchemaForStruct(app App, structPtr any) (*AttrSchema, error)
+
+	// High level function that loads a cell with the given URI having the inferred schema (built from its fields using reflection).
+	// The URI is scoped from the user's home planet and App URI.
+	ReadCell(ctx App, URI string, dst any) error
+
+	// WriteCell is the write analog of ReadCell.
+	WriteCell(ctx App, URI string, src any) error
 }
 
 // MsgBatch is an ordered list os Msgs

@@ -58,3 +58,15 @@ func (code ErrCode) Wrap(cause error) error {
 		Msg:  cause.Error(),
 	}
 }
+
+func UnwrapErr(err error) ErrCode {
+	if err == nil {
+		return ErrCode_NoErr
+	}
+
+	if arcErr, ok := err.(*Err); ok {
+		return arcErr.Code
+	}
+
+	return ErrCode_UnnamedErr
+}

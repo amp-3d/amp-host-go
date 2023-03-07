@@ -116,6 +116,11 @@ protos:
 	    --proto_path=. \
 		crates/crates.proto
 
+	protoc \
+	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
+	    --csharp_out "${ARC_UNITY_PATH}/Arc/Apps/amp" \
+	    --proto_path=. \
+		arc/apps/amp/pb/amp.proto
 				
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \

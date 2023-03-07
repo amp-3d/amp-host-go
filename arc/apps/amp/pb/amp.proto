@@ -1,0 +1,44 @@
+syntax = "proto3";
+package pb;
+
+option csharp_namespace = "Arcspace";
+
+
+enum PlayableFlags {
+    Unknown             = 0;
+    HasAudio            = 0x1000;
+    HasVideo            = 0x2000;
+    
+    IsLive              = 0x0001;
+    IsSeekable          = 0x0002;
+    IsUnending          = 0x0004;
+    
+    IsStation           = 0x0010;
+    IsPodcastEpisode    = 0x0020;
+    IsAudioBook         = 0x0040;
+    RequiresWAN         = 0x0100;
+    RequiresLAN         = 0x0200;
+}
+    
+
+message LoginInfo {
+    string              UserID       = 1;
+    string              Pass         = 2;
+    string              TokenValue   = 3;
+    int64               TokenExpires = 4;
+}
+
+
+
+
+
+message MediaProviderInfo {
+    
+    string              CommonName = 1;
+    bool                RequiresSubscription = 2;
+    bool                RequiresInternet = 3;
+    //string              LoggedInAs = 4;
+
+}
+
+

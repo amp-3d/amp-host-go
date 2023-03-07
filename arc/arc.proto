@@ -82,12 +82,12 @@ enum ValType {
     ValType_Blob                = 22; // .ValInt is a Blob ID 
     ValType_DateTime            = 23; // .ValInt is a TimeFS value (1 sec == 1<<16 ticks)
     ValType_Duration            = 24; // .ValInt is a TimeFS delta (1 sec == 1<<16 ticks)
-    ValType_AssetURI            = 25; // .ValBuf is a UTF8 asset URI
     ValType_URL                 = 26; // .ValBuf is a UTF8 URL
     
     /******     Builtin protobufs       ******/
     
     ValType_Err                 = 50; // .ValBuf is a Err 
+    ValType_AssetRef            = 51; // .ValBuf is an AssetRef
     ValType_DataSegment         = 52; // .ValBuf is an DataSegment
     ValType_Content             = 54; // .ValBuf is an Content
     ValType_CryptoKey           = 56; // .ValBuf is a CryptoKey
@@ -95,6 +95,7 @@ enum ValType {
     ValType_LoginReq            = 60; // .ValBuf is a LoginReq
     ValType_Defs                = 62; // .ValBuf is a Defs
     ValType_PinReq              = 64; // .ValBuf is a PinReq
+    ValType_CreateCellsReq      = 65; // .ValBuf is a CreateCellsReq
     ValType_AttrRange           = 66; // .ValBuf is a AttrRange
     ValType_Link                = 80; // .ValBuf is a Link
     ValType_GeoFix              = 82; // .ValBuf is an GeoFix
@@ -161,10 +162,10 @@ enum MsgOp {
     //      Msg.ValBuf:     PinReq                  (client to host, otherwise nil)
     MsgOp_PinCell = 6;
 
-    // Requests a given CellID to be pinned under a client-generated PinID
+    // Requests a given CellID to be pinned under a unique client-generated PinID
     //
     // Params: 
-    //      Msg.ReqID:      client-generated (unique) request ID 
+    //      Msg.ReqID:      client-generated request ID 
     //      Msg.CellID:     which cell
     //      Msg.ValType:    ValType_AttrRange
     //      Msg.ValInt:     cell type ID specifying the AttrSchema (the expected cell and format)
@@ -176,25 +177,35 @@ enum MsgOp {
     // A cell attr item us specified by the host via ReqID+AttrID+SI and its value type via ValType. 
     //
     // Params: 
-    //      Msg.ReqID:      originating request ID
+    //      Msg.ReqID:      originating MsgOp_PinCell request ID
     //      Msg.CellID:     which cell is being updated
     //      Msg.AttrID:     which attr is being updated
     //      Msg.ValType:    format of Msg.ValInt / .ValBuf 
     //      Msg.Val*:       attr value
     MsgOp_PushAttr = 10;
     
-    // This MsgOp signals the insertion of a new cell.
-    // The new cell is either as a child cell or the "content" of the cell being pinned (detected via Msg.CellID == MsgOp_PinCell.CellID).
+    // Signals the insertion of a new child cell into the pinned (parent) cell.
     // After this message, zero or more MsgOp_PushAttr msgs follow.
     //
     // Params: 
-    //      Msg.ReqID:      originating request ID
+    //      Msg.ReqID:      originating MsgOp_PinCell request ID
     //      Msg.CellID:     new cell being added
     //      Msg.ValType:    ValType_SchemaID
     //      Msg.ValInt:     cell schema ID being pushed (specifies which Cell attribs are expected to follow)
-    MsgOp_InsertCell = 14;
+    //      Msg.ValStr:     cell local ID (if present)
+    MsgOp_InsertChildCell = 14;
     
-    // Used by the Host to signal that the request associated with ReqID is up to date and in a state to be processed by the client.
+    // Similar to InsertCell, except this auto-creates a new cell if it doesn't exist.
+    //
+    // Params: 
+    //      Msg.ReqID:      originating MsgOp_PinCell request ID (client to host)
+    //      Msg.CellID:     new cell that was added (set on host reply)
+    //      Msg.ValType:    ValType_SchemaID
+    //      Msg.ValInt:     cell schema ID to be attached to the new cell
+    //      Msg.ValStr:     cell local ID (optional)
+    MsgOp_UpsertCell = 15; 
+    
+    // Used by the sender to signal that the request associated with ReqID is up to date and can be processed by the recipient.
     // This msg is typically used to drive UI updates or other aggregate cell dependencies.
     //
     // Params: 
@@ -246,9 +257,11 @@ message Msg {
     // CellID identifies the cell associated with Msg.Op.
     uint64              CellID          = 6;
     
+    // AttrID names the attribute associated with this Msg (used for MsgOp_PushAttr)
+    int32               AttrID          = 8;
+    
+    // CellID corresponding to a user or agent that authored the content of this Msg.
     uint64              FromID          = 11;
-
-    int32               AttrID          = 15;
 
     // SI ("Series Index") associates and binds a value to and int64 key.
     // By convention, this is 48.16 fixed signed fractional seconds (one second == 0x10000 ticks), naming a time duration or timestamp.
@@ -264,6 +277,10 @@ message Msg {
 
     // Flags contains MsgFlags
     MsgFlags            Flags           = 24;
+    
+    int64               RevID_TimeFS    = 26;  // When was this rev authored
+    uint64              RevID_TxnID     = 27;  // Which txn contains this rev 
+    uint64              RevID_FromID    = 28;  // Who authored this rev    
     
     // Allows a sequence of Msgs to be chained together.
     Msg                 Next            = 32;
@@ -293,19 +310,6 @@ enum SeriesType {
     //SeriesType_CellSet = 11;
 
 }
-
-
-// // CellInfo references a particular cell, on a particular planet, and optional type info.
-// // 
-// // A CellTypeID generally accompanies Cell Pin requests as that specifies the AttrSchema to use.
-// message CellInfo {
-//     uint64              PlanetID        = 1; // This cell's home store, governance system, and transport syndication
-//     uint64              CellID          = 2; // Uniquely identifies a cell on the given PlanetID
-//     uint64              CellTypeID      = 4; // Element type when SetTypeID != nil
-//     int32               PinID           = 6; // target instance ID of the Cell for pushed sub attr items
-//     int32               ParentPinID     = 7; // target instance ID of the Cell to receive update notifications  
-// }
-
 
 
 message PlanetEpoch {
@@ -370,7 +374,7 @@ message Defs {
 message AttrSchema {
     
     // AppURI specifies which specific app and optional version should handle requests with this schema.
-    // The reserved value "." tells the host to choose the default app registered to handle the below CellModelURI (common).
+    // The reserved value "." tells the host to choose the default app registered to handle the below CellDataModel (common).
     // e.g. 
     //      "."
     //      "planet.tools/amp.app"
@@ -378,7 +382,7 @@ message AttrSchema {
     //      "planet.tools/hfs.app/v1.2.3"
     string              AppURI = 1;
     
-    // CellModelURI names a particular data model used by this schema, in effect specifying a namespace / scope for the attached Attrs.
+    // CellDataModel names a particular data model used by this schema, in effect specifying a namespace / scope for the attached Attrs.
     // This URI names a complete data protocol / specification that this collection of AttrSpecs conforms to (and is a subset of).
     // To an implementing app on the Go side, this URI implies a family of valid possible AttrSpecs to choose from. 
     // e.g.
@@ -387,10 +391,10 @@ message AttrSchema {
     //      "spotify/v1/track"
     //      "filesys/dir"
     //      "filesys/fil"
-    string              CellModelURI = 3;
+    string              CellDataModel = 3;
 
-    // This describes this *particular* AttrSchema, a particular collection of AttrSpecs (and is implicitly scoped within CellModelURI).
-    // The host (and its apps) generally don't even look at this field since "{CellModelURI}/{Attrs[i].AttrURI}" fully specifies each attr's data model URI.
+    // This describes this *particular* AttrSchema, a particular collection of AttrSpecs (and is implicitly scoped within CellDataModel).
+    // The host (and its apps) generally don't even look at this field since "{CellDataModel}/{Attrs[i].AttrURI}" fully specifies each attr's data model URI.
     // The can use this for internal identification, usually to link this schema to particular cell view binding.
     string              SchemaName = 4;
 
@@ -412,10 +416,10 @@ message AttrSchema {
 message AttrSpec {
 
 
-    // AttrURI is a self-describing URI scoped within the parent's CellModelURI.
+    // AttrURI is a self-describing URI scoped within the parent's CellDataModel.
     // It communicates a purpose or role, for a particular usage context of the attr.
     // It originates from an app data model spec and allows the host to associate an app attr to a client-provided AttrID (and SI when SeriesType == Fixed).
-    // e.g. for AttrSchema.CellModelURI == "hfs1/directory"
+    // e.g. for AttrSchema.CellDataModel == "hfs1/directory"
     //      "v1/creation-time"
     //      "v1/thumbnail.glyph"
     //      "v1/detailed.glyph"
@@ -441,9 +445,12 @@ message AttrSpec {
     // If omitted, ValTypeID is assumed to be a built-in type (ValType_XXX). 
     //string              ValTypeURI = 12;
     
-    // ValTypeID is standard ValType enum or a client-generated ID that is bound to the given ValTypeURI.
-    // This ID is placed in Msg.ValType in a MsgOp_PushAttr msg.
+    // ValTypeID is either a standard ValType (enum) or a client-generated ID that is bound to the given ValTypeURI.
+    // This enum is placed in Msg.ValType in a MsgOp_PushAttr msg.
     ValType             ValTypeID = 13;
+    
+    // An open-ended revision or custom identifier.
+    //int64               VariantID = 16;
     
 }
 
@@ -468,7 +475,7 @@ message PinReq {
     uint64              PinCell = 5;
     
     // AttrSchema ID to apply on the cell being pinned, specifying which attrs of the target cell will be pushed to the client.
-    int32               ContentSchema = 7; 
+    int32               ContentSchemaID = 7; 
     
     // Specifies which child cell types should be pushed (and which attr schema they should be pushed with).
     // If empty, no child cells are pushed.
@@ -480,7 +487,6 @@ message PinReq {
 
 
 message AttrRange {
-
     
     // Explicit list of SI values to be pinned
     //repeated uint64     ExplicitSIs     = 15;
@@ -502,6 +508,12 @@ message AttrRange {
     uint64              SI_BatchLimit   = 27;
 }
 
+// This is a work in progress 
+message Txn {
+
+    repeated Msg        Msgs = 1;
+}
+
 
 enum GeoModel {
     GeoModel_Sphere = 0;
@@ -517,6 +529,36 @@ message GeoFix {
     float               AltROU          = 10; // radius of uncertainty (meters)
     float               PosROU          = 11; // radius of uncertainty (meters)
 }
+
+// enum AssetKind {
+//     AssetKind_Nil       = 0;
+//     AssetKind_Image     = 1;
+//     AssetKind_Video     = 2;
+//     AssetKind_Audio     = 3;
+//     AssetKind_XR_Volume = 4;
+//     AssetKind_3D        = 5;
+// }
+
+// URIScheme is used to accompany a URI to specify a URI scheme without it being being a prefix of the URI .
+enum URIScheme {
+    URIScheme_URL           = 0;    // unspecified URL scheme (URI contains a scheme prefix)
+    URIScheme_Data          = 1;    // [data:]<mimetype>[[;base64],<data>] 
+    URIScheme_HTTP          = 2;    // [https://]<hostname>[:<port>]/<path>
+    URIScheme_HTTPS         = 3;    // [https://]<hostname>[:<port>]/<path>
+    URIScheme_File          = 5;    // [file://]<unix-pathname>
+    URIScheme_CrateAsset    = 2701; // [crate-asset://]<crate-asset-uri>
+    URIScheme_CellSchema    = 2702; // [cell-schema://]<cell-schema-uri>
+}
+
+message AssetRef {
+    string              Label = 1;     // Describes the asset (optional)
+    string              MediaType = 3; // Describes content of URI; MIME type (or '/' separated type pathname)
+    URIScheme           Scheme = 5;    // Describes URI scheme such that the pa URL scheme is not required to prefix URI
+    string              URI = 6;       // URI to the asset (has scheme prefix if URIScheme == URL, otherwise, scheme prefix is optional)
+    
+    //string              UUID = 2;   // Asset's hashname (optional); contains only A-Z, a-z, 0-9, _, and - (no spaces) 
+}
+
 
 
 // Content is an extensible content wrapper, offering an optional accompanying MIME type.
@@ -660,8 +702,10 @@ enum ErrCode {
     ErrCode_TypeNotRegistered           = 5051;
     ErrCode_BadSchema                   = 5052;
     ErrCode_DataFailure                 = 5053;
+    ErrCode_ExportErr                   = 5054;
     ErrCode_InvalidCell                 = 5055;
     ErrCode_NotPinnable                 = 5056;   
+    ErrCode_CellNotFound                = 5058;
     
     ErrCode_ViolatesAppendOnly          = 5100;
     ErrCode_InsufficientPermissions     = 5101;

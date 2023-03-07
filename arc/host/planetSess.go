@@ -168,7 +168,7 @@ func (pl *planetSess) queueReq(cell *cellInst, req *openReq) error {
 
 	var err error
 	if cell == nil {
-		cell, err = pl.getCell(req.PinCell)
+		cell, err = pl.getCell(req.PinnedCell.ID())
 		if err != nil {
 			return err
 		}
@@ -176,7 +176,8 @@ func (pl *planetSess) queueReq(cell *cellInst, req *openReq) error {
 
 	req.cell = cell
 
-	cell.subsMu.Lock() // needed?  or just one pl mutex?
+	// Add incoming req to the cell IDs list of subs
+	cell.subsMu.Lock()
 	{
 		prev := &cell.subsHead
 		for *prev != nil {
@@ -252,6 +253,12 @@ func (cell *cellInst) pushToSubs(tx *arc.MsgBatch) {
 
 }
 
+// WIP -- to be replaced by generic cell storage
+const (
+	kUserTable   = byte(0xF1)
+	kCellStorage = byte(0xF2)
+)
+
 // This will be replaced in the future with generic use of GetCell() with a "user" App type.
 // For now, just make a table with user IDs their respective user record.
 func (pl *planetSess) getUser(req arc.LoginReq, autoCreate bool) (seat arc.UserSeat, err error) {
@@ -268,7 +275,7 @@ func (pl *planetSess) getUser(req arc.LoginReq, autoCreate bool) (seat arc.UserS
 	defer dbTx.Discard()
 
 	// For now, just make a table with user IDs their respective user record.
-	key := append(buf[:0], 0xF1) // User record table
+	key := append(buf[:0], kUserTable) // User record table
 	key = userID.WriteTo(key)
 	item, err := dbTx.Get(key)
 	if err == badger.ErrKeyNotFound && autoCreate {
@@ -289,6 +296,71 @@ func (pl *planetSess) getUser(req arc.LoginReq, autoCreate bool) (seat arc.UserS
 
 	return
 }
+
+// WIP -- placeholder hack until cell+attr support is added to the db
+func (pl *planetSess) PushTx(tx *arc.MsgBatch) error {
+	cellSymID := pl.symTable.GetSymbolID(tx.Msgs[0].ValBuf, true)
+
+	var buf [512]byte
+	key := append(buf[:0], kCellStorage)
+	key = cellSymID.WriteTo(key)
+
+	txn := arc.Txn{
+		Msgs: tx.Msgs,
+	}
+
+	txData, _ := txn.Marshal()
+
+	dbTx := pl.db.NewTransaction(true)
+	defer dbTx.Discard()
+
+	dbTx.Set(key, txData)
+	err := dbTx.Commit()
+
+	return err
+}
+
+// WIP -- placeholder hack until cell+attr support is added to the db
+// Full replacement of all attrs is not how this will work in the future -- this is just a placeholder
+func (pl *planetSess) ReadCell(cellKey []byte, schema *arc.AttrSchema, msgs func(msg *arc.Msg)) error {
+	cellSymID := pl.symTable.GetSymbolID(cellKey, false)
+	if cellSymID == 0 {
+		return arc.ErrCode_CellNotFound.Error("cell not found")
+	}
+
+	var buf [128]byte
+	key := append(buf[:0], kCellStorage)
+	key = cellSymID.WriteTo(key)
+
+	dbTx := pl.db.NewTransaction(false)
+	defer dbTx.Discard()
+	item, err := dbTx.Get(key)
+	if err == badger.ErrKeyNotFound {
+		return arc.ErrCode_CellNotFound.Error("cell not found")
+	}
+
+	var txn arc.Txn
+	err = item.Value(func(val []byte) error {
+		return txn.Unmarshal(val)
+	})
+
+	if err != nil {
+		return arc.ErrCode_CellNotFound.Errorf("failed to read cell: %v", err)
+		//return ErrCode_CellNotFound
+	}
+
+	for _, msg := range txn.Msgs {
+		msgs(msg)
+	}
+
+	return err
+}
+
+/*
+	PushTx(tx *MsgBatch) error
+	ReadCell(cellURI string, schema *AttrSchema, msgs func (msg *Msg)) error
+
+*/
 
 /*
 	symbol.ID(cellID).WriteTo(csess.keyPrefix[:])
@@ -373,8 +445,8 @@ func (csess *cellInst) serveState(req *nodeReq) error {
 	//       => a time series is its own node type (where each node entry key is SI rather than an attr ID)
 	//       => machinery to perform multi-node locking txns would then update the node safely (and push to subs) -- but can be deferred (tech debt)
 	//    node embeds all history: node key has AttrID+SI+From suffix (non-trivial impl)
-	//       => reading node state means seeking the latest TSI of each attr
-	//       => merging a Tx only pushes state if its TSI maps/replaces what is already mapped  (non-trivial impl)
+	//       => reading node state means seeking the latest SI of each attr
+	//       => merging a Tx only pushes state if its SI maps/replaces what is already mapped  (non-trivial impl)
 	//       => multi-node locking ops get MESSY
 
 	// Form key for target node to read, seek, and read and send each node entry / attr
@@ -513,4 +585,22 @@ func (sub *cellSub) pushMsg(msg *arc.Msg) error {
 	return err
 }
 
+*/
+
+/*
+type cellBase struct {
+	arc.CellID
+
+}
+
+type pinnedCell struct {
+	req arc.CellReq
+
+	children map[arc.CellID]*cellBase
+}
+
+func (cell *pinnedCell) PushCellState(req *arc.CellReq) error {
+
+
+}
 */

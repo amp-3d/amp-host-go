@@ -205,7 +205,7 @@ func (tid TID) CopyNext(inTID TID) {
 }
 
 func (schema *AttrSchema) SchemaDesc() string {
-	return path.Join(schema.AppURI, schema.CellModelURI, schema.SchemaName)
+	return path.Join(schema.AppURI, schema.CellDataModel, schema.SchemaName)
 }
 
 func (schema *AttrSchema) LookupAttr(attrURI string) *AttrSpec {
@@ -231,7 +231,7 @@ func (req *CellReq) GetKwArg(argKey string) (string, bool) {
 
 func (req *CellReq) GetChildSchema(modelURI string) *AttrSchema {
 	for _, schema := range req.ChildSchemas {
-		if schema.CellModelURI == modelURI {
+		if schema.CellDataModel == modelURI {
 			return schema
 		}
 	}
@@ -249,7 +249,7 @@ func (req *CellReq) PushInsertCell(target CellID, schema *AttrSchema) {
 	if schema != nil {
 		m := NewMsg()
 		m.CellID = target.U64()
-		m.Op = MsgOp_InsertCell
+		m.Op = MsgOp_InsertChildCell
 		m.ValType = ValType_SchemaID
 		m.ValInt = int64(schema.SchemaID)
 		req.PushMsg(m)
@@ -279,9 +279,22 @@ func (req *CellReq) PushAttr(target CellID, schema *AttrSchema, attrURI string, 
 func (req *CellReq) PushCheckpoint(err error) {
 	m := NewMsg()
 	m.Op = MsgOp_Commit
-	m.CellID = req.PinCell.U64()
+	m.CellID = req.PinnedCell.ID().U64()
 	if err != nil {
 		m.SetVal(err)
 	}
 	req.PushMsg(m)
 }
+
+// type StdApp struct {
+// 	appID      string
+// }
+
+// func (app *StdApp) AppURI() string {
+// 	return app.appID
+// }
+
+// func (app *StdApp) StartApp(appID string) error {
+// 	app.appID = appID
+// 	return nil
+// }

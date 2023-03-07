@@ -30,10 +30,10 @@ func (app *fsApp) AppURI() string {
 	return AppURI
 }
 
-func (app *fsApp) CellModelURIs() []string {
+func (app *fsApp) CellDataModels() []string {
 	return []string{
-		CellModel_Dir,
-		CellModel_File,
+		CellDataModel_Dir,
+		CellDataModel_File,
 	}
 }
 
@@ -56,9 +56,9 @@ func (app *fsApp) ResolveRequest(req *arc.CellReq) error {
 		if err != nil {
 			return arc.ErrCode_InvalidCell.Errorf("path not found: %q", item.pathname)
 		}
-		req.PinCell = app.IssueCellID()
+
 		item.setFrom(fi)
-		item.CellID = req.PinCell
+		item.CellID = app.IssueCellID()
 
 	} else {
 		if req.ParentReq == nil || req.ParentReq.PinnedCell == nil {
@@ -108,6 +108,10 @@ type fsItem struct {
 	size        int64
 	model       dataModel
 	modTime     time.Time
+}
+
+func (item *fsItem) ID() arc.CellID {
+	return item.CellID
 }
 
 func (item *fsItem) Compare(oth *fsItem) int {
@@ -234,9 +238,9 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 func (item *fsItem) DataModelURI() string {
 	switch item.model {
 	case dataModel_Dir:
-		return CellModel_Dir
+		return CellDataModel_Dir
 	case dataModel_File:
-		return CellModel_File
+		return CellDataModel_File
 	}
 	return ""
 }
@@ -250,7 +254,9 @@ func (item *fsItem) pushCellState(req *arc.CellReq, asChild bool) error {
 		return nil
 	}
 
-	req.PushInsertCell(item.CellID, schema)
+	if asChild {
+		req.PushInsertCell(item.CellID, schema)
+	}
 
 	req.PushAttr(item.CellID, schema, attr_ItemName, item.name)
 
