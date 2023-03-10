@@ -88,6 +88,10 @@ type HostSession interface {
 	// Threadsafe
 	TypeRegistry
 
+	// Atomically issues a new and unique ID that will remain unique for the duration of this session.
+	// An ID may still expire, go out of scope, or otherwise become meaningless.
+	IssueCellID() CellID
+
 	LoggedIn() User
 }
 
@@ -168,14 +172,14 @@ type CellReq struct {
 	CellSub
 
 	ReqID         uint64        // Client-set request ID
-	Args          []*KwArg      // Client-set args (optional if PinCell provided)
-	PinCell       CellID        // Client-set cell ID to pin (or 0 if Args sufficient).  Use PinnedCell().ID() for the CellID that was actually pinned.
+	Args          []*KwArg      // Client-set args (typically used when pinning a root where CellID is not known)
+	CellID        CellID        // Client-set cell ID to pin (or 0 if Args sufficient).  Use req.Cell.ID() for the resolved CellID.
 	ContentSchema *AttrSchema   // Client-set schema specifying the cell attr model for the cell being pinned.
 	ChildSchemas  []*AttrSchema // Client-set schema(s) specifying which child cells (and attrs) should be pushed to the client.
 	User          User          // Runtime-set; the user that initiated this request
-	ParentReq     *CellReq      // Runtime-set; allows App.ResolveRequest() has access the parent context
-	ParentApp     App           // Runtime-set during SelectAppForSchema()
-	PinnedCell    AppPinnedCell // App-set during App.ResolveRequest()
+	ParentReq     *CellReq      // Runtime-set; allows App.ResolveCell() has access the parent context
+	ParentApp     App           // Runtime-set using SelectAppForSchema()
+	Cell          AppCell       // Runtime-set from App.ResolveCell() and AppCell.PinCell()
 }
 
 // Signals to use the default App for a given AttrSchema CellDataModel.
@@ -194,20 +198,28 @@ type App interface {
 	// When the host session receives a client request for a specific data model URI, it will route it to the app that registered for it here.
 	CellDataModels() []string
 
-	// Resolves the given request to final target Planet, CellID, and AppCell.
-	ResolveRequest(req *CellReq) error
+	// Handles a client request to pin a cell, potentially looking at KwArgs and ChildSchemas to make choices.
+	// The implementation sets req.Cell so that subsequent calls to PushCellState() are possible.
+	PinCell(req *CellReq) error
 }
 
 // AppCell is how an App offers a cell instance to the planet runtime.
-type AppPinnedCell interface {
+type AppCell interface {
 
 	// Returns the CellID of this cell
 	ID() CellID
+
+	// Names the data model that this cell implements.
+	CellDataModel() string
 
 	// Called when a cell is pinned and is to push its state (in accordance with req.ContentSchema & req.ChildSchemas supplied by the client).
 	// The implementation uses req.CellSub.PushMsg(...) to push attributes and child cells to the client.
 	// Called on the goroutine owned by the the target CellID.
 	PushCellState(req *CellReq) error
+
+	// PinCell is called when a client requests to either pin the cell itself or one of its children (based on req.CellID and req.ParentReq)
+	// This allows Apps to interoperate and query other App cells through the Arc runtime (without direct dependencies).
+	PinCell(req *CellReq) error
 }
 
 type CellSub interface {

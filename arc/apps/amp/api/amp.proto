@@ -1,5 +1,5 @@
 syntax = "proto3";
-package pb;
+package api;
 
 option csharp_namespace = "Arcspace";
 
@@ -12,10 +12,12 @@ enum PlayableFlags {
     IsLive              = 0x0001;
     IsSeekable          = 0x0002;
     IsUnending          = 0x0004;
+    IsPlaylist          = 0x0008;
     
-    IsStation           = 0x0010;
-    IsPodcastEpisode    = 0x0020;
-    IsAudioBook         = 0x0040;
+    InternetRadio       = 0x0010;
+    PodcastEpisode      = 0x0020;
+    AudioBook           = 0x0040;
+    
     RequiresWAN         = 0x0100;
     RequiresLAN         = 0x0200;
 }
@@ -29,7 +31,16 @@ message LoginInfo {
 }
 
 
+// message PlayableInfo {
+//     string              Title        = 1;
+//     string              Subtitle     = 2;
+//     string              Artist       = 3;
+//     string              Album        = 4;
+//     int64               ReleaseDate  = 5; // unix timestamp
+//     double              Duration     = 6; // seconds
+//     PlayableFlags       Flags        = 7;
 
+// }
 
 
 message MediaProviderInfo {

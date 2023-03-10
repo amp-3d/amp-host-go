@@ -2,6 +2,7 @@ package grpc_service
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"sync/atomic"
 	"time"
@@ -141,7 +142,7 @@ func (sess *grpcSess) RecvMsg() (*arc.Msg, error) {
 	if err == nil {
 		return msg, nil
 	}
-	if status.Code(err) == codes.Canceled {
+	if status.Code(err) == codes.Canceled || err == io.EOF {
 		err = arc.ErrStreamClosed
 	}
 	return msg, err

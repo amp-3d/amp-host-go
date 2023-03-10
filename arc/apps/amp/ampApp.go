@@ -1,71 +1,59 @@
 package amp
 
 import (
-	"sync/atomic"
-
 	"github.com/arcspace/go-arcspace/arc"
+	"github.com/arcspace/go-arcspace/arc/apps/amp/api"
+	"github.com/arcspace/go-arcspace/arc/apps/amp/filesys"
 )
 
+func NewApp() arc.App {
+	return &ampApp{}
+}
+
 type ampApp struct {
-	nextID uint64
+	fsApp arc.App
 }
 
 func (app *ampApp) AppURI() string {
-	return AppURI
-}
-
-var CellDataModels = []string{
-	"",
-	CellDataModel_Playlist,
-	CellDataModel_Playable,
+	return api.AmpAppURI
 }
 
 func (app *ampApp) CellDataModels() []string {
-	return CellDataModels[1:]
+	return []string{
+		api.CellDataModel_Playlist,
+		api.CellDataModel_Playable,
+	}
 }
 
-// Issues a new and unique ID that will persist during runtime
-func (app *ampApp) IssueCellID() arc.CellID {
-	return arc.CellID(atomic.AddUint64(&app.nextID, 1) + 2701)
-}
+func (app *ampApp) PinCell(req *arc.CellReq) error {
 
-func (app *ampApp) ResolveRequest(req *arc.CellReq) error {
-	var err error
+	if req.CellID == 0 {
+		provider, _ := req.GetKwArg(api.KwArg_Provider)
 
-	if req.PinCell == 0 {
-		pinRoot, _ := req.GetKwArg(KwArg_PinRoot)
-
-		switch pinRoot {
-		case "home":
-			//req.PinnedCell, err = app.pinRadioHome(req.User)
-			req.PinnedCell = pinSpotifyHome(app)
-		case "filesys":
-			req.PinnedCell = pinSpotifyHome(app)
+		switch provider {
+		case api.Provider_Amp:
+			//req.Cell, err = app.pinRadioHome(req.User)
+			req.Cell = pinSpotifyHome(req)
+		case api.Provider_FileSys:
+			if app.fsApp == nil {
+				app.fsApp = filesys.NewApp()
+			}
+			return app.fsApp.PinCell(req)
 		default:
-			return arc.ErrCode_InvalidCell.Errorf("invalid %q arg", KwArg_PinRoot)
+			return arc.ErrCode_InvalidCell.Errorf("invalid %q arg: %q", api.KwArg_Provider, provider)
 		}
 
 	} else {
-		if req.ParentReq == nil || req.ParentReq.PinnedCell == nil {
+		if req.ParentReq == nil || req.ParentReq.Cell == nil {
 			return arc.ErrCode_InvalidCell.Error("missing parent")
 		}
 
-		parent, ok := req.ParentReq.PinnedCell.(*playlist)
-		if !ok {
-			return arc.ErrCode_NotPinnable.Error("invalid parent")
+		if err := req.ParentReq.Cell.PinCell(req); err != nil {
+			return err
 		}
-
-		item := parent.itemsByID[req.PinCell]
-		if item == nil {
-			return arc.ErrCode_InvalidCell.Error("invalid target cell")
-		}
-
-		req.PinnedCell = item
-		// item = *itemRef
-		// item.pathname = path.Join(parent.pathname, item.name
 	}
 
-	return err
+	return nil
 }
 
 type ampItem struct {
@@ -87,7 +75,6 @@ func pushCell(req *arc.CellReq, cell ampCell, asChild bool) error {
 	} else {
 		schema = req.ContentSchema
 	}
-
 	if schema == nil {
 		return nil
 	}
@@ -97,11 +84,10 @@ func pushCell(req *arc.CellReq, cell ampCell, asChild bool) error {
 	if asChild {
 		req.PushInsertCell(item.CellID, schema)
 	}
-
-	req.PushAttr(item.CellID, schema, Attr_ItemName, item.title)
-	req.PushAttr(item.CellID, schema, Attr_Subtitle, item.subtitle)
-	req.PushAttr(item.CellID, schema, Attr_Glyph, &item.glyph)
-	req.PushAttr(item.CellID, schema, Attr_Playable, &item.playable)
+	req.PushAttr(item.CellID, schema, api.Attr_Title, item.title)
+	req.PushAttr(item.CellID, schema, api.Attr_Subtitle, item.subtitle)
+	req.PushAttr(item.CellID, schema, api.Attr_Glyph, &item.glyph)
+	req.PushAttr(item.CellID, schema, api.Attr_Playable, &item.playable)
 
 	return nil
 }
@@ -114,9 +100,9 @@ type playlist struct {
 	itemsByID map[arc.CellID]ampCell
 }
 
-func (pl *playlist) init(app *ampApp) {
-	pl.CellID = app.IssueCellID()
-	pl.glyph.MediaType = MimeType_Dir
+func (pl *playlist) init(req *arc.CellReq) {
+	pl.CellID = req.IssueCellID()
+	pl.glyph.MediaType = api.MimeType_Dir
 	pl.items = make([]arc.CellID, 0, 32)
 	pl.itemsByID = make(map[arc.CellID]ampCell, 32)
 }
@@ -132,7 +118,22 @@ func (pl *playlist) item() ampItem {
 }
 
 func (pl *playlist) CellDataModel() string {
-	return CellDataModel_Playlist
+	return api.CellDataModel_Playlist
+}
+
+func (pl *playlist) PinCell(req *arc.CellReq) error {
+	if req.CellID == pl.CellID {
+		req.Cell = pl
+		return nil
+	}
+
+	item := pl.itemsByID[req.CellID]
+	if item == nil {
+		return arc.ErrCode_InvalidCell.Error("invalid playlist cell ID")
+	}
+
+	req.Cell = item
+	return nil
 }
 
 func (pl *playlist) PushCellState(req *arc.CellReq) error {
@@ -156,12 +157,12 @@ func (pl *playlist) PushCell(req *arc.CellReq, asChild bool) error {
 	return nil
 }
 
-func pinSpotifyHome(app *ampApp) arc.AppPinnedCell {
+func pinSpotifyHome(req *arc.CellReq) arc.AppCell {
 	sp := &playlist{}
 
-	sp.init(app)
+	sp.init(req)
 	sp.title = "Music Library"
-	sp.glyph.MediaType = MimeType_Dir
+	sp.glyph.MediaType = api.MimeType_Dir
 
 	// subs := []string{
 	// 	"Playlists", "Artists", "Albums", "Songs", "Genres", "New Releases", "Podcasts", "Internet Radio"}
@@ -190,19 +191,19 @@ func pinSpotifyHome(app *ampApp) arc.AppPinnedCell {
 		//item.glyph.MediaType = "audio/mpegurl"
 		item.playable.MediaType = "audio/mpegurl"
 		item.playable.URI = stations[i+2]
-		item.CellID = app.IssueCellID()
+		item.CellID = req.IssueCellID()
 		sp.addItem(item)
 	}
 	return sp
 }
 
+// TODO: use generics instead
 type ampCell interface {
-	arc.AppPinnedCell
+	arc.AppCell
 
 	item() ampItem
-	CellDataModel() string
+
 	PushCell(req *arc.CellReq, asChild bool) error
-	
 }
 
 type playable struct {
@@ -214,11 +215,20 @@ func (item *playable) item() ampItem {
 }
 
 func (item *playable) CellDataModel() string {
-	return CellDataModel_Playable
+	return api.CellDataModel_Playable
 }
 
 func (item *playable) PushCellState(req *arc.CellReq) error {
 	return item.PushCell(req, false)
+}
+
+func (item *playable) PinCell(req *arc.CellReq) error {
+	if req.CellID == item.CellID {
+		req.Cell = item
+		return nil
+	}
+
+	return arc.ErrCode_InvalidCell.Error("playable item has no children to pin")
 }
 
 func (item *playable) PushCell(req *arc.CellReq, asChild bool) error {

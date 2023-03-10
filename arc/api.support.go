@@ -217,6 +217,10 @@ func (schema *AttrSchema) LookupAttr(attrURI string) *AttrSpec {
 	return nil
 }
 
+func (req *CellReq) IssueCellID() CellID {
+	return req.User.Session().IssueCellID()
+}
+
 func (req *CellReq) GetKwArg(argKey string) (string, bool) {
 	for _, arg := range req.Args {
 		if arg.Key == argKey {
@@ -279,7 +283,7 @@ func (req *CellReq) PushAttr(target CellID, schema *AttrSchema, attrURI string, 
 func (req *CellReq) PushCheckpoint(err error) {
 	m := NewMsg()
 	m.Op = MsgOp_Commit
-	m.CellID = req.PinnedCell.ID().U64()
+	m.CellID = req.Cell.ID().U64()
 	if err != nil {
 		m.SetVal(err)
 	}

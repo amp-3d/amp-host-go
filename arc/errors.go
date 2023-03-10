@@ -59,7 +59,7 @@ func (code ErrCode) Wrap(cause error) error {
 	}
 }
 
-func UnwrapErr(err error) ErrCode {
+func GetErrCode(err error) ErrCode {
 	if err == nil {
 		return ErrCode_NoErr
 	}

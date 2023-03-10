@@ -406,7 +406,8 @@ type hostSess struct {
 	process.Context
 	arc.TypeRegistry
 
-	user       arc.User
+	nextID     atomic.Uint64	   // next CellID to be issued
+	user       arc.User             // current user
 	host       *host               // parent host
 	msgsIn     chan *arc.Msg       // msgs inbound to this hostSess
 	msgsOut    chan *arc.Msg       // msgs outbound from this hostSess
@@ -544,6 +545,10 @@ func (sess *hostSess) LoggedIn() arc.User {
 	return sess.user
 }
 
+func (sess *hostSess) IssueCellID() arc.CellID {
+	return arc.CellID(sess.nextID.Add(1) + 2701)
+}
+
 func (sess *hostSess) consumeInbox() {
 	for running := true; running; {
 		select {
@@ -656,7 +661,7 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *openReq, err erro
 		if req != nil {
 			switch verb {
 			case removeReq:
-				sess.openReqs[reqID] = nil
+				delete(sess.openReqs, reqID)
 			case insertReq:
 				err = arc.ErrCode_InvalidReq.Error("ReqID already in use")
 			}
@@ -711,7 +716,7 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 		return err
 	}
 
-	req.PinCell = arc.CellID(pinReq.PinCell)
+	req.CellID = arc.CellID(pinReq.PinCell)
 	req.User = sess.user
 	req.Args = pinReq.Args
 	req.ChildSchemas = make([]*arc.AttrSchema, len(pinReq.ChildSchemas))
@@ -722,12 +727,12 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 		}
 	}
 
-	err = req.ParentApp.ResolveRequest(&req.CellReq)
+	err = req.ParentApp.PinCell(&req.CellReq)
 	if err != nil {
 		return err
 	}
-	if req.PinnedCell == nil {
-		return arc.ErrCode_Unimplemented.Errorf("app %s did not pin a cell", req.ParentApp.AppURI())
+	if req.Cell == nil {
+		return arc.ErrCode_Unimplemented.Errorf("app %s failed to pin cell", req.ParentApp.AppURI())
 	}
 
 	pl, err := sess.host.getPlanet(sess.user.HomePlanet().PlanetID())

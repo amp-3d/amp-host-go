@@ -1,29 +1,19 @@
 package filesys
 
 import (
-	"mime"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/arcspace/go-arcspace/arc"
-)
-
-// data model type of a fsItem
-type dataModel int
-
-const (
-	dataModel_nil dataModel = iota
-	dataModel_Dir
-	dataModel_File
+	"github.com/arcspace/go-arcspace/arc/apps/amp/api"
+	"github.com/h2non/filetype"
 )
 
 type fsApp struct {
-	nextID uint64
 }
 
 func (app *fsApp) AppURI() string {
@@ -32,93 +22,70 @@ func (app *fsApp) AppURI() string {
 
 func (app *fsApp) CellDataModels() []string {
 	return []string{
-		CellDataModel_Dir,
-		CellDataModel_File,
+		api.CellDataModel_Playlist,
+		api.CellDataModel_Playable,
 	}
 }
 
-// Issues a new and unique ID that will persist during runtime
-func (app *fsApp) IssueCellID() arc.CellID {
-	return arc.CellID(atomic.AddUint64(&app.nextID, 1) + 100)
-}
+func (app *fsApp) PinCell(req *arc.CellReq) error {
 
-func (app *fsApp) ResolveRequest(req *arc.CellReq) error {
-	item := fsItem{}
-
-	if req.PinCell == 0 {
-		pinPath, _ := req.GetKwArg(KwArg_PinPath)
-		if pinPath == "" {
-			return arc.ErrCode_InvalidCell.Errorf("missing Cell ID or valid %q arg", KwArg_PinPath)
+	if req.CellID == 0 {
+		pathname, _ := req.GetKwArg(api.KwArg_CellURI)
+		if pathname == "" {
+			return arc.ErrCode_InvalidCell.Errorf("filesys: missing %q pathname", api.KwArg_CellURI)
 		}
-		item.pathname = path.Clean(pinPath)
-
-		fi, err := os.Stat(item.pathname)
+		item := fsInfo{}
+		pathname = path.Clean(pathname)
+		fi, err := os.Stat(pathname)
 		if err != nil {
 			return arc.ErrCode_InvalidCell.Errorf("path not found: %q", item.pathname)
 		}
-
+		item.pathname = pathname
 		item.setFrom(fi)
-		item.CellID = app.IssueCellID()
+		item.CellID = req.IssueCellID()
+		req.Cell = item.newAppCell()
 
 	} else {
-		if req.ParentReq == nil || req.ParentReq.PinnedCell == nil {
-			return arc.ErrCode_InvalidCell.Error("missing parent")
-		}
+		panic("ampApp should have caught this")
+		// if req.ParentReq == nil || req.ParentReq.Cell == nil {
+		// 	return arc.ErrCode_InvalidCell.Error("missing parent cell")
+		// }
 
-		parent, ok := req.ParentReq.PinnedCell.(*pinnedDir)
-		if !ok {
-			return arc.ErrCode_NotPinnable.Error("parent is not a pinned dir")
-		}
-
-		itemRef := parent.itemsByID[req.PinCell]
-		if itemRef == nil {
-			return arc.ErrCode_InvalidCell.Error("invalid target cell")
-		}
-
-		item = *itemRef
-		item.pathname = path.Join(parent.pathname, item.name)
-	}
-
-	switch item.model {
-	case dataModel_Dir:
-		pinned := &pinnedDir{}
-		pinned.fsItem = item
-		req.PinnedCell = pinned
-	case dataModel_File:
-		req.PinnedCell = &item
+		// if err := req.ParentReq.Cell.PinCell(req); err != nil {
+		// 	return err
+		// }
 	}
 
 	return nil
 }
 
-type pinnedDir struct {
-	fsItem                 // base file info
-	items     []arc.CellID // ordered
-	itemsByID map[arc.CellID]*fsItem
-}
-
-type fsItem struct {
+type fsInfo struct {
 	arc.CellID
 
-	name        string // base file name
-	pathname    string // only set for pinned items  (could be alternative OS handle)
+	dataModel   string // TODO: make this a read-only util struct to facilitate cell schema access??
+	basename    string // base file name
+	pathname    string // only set for pinned items (could be alternative OS handle)
 	lastRefresh time.Time
 	isHidden    bool
 	mode        os.FileMode
 	size        int64
-	model       dataModel
+	isDir       bool
 	modTime     time.Time
 }
 
-func (item *fsItem) ID() arc.CellID {
+func (item *fsInfo) ID() arc.CellID {
 	return item.CellID
 }
 
-func (item *fsItem) Compare(oth *fsItem) int {
+func (item *fsInfo) CellDataModel() string {
+	return item.dataModel
+}
+
+func (item *fsInfo) Compare(oth *fsInfo) int {
 	// if item.isDir != oth.isDir {
 	// 	return int(item.isDir) - int(oth.isDir)
 	// }
-	if diff := strings.Compare(item.name, oth.name); diff != 0 {
+	if diff := strings.Compare(item.basename, oth.basename); diff != 0 {
 		return diff
 	}
 	if diff := item.modTime.Unix() - oth.modTime.Unix(); diff != 0 {
@@ -133,9 +100,50 @@ func (item *fsItem) Compare(oth *fsItem) int {
 	return 0
 }
 
-// reads the pinnedDir's catalog and issues new items as needed.
-func (dir *pinnedDir) readDir(req *arc.CellReq) error {
-	app := req.ParentApp.(*fsApp)
+func (item *fsInfo) newAppCell() arc.AppCell {
+	var appCell arc.AppCell
+
+	if item.isDir {
+		pinDir := &fsDir{
+			fsInfo: *item,
+		}
+		appCell = pinDir
+	} else {
+		pinFile := &fsFile{
+			fsInfo: *item,
+		}
+		appCell = pinFile
+	}
+
+	return appCell
+}
+
+func (item *fsInfo) setFrom(fi os.FileInfo) {
+	item.basename = fi.Name()
+	item.mode = fi.Mode()
+	item.modTime = fi.ModTime()
+	item.isHidden = strings.HasPrefix(item.basename, ".")
+	item.isDir = fi.IsDir()
+	if item.isDir {
+		item.dataModel = api.CellDataModel_Playlist
+	} else {
+		item.dataModel = api.CellDataModel_Playable
+		item.size = fi.Size()
+	}
+}
+
+type fsFile struct {
+	fsInfo // base file info
+}
+
+type fsDir struct {
+	fsInfo                 // base file info
+	items     []arc.CellID // ordered
+	itemsByID map[arc.CellID]*fsInfo
+}
+
+// reads the fsDir's catalog and issues new items as needed.
+func (dir *fsDir) readDir(req *arc.CellReq) error {
 
 	{
 		//dir.subs = make(map[arc.CellID]os.DirEntry)
@@ -145,26 +153,26 @@ func (dir *pinnedDir) readDir(req *arc.CellReq) error {
 		}
 		defer f.Close()
 
-		lookup := make(map[string]*fsItem, len(dir.itemsByID))
+		lookup := make(map[string]*fsInfo, len(dir.itemsByID))
 		for _, sub := range dir.itemsByID {
-			lookup[sub.name] = sub
+			lookup[sub.basename] = sub
 		}
 
-		fsItems, err := f.Readdir(-1)
+		fsInfos, err := f.Readdir(-1)
 		f.Close()
 		if err != nil {
 			return nil
 		}
 
-		N := len(fsItems)
-		dir.itemsByID = make(map[arc.CellID]*fsItem, N)
+		N := len(fsInfos)
+		dir.itemsByID = make(map[arc.CellID]*fsInfo, N)
 		dir.items = dir.items[:0]
 
-		var tmp *fsItem
-		for _, fi := range fsItems {
+		var tmp *fsInfo
+		for _, fi := range fsInfos {
 			sub := tmp
 			if sub == nil {
-				sub = &fsItem{}
+				sub = &fsInfo{}
 			}
 			sub.setFrom(fi)
 			if sub.isHidden {
@@ -172,9 +180,9 @@ func (dir *pinnedDir) readDir(req *arc.CellReq) error {
 			}
 
 			// preserve items that have not changed
-			old := lookup[sub.name]
+			old := lookup[sub.basename]
 			if old == nil || old.Compare(sub) != 0 {
-				sub.CellID = app.IssueCellID()
+				sub.CellID = req.IssueCellID()
 				tmp = nil
 			} else {
 				sub = old
@@ -195,7 +203,7 @@ func (dir *pinnedDir) readDir(req *arc.CellReq) error {
 	return nil
 }
 
-func (dir *pinnedDir) PushCellState(req *arc.CellReq) error {
+func (dir *fsDir) PushCellState(req *arc.CellReq) error {
 
 	// Refresh if first time or too old
 	now := time.Now()
@@ -207,7 +215,7 @@ func (dir *pinnedDir) PushCellState(req *arc.CellReq) error {
 	// Push the dir as the content item (vs child)
 	dir.pushCellState(req, false)
 
-	// Push each dir item as a child cell
+	// Push each dir sub item as a child cell
 	for _, itemID := range dir.items {
 		dir.itemsByID[itemID].pushCellState(req, true)
 	}
@@ -215,40 +223,53 @@ func (dir *pinnedDir) PushCellState(req *arc.CellReq) error {
 	return nil
 }
 
-func (item *fsItem) PushCellState(req *arc.CellReq) error {
+// TODO: use generics
+func (dir *fsDir) PinCell(req *arc.CellReq) error {
+	if req.CellID == dir.CellID {
+		req.Cell = dir // FUTURE: a pinned dir returns more detailed attrs (e.g. reads mpeg tags)
+		return nil
+	}
+
+	itemRef := dir.itemsByID[req.CellID]
+	if itemRef == nil {
+		return arc.ErrCode_InvalidCell.Error("invalid child cell")
+	}
+
+	itemRef.pathname = path.Join(dir.pathname, itemRef.basename)
+	req.Cell = itemRef.newAppCell()
+	return nil
+}
+
+func (file *fsFile) PinCell(req *arc.CellReq) error {
+	// if err := file.setPathnameUsingParent(req); err != nil {
+	// 	return err
+	// }
+
+	// In the future pinning a file can do fancy things but for now, just use the same item
+	if req.CellID == file.CellID {
+		req.Cell = file
+		return nil
+	}
+
+	return arc.ErrCode_InvalidCell.Error("item is a file; no children to pin")
+}
+
+func (item *fsInfo) PushCellState(req *arc.CellReq) error {
 	return item.pushCellState(req, false)
 }
 
-func (item *fsItem) setFrom(fi os.FileInfo) {
-	item.name = fi.Name()
-	item.mode = fi.Mode()
-	item.modTime = fi.ModTime()
-	item.isHidden = strings.HasPrefix(item.name, ".")
-	switch {
-	case fi.IsDir():
-		item.model = dataModel_Dir
-	// case strings.HasSuffix(sub.name, ".mp3"):
-	// 	sub.model = PlayableCell
-	default:
-		item.model = dataModel_File
-		item.size = fi.Size()
+var (
+	dirGlyph = &arc.AssetRef{
+		MediaType: api.MimeType_Dir,
 	}
-}
+)
 
-func (item *fsItem) DataModelURI() string {
-	switch item.model {
-	case dataModel_Dir:
-		return CellDataModel_Dir
-	case dataModel_File:
-		return CellDataModel_File
-	}
-	return ""
-}
-
-func (item *fsItem) pushCellState(req *arc.CellReq, asChild bool) error {
-	schema := req.ContentSchema
+func (item *fsInfo) pushCellState(req *arc.CellReq, asChild bool) error {
+	var schema *arc.AttrSchema
 	if asChild {
-		schema = req.GetChildSchema(item.DataModelURI())
+		schema = req.GetChildSchema(item.CellDataModel())
+	} else {
+		schema = req.ContentSchema
 	}
 	if schema == nil {
 		return nil
@@ -258,21 +279,47 @@ func (item *fsItem) pushCellState(req *arc.CellReq, asChild bool) error {
 		req.PushInsertCell(item.CellID, schema)
 	}
 
-	req.PushAttr(item.CellID, schema, attr_ItemName, item.name)
+	fileExt := filepath.Ext(item.basename)
 
-	if !asChild {
-		req.PushAttr(item.CellID, schema, attr_Pathname, item.pathname)
-	}
-
-	switch item.model {
-	case dataModel_Dir:
-		req.PushAttr(item.CellID, schema, attr_MimeType, "filesys/directory")
-	case dataModel_File:
-		if mimeType := mime.TypeByExtension(filepath.Ext(item.name)); len(mimeType) > 1 {
-			req.PushAttr(item.CellID, schema, attr_MimeType, mimeType)
+	{
+		base := item.basename[:len(item.basename)-len(fileExt)]
+		left := ""
+		right := ""
+		splitAt := strings.LastIndex(base, " - ")
+		if splitAt > 0 {
+			left = base[:splitAt]
+			right = base[splitAt+3:]
 		}
-		req.PushAttr(item.CellID, schema, attr_ByteSz, item.size)
-		req.PushAttr(item.CellID, schema, attr_LastModified, arc.ConvertToTimeFS(item.modTime))
+
+		if len(left) > 0 && len(right) > 0 {
+			req.PushAttr(item.CellID, schema, api.Attr_Title, right)
+			req.PushAttr(item.CellID, schema, api.Attr_Subtitle, left)
+		} else {
+			req.PushAttr(item.CellID, schema, api.Attr_Title, base)
+		}
 	}
+
+	if item.isDir {
+		req.PushAttr(item.CellID, schema, api.Attr_Glyph, dirGlyph)
+	} else {
+
+		if len(fileExt) > 0 {
+			fileExt = fileExt[1:] // remove '.' prefix
+		}
+		asset := arc.AssetRef{
+			MediaType: filetype.GetType(fileExt).MIME.Value,
+		}
+		req.PushAttr(item.CellID, schema, api.Attr_Glyph, &asset)
+		if item.pathname != "" {
+			asset.URI = item.pathname
+			asset.Scheme = arc.URIScheme_File
+			req.PushAttr(item.CellID, schema, api.Attr_Playable, &asset)
+		}
+
+		req.PushAttr(item.CellID, schema, api.Attr_ByteSz, item.size)
+		req.PushAttr(item.CellID, schema, api.Attr_LastModified, arc.ConvertToTimeFS(item.modTime))
+
+	}
+
 	return nil
 }

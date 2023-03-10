@@ -131,13 +131,13 @@ func (pl *planetSess) getCell(ID arc.CellID) (cell *cellInst, err error) {
 				select {
 				case req := <-cell.newReqs:
 					var err error
-					if req.PinnedCell == nil {
-						err = arc.ErrCode_InternalErr.Errorf("parent arc.App instance %q did not assign an AppCell", req.ParentApp.AppURI())
+					if req.Cell == nil {
+						err = arc.ErrCode_InternalErr.Errorf("parent arc.App instance %q did got provide a cell", req.ParentApp.AppURI())
 					} else {
 						req.PushBeginPin(cell.CellID)
 
 						// TODO: verify that a cell pushing state doesn't escape idle or close analysis
-						err = req.PinnedCell.PushCellState(&req.CellReq)
+						err = req.Cell.PushCellState(&req.CellReq)
 					}
 					req.PushCheckpoint(err)
 
@@ -168,7 +168,7 @@ func (pl *planetSess) queueReq(cell *cellInst, req *openReq) error {
 
 	var err error
 	if cell == nil {
-		cell, err = pl.getCell(req.PinnedCell.ID())
+		cell, err = pl.getCell(req.Cell.ID())
 		if err != nil {
 			return err
 		}
@@ -593,13 +593,13 @@ type cellBase struct {
 
 }
 
-type pinnedCell struct {
+type Cell struct {
 	req arc.CellReq
 
 	children map[arc.CellID]*cellBase
 }
 
-func (cell *pinnedCell) PushCellState(req *arc.CellReq) error {
+func (cell *Cell) PushCellState(req *arc.CellReq) error {
 
 
 }
