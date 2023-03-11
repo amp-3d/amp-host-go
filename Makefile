@@ -48,37 +48,39 @@ build:  archost archost-lib
 #
 
 
-## build archost.dylib for OSX        ---> build on x86_64 mac!
+## build archost.dylib for OSX (build on x86_64 mac)
 archost-lib-osx:
 # Beware of a Unity bug where *not* selecting "Any CPU" causes the app builder to not add the .dylib to the app bundle!
 # Also note that a .dylib is identical to the binary in an OS X .bundle.  Also: https://stackoverflow.com/questions/2339679/what-are-the-differences-between-so-and-dylib-on-macos 
 # Info on cross-compiling Go: https://freshman.tech/snippets/go/cross-compile-go-programs/
-# Note: for the time being, we are x86_64 (amd64) only, the archost.dylib should only be compiled on an x86_64 machine!
+# Note: for the time being, we are currently x86_64 (amd64) only, so the archost.dylib should only be compiled on an x86_64 machine!
 	OUT_DIR="${ARC_LIBS}"           CC="${LIB_PROJ}/clangwrap.sh" \
 	PLATFORM=OSX                    GOARCH=amd64        "${LIB_PROJ}/build.sh"
 
-
-## build archost.a for iOS            ---> build on x86_64 mac!
+## build archost.a for iOS (build on x86_64 mac)
 archost-lib-ios:
 	OUT_DIR="${ARC_LIBS}"           CC="${LIB_PROJ}/clangwrap.sh" \
 	PLATFORM=iOS                    GOARCH=arm64        "${LIB_PROJ}/build.sh"
 
 
-
-## build archost-lib for arm64-v8a    ---> build on x86_64 mac!
+## build archost-lib for arm64-v8a
 archost-lib-android-arm64-v8a:
-	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/aarch64-linux-android21-clang" \
+	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/aarch64-linux-android27-clang" \
 	PLATFORM=Android/arm64-v8a      GOARCH=arm64        "${LIB_PROJ}/build.sh"
 
-
-## build archost-lib for armeabi-v7a  ---> build on x86_64 mac!
+## build archost-lib for armeabi-v7a 
 archost-lib-android-armeabi-v7a:
-	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/armv7a-linux-androideabi21-clang" \
+	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/armv7a-linux-androideabi27-clang" \
 	PLATFORM=Android/armeabi-v7a    GOARCH=arm          "${LIB_PROJ}/build.sh"
-	
+		
+## build archost-lib for armeabi-v7a 
+archost-lib-android-x86_64:
+	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/x86_64-linux-android27-clang" \
+	PLATFORM=Android/x86_64         GOARCH=amd64        "${LIB_PROJ}/build.sh"
+
 
 ## build archost.dylib/so/.a for all platforms
-archost-lib:  archost-lib-osx archost-lib-ios archost-lib-android-arm64-v8a archost-lib-android-armeabi-v7a
+archost-lib:  archost-lib-osx archost-lib-ios archost-lib-android-arm64-v8a archost-lib-android-armeabi-v7a archost-lib-android-x86_64
 
 
 ## build archost "headless" daemon
