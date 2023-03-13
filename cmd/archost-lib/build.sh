@@ -12,7 +12,7 @@ GO_ARCHOST_LIB="./cmd/archost-lib"
 
 if [[ $PLATFORM =~ ^Android ]]; then
     export GOOS=android
-    NAME="${NAME}.so"
+    NAME="lib${NAME}.so"
 fi
 
 
