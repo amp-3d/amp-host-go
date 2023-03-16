@@ -1,7 +1,7 @@
 package symbol
 
 import (
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 )
 
 // Creates a new symbol.Table and attaches it to the given db.

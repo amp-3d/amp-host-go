@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/arcspace/go-arcspace/symbol"
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 )
 
 var gTest = make(chan error)

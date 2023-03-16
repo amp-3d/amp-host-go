@@ -8,7 +8,7 @@ import (
 	"github.com/arcspace/go-arcspace/arc"
 	"github.com/arcspace/go-arcspace/symbol"
 	"github.com/arcspace/go-cedar/process"
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 )
 
 // cellInst is a "mounted" cell servicing requests for a specific cell (typically one).

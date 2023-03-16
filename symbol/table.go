@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/arcspace/go-cedar/bufs"
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 )
 
 func (id ID) WriteTo(io []byte) []byte {
