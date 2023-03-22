@@ -12,6 +12,9 @@ import (
 	"github.com/arcspace/go-arcspace/arc/apps/amp/api"
 	"github.com/h2non/filetype"
 )
+func init() {
+	filetype.AddType("jpeg", "image/jpeg")
+}
 
 type fsApp struct {
 }
