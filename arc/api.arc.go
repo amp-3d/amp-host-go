@@ -177,9 +177,9 @@ type CellReq struct {
 	ContentSchema *AttrSchema   // Client-set schema specifying the cell attr model for the cell being pinned.
 	ChildSchemas  []*AttrSchema // Client-set schema(s) specifying which child cells (and attrs) should be pushed to the client.
 	User          User          // Runtime-set; the user that initiated this request
-	ParentReq     *CellReq      // Runtime-set; allows App.ResolveCell() has access the parent context
+	ParentReq     *CellReq      // Runtime-set; allows arc.App and arc.AppCell to access the parent context
 	ParentApp     App           // Runtime-set using SelectAppForSchema()
-	Cell          AppCell       // Runtime-set from App.ResolveCell() and AppCell.PinCell()
+	Cell          AppCell       // Runtime-set from AppCell.PinCell()
 }
 
 // Signals to use the default App for a given AttrSchema CellDataModel.
@@ -212,7 +212,7 @@ type AppCell interface {
 	// Names the data model that this cell implements.
 	CellDataModel() string
 
-	// Called when a cell is pinned and is to push its state (in accordance with req.ContentSchema & req.ChildSchemas supplied by the client).
+	// Called when a cell is pinned and should push its state (in accordance with req.ContentSchema & req.ChildSchemas supplied by the client).
 	// The implementation uses req.CellSub.PushMsg(...) to push attributes and child cells to the client.
 	// Called on the goroutine owned by the the target CellID.
 	PushCellState(req *CellReq) error

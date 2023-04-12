@@ -993,19 +993,11 @@ type AttrSchema struct {
 	// The reserved value "." tells the host to choose the default app registered to handle the below CellDataModel (common).
 	// e.g.
 	//      "."
-	//      "planet.tools/amp.app"
 	//      "planet.tools/amp.app/v1.2022.1"
-	//      "planet.tools/hfs.app/v1.2.3"
 	AppURI string `protobuf:"bytes,1,opt,name=AppURI,proto3" json:"AppURI,omitempty"`
-	// CellDataModel names a particular data model used by this schema, in effect specifying a namespace / scope for the attached Attrs.
+	// CellDataModel identifies a data model this schema conforms to, in effect it specifies a scope for the attached Attrs.
 	// This URI names a complete data protocol / specification that this collection of AttrSpecs conforms to (and is a subset of).
 	// To an implementing app on the Go side, this URI implies a family of valid possible AttrSpecs to choose from.
-	// e.g.
-	//      "spotify/v1/artist"
-	//      "spotify/v1/album"
-	//      "spotify/v1/track"
-	//      "filesys/dir"
-	//      "filesys/fil"
 	CellDataModel string `protobuf:"bytes,3,opt,name=CellDataModel,proto3" json:"CellDataModel,omitempty"`
 	// This describes this *particular* AttrSchema, a particular collection of AttrSpecs (and is implicitly scoped within CellDataModel).
 	// The host (and its apps) generally don't even look at this field since "{CellDataModel}/{Attrs[i].AttrURI}" fully specifies each attr's data model URI.
