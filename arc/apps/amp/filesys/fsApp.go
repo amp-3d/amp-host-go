@@ -307,7 +307,7 @@ func (item *fsInfo) pushCellState(req *arc.CellReq, asChild bool) error {
 	} else {
 
 		if len(fileExt) > 0 {
-			fileExt = fileExt[1:] // remove '.' prefix
+			fileExt = fileExt[1:] // remove '.' prefix from extension
 		}
 		asset := arc.AssetRef{
 			MediaType: filetype.GetType(fileExt).MIME.Value,

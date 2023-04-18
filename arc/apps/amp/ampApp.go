@@ -3,6 +3,7 @@ package amp
 import (
 	"github.com/arcspace/go-arcspace/arc"
 	"github.com/arcspace/go-arcspace/arc/apps/amp/api"
+	"github.com/arcspace/go-arcspace/arc/apps/amp/bs"
 	"github.com/arcspace/go-arcspace/arc/apps/amp/filesys"
 )
 
@@ -12,6 +13,7 @@ func NewApp() arc.App {
 
 type ampApp struct {
 	fsApp arc.App
+	bsApp arc.App
 }
 
 func (app *ampApp) AppURI() string {
@@ -32,8 +34,10 @@ func (app *ampApp) PinCell(req *arc.CellReq) error {
 
 		switch provider {
 		case api.Provider_Amp:
-			//req.Cell, err = app.pinRadioHome(req.User)
-			req.Cell = pinSpotifyHome(req)
+			if app.bsApp == nil {
+				app.bsApp = bs.NewApp()
+			}
+			return app.bsApp.PinCell(req)
 		case api.Provider_FileSys:
 			if app.fsApp == nil {
 				app.fsApp = filesys.NewApp()

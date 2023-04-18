@@ -42,6 +42,41 @@ message LoginInfo {
 
 // }
 
+message LoginCreateResponse {
+    string   timestamp_expires = 1;
+    string   token = 2;
+    string   chat_status = 3;
+    int64    chat_version = 4;
+}
+
+message CategoryInfo {
+    uint32 id = 1;
+    string category = 2;
+    string title = 3;
+    string description = 4;
+    string type = 5;
+    string subtype = 6;
+    string image = 7;
+    string timestamp_created = 8;
+    string timestamp_modified = 9;
+}
+
+
+message StationInfo {
+    uint32 id = 1;
+    string category = 2;
+    string title = 3;
+    string description = 4;
+    string type = 5;
+    string subtype = 6;
+    string image = 7;
+    string author = 8;
+    string url = 9;
+    string summary = 10;
+    
+}
+
+
 
 message MediaProviderInfo {
     
