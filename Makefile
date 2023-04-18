@@ -35,7 +35,7 @@ help:
 
 GOFILES = $(shell find . -type f -name '*.go')
 	
-.PHONY: build protos
+.PHONY: build protos tools
 
 ## build archost and archost-lib
 build:  archost archost-lib
@@ -84,7 +84,7 @@ archost-lib:  archost-lib-osx archost-lib-ios archost-lib-android-arm64-v8a arch
 
 
 ## build archost "headless" daemon
-archost: $(GOFILES)
+archost:
 	cd cmd/archost && touch main.go && \
 	go build -trimpath .
 
@@ -128,3 +128,13 @@ protos:
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
 	    --proto_path=. \
 		ski/api.ski.proto
+
+
+## build fmod play toy
+play:
+#   https://stackoverflow.com/questions/75666660/how-can-i-specify-a-relative-dylib-path-in-cgo-on-macos
+	cd cmd/play && touch main.go && \
+	go build -trimpath . && \
+	install_name_tool -change @rpath/libfmod.dylib @executable_path/libfmod.dylib play
+	cd cmd/play && ./play
+

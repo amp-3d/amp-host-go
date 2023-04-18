@@ -7,5 +7,6 @@ cmd/archost/archost
 
 cmd/archost-lib/tmp
 
+cmd/play/play
 __debug_bin
 __debug_bin.exe
