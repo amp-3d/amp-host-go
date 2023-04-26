@@ -260,6 +260,7 @@ func (req *CellReq) PushInsertCell(target CellID, schema *AttrSchema) {
 	}
 }
 
+// Pushes the given attr to the client
 func (req *CellReq) PushAttr(target CellID, schema *AttrSchema, attrURI string, attrVal interface{}) {
 	attr := schema.LookupAttr(attrURI)
 	if attr == nil {

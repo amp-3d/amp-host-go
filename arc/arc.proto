@@ -205,7 +205,7 @@ enum MsgOp {
     //      Msg.ValStr:     cell local ID (optional)
     MsgOp_UpsertCell = 15; 
     
-    // Used by the sender to signal that the request associated with ReqID is up to date and can be processed by the recipient.
+    // Used by the sender to signal that the given cell's state push is up to date and can be processed by the recipient.
     // This msg is typically used to drive UI updates or other aggregate cell dependencies.
     //
     // Params: 
@@ -229,8 +229,8 @@ enum MsgFlags {
 
     MsgFlags_None = 0;
     
-    // CellCheckpoint signals that the cell referenced by this Msg is at a stable state "checkpoint", 
-    MsgFlags_CellCheckpoint = 0x001;
+    // // CellCheckpoint signals that the cell referenced by this Msg is at a stable state "checkpoint", 
+    // MsgFlags_CellCheckpoint = 0x001;
     
     // // ReqCheckpoint signals that the request referenced ReqID is at a stable state "checkpoint",
     // MsgFlags_ReqCheckpoint = 0x02;
@@ -533,10 +533,9 @@ message GeoFix {
 
 // URIScheme is used to accompany a URI to specify a URI scheme without it being being a prefix of the URI .
 enum URIScheme {
-    URIScheme_URL           = 0;    // unspecified URL scheme (URI contains a scheme prefix)
+    URIScheme_Any           = 0;    // unspecified URI scheme
     URIScheme_Data          = 1;    // [data:]<mimetype>[[;base64],<data>] 
-    URIScheme_HTTP          = 2;    // [https://]<hostname>[:<port>]/<path>
-    URIScheme_HTTPS         = 3;    // [https://]<hostname>[:<port>]/<path>
+    URIScheme_HTTP          = 2;    // [http[s]://]<hostname>[:<port>]/<path>
     URIScheme_File          = 5;    // [file://]<unix-pathname>
     URIScheme_CrateAsset    = 2701; // [crate-asset://]<crate-asset-uri>
     URIScheme_CellSchema    = 2702; // [cell-schema://]<cell-schema-uri>
@@ -547,6 +546,11 @@ message AssetRef {
     string              MediaType = 3; // Describes content of URI; MIME type (or '/' separated type pathname)
     URIScheme           Scheme = 5;    // Describes URI scheme such that the pa URL scheme is not required to prefix URI
     string              URI = 6;       // URI to the asset (has scheme prefix if URIScheme == URL, otherwise, scheme prefix is optional)
+    
+    int32               PixWidth   = 10;   // Width in pixels  (0 -> not specified)
+    int32               PixHeight  = 11;   // Height in pixels (0 -> not specified)
+    float               PhysWidth  = 12;   // Width in mm      (0 -> not specified)
+    float               PhysHeight = 13;   // Height in mm     (0 -> not specified)
     
     //string              UUID = 2;   // Asset's hashname (optional); contains only A-Z, a-z, 0-9, _, and - (no spaces) 
 }
@@ -698,6 +702,7 @@ enum ErrCode {
     ErrCode_InvalidCell                 = 5055;
     ErrCode_NotPinnable                 = 5056;   
     ErrCode_CellNotFound                = 5058;
+    ErrCode_ProviderErr                 = 5059;
     
     ErrCode_ViolatesAppendOnly          = 5100;
     ErrCode_InsufficientPermissions     = 5101;

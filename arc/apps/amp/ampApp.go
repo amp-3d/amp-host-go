@@ -2,6 +2,7 @@ package amp
 
 import (
 	"github.com/arcspace/go-arcspace/arc"
+	"github.com/arcspace/go-arcspace/arc/apps/amp/amp_spotify"
 	"github.com/arcspace/go-arcspace/arc/apps/amp/api"
 	"github.com/arcspace/go-arcspace/arc/apps/amp/bs"
 	"github.com/arcspace/go-arcspace/arc/apps/amp/filesys"
@@ -12,19 +13,17 @@ func NewApp() arc.App {
 }
 
 type ampApp struct {
-	fsApp arc.App
-	bsApp arc.App
+	fsApp      arc.App
+	bsApp      arc.App
+	spotifyApp arc.App
 }
 
 func (app *ampApp) AppURI() string {
 	return api.AmpAppURI
 }
 
-func (app *ampApp) CellDataModels() []string {
-	return []string{
-		api.CellDataModel_Playlist,
-		api.CellDataModel_Playable,
-	}
+func (app *ampApp) SupportedDataModels() []string {
+	return api.SupportedDataModels
 }
 
 func (app *ampApp) PinCell(req *arc.CellReq) error {
@@ -43,6 +42,11 @@ func (app *ampApp) PinCell(req *arc.CellReq) error {
 				app.fsApp = filesys.NewApp()
 			}
 			return app.fsApp.PinCell(req)
+		case api.Provider_Spotify:
+			if app.spotifyApp == nil {
+				app.bsApp = amp_spotify.NewApp()
+			}
+			return app.bsApp.PinCell(req)
 		default:
 			return arc.ErrCode_InvalidCell.Errorf("invalid %q arg: %q", api.KwArg_Provider, provider)
 		}
@@ -72,9 +76,9 @@ func (item *ampItem) ID() arc.CellID {
 	return item.CellID
 }
 
-func pushCell(req *arc.CellReq, cell ampCell, asChild bool) error {
+func pushCell(req *arc.CellReq, cell ampCell, opts arc.PushCellOpts) error {
 	var schema *arc.AttrSchema
-	if asChild {
+	if opts.PushAsChild() {
 		schema = req.GetChildSchema(cell.CellDataModel())
 	} else {
 		schema = req.ContentSchema
@@ -85,7 +89,7 @@ func pushCell(req *arc.CellReq, cell ampCell, asChild bool) error {
 
 	item := cell.item()
 
-	if asChild {
+	if opts.PushAsChild() {
 		req.PushInsertCell(item.CellID, schema)
 	}
 	req.PushAttr(item.CellID, schema, api.Attr_Title, item.title)
@@ -140,19 +144,19 @@ func (pl *playlist) PinCell(req *arc.CellReq) error {
 	return nil
 }
 
-func (pl *playlist) PushCellState(req *arc.CellReq) error {
-	return pl.PushCell(req, false)
+func (pl *playlist) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
+	return pl.PushCell(req, opts)
 }
 
-func (pl *playlist) PushCell(req *arc.CellReq, asChild bool) error {
-	if err := pushCell(req, pl, asChild); err != nil {
+func (pl *playlist) PushCell(req *arc.CellReq, opts arc.PushCellOpts) error {
+	if err := pushCell(req, pl, opts); err != nil {
 		return err
 	}
 
-	if !asChild {
+	if opts.PushAsParent() {
 		for _, itemID := range pl.items {
 			item := pl.itemsByID[itemID]
-			err := item.PushCell(req, true)
+			err := item.PushCell(req, arc.PushAsChild)
 			if err != nil {
 				return err
 			}
@@ -207,7 +211,7 @@ type ampCell interface {
 
 	item() ampItem
 
-	PushCell(req *arc.CellReq, asChild bool) error
+	PushCell(req *arc.CellReq, opts arc.PushCellOpts) error
 }
 
 type playable struct {
@@ -222,8 +226,8 @@ func (item *playable) CellDataModel() string {
 	return api.CellDataModel_Playable
 }
 
-func (item *playable) PushCellState(req *arc.CellReq) error {
-	return item.PushCell(req, false)
+func (item *playable) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
+	return item.PushCell(req, opts)
 }
 
 func (item *playable) PinCell(req *arc.CellReq) error {
@@ -235,6 +239,6 @@ func (item *playable) PinCell(req *arc.CellReq) error {
 	return arc.ErrCode_InvalidCell.Error("playable item has no children to pin")
 }
 
-func (item *playable) PushCell(req *arc.CellReq, asChild bool) error {
-	return pushCell(req, item, asChild)
+func (item *playable) PushCell(req *arc.CellReq, opts arc.PushCellOpts) error {
+	return pushCell(req, item, opts)
 }

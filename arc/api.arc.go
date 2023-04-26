@@ -69,7 +69,7 @@ type Host interface {
 
 	HostPlanet() Planet
 
-	// Registers an App for invocation based on its AppURI and CellDataModels.
+	// Registers an App for invocation based on its AppURI and SupportedDataModels.
 	RegisterApp(app App) error
 
 	// Selects an App, typically based on schema.CellDataModel (or schema.AppURI if given).
@@ -194,14 +194,23 @@ type App interface {
 	// Identifies this App and usually has the form: "{domain_name}/{app_identifier}/v{MAJOR}.{MINOR}.{REV}"
 	AppURI() string
 
-	// CellDataModels lists data models that this app supports / handles.
+	// SupportedDataModels lists data models that this app supports / handles.
 	// When the host session receives a client request for a specific data model URI, it will route it to the app that registered for it here.
-	CellDataModels() []string
+	SupportedDataModels() []string
 
 	// Handles a client request to pin a cell, potentially looking at KwArgs and ChildSchemas to make choices.
 	// The implementation sets req.Cell so that subsequent calls to PushCellState() are possible.
 	PinCell(req *CellReq) error
 }
+
+// PushCellOpts specifies how an AppCell should be pushed to the client
+type PushCellOpts uint32
+const (
+	PushAsParent PushCellOpts = 1 << iota
+	PushAsChild
+)
+func (opts PushCellOpts) PushAsParent() bool { return opts&PushAsParent != 0 }
+func (opts PushCellOpts) PushAsChild() bool { return opts&PushAsChild != 0 }
 
 // AppCell is how an App offers a cell instance to the planet runtime.
 type AppCell interface {
@@ -215,7 +224,7 @@ type AppCell interface {
 	// Called when a cell is pinned and should push its state (in accordance with req.ContentSchema & req.ChildSchemas supplied by the client).
 	// The implementation uses req.CellSub.PushMsg(...) to push attributes and child cells to the client.
 	// Called on the goroutine owned by the the target CellID.
-	PushCellState(req *CellReq) error
+	PushCellState(req *CellReq, opts PushCellOpts) error
 
 	// PinCell is called when a client requests to either pin the cell itself or one of its children (based on req.CellID and req.ParentReq)
 	// This allows Apps to interoperate and query other App cells through the Arc runtime (without direct dependencies).

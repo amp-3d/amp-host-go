@@ -275,7 +275,7 @@ func (host *host) RegisterApp(app arc.App) error {
 	}
 	host.appsByURI[appURI] = app
 
-	for _, modelURI := range app.CellDataModels() {
+	for _, modelURI := range app.SupportedDataModels() {
 		if modelURI != "" {
 			host.appsByModel[modelURI] = app
 		}

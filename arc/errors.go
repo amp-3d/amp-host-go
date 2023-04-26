@@ -31,7 +31,7 @@ func (code ErrCode) Error(msg string) error {
 
 // Errorf returns an *Err with the given error code and msg.
 // If one or more args are given, msg is used as a format string
-func (code ErrCode) Errorf(msg string, msgArgs ...interface{}) error {
+func (code ErrCode) Errorf(format string, msgArgs ...interface{}) error {
 	if code == ErrCode_NoErr {
 		return nil
 	}
@@ -40,9 +40,9 @@ func (code ErrCode) Errorf(msg string, msgArgs ...interface{}) error {
 		Code: code,
 	}
 	if len(msgArgs) == 0 {
-		err.Msg = msg
+		err.Msg = format
 	} else {
-		err.Msg = fmt.Sprintf(msg, msgArgs...)
+		err.Msg = fmt.Sprintf(format, msgArgs...)
 	}
 
 	return err

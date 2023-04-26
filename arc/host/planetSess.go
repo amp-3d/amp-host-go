@@ -137,7 +137,7 @@ func (pl *planetSess) getCell(ID arc.CellID) (cell *cellInst, err error) {
 						req.PushBeginPin(cell.CellID)
 
 						// TODO: verify that a cell pushing state doesn't escape idle or close analysis
-						err = req.Cell.PushCellState(&req.CellReq)
+						err = req.Cell.PushCellState(&req.CellReq, arc.PushAsParent)
 					}
 					req.PushCheckpoint(err)
 

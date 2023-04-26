@@ -24,11 +24,8 @@ func (app *bsApp) AppURI() string {
 	return AppURI
 }
 
-func (app *bsApp) CellDataModels() []string {
-	return []string{
-		api.CellDataModel_Playlist,
-		api.CellDataModel_Playable,
-	}
+func (app *bsApp) SupportedDataModels() []string {
+	return api.SupportedDataModels
 }
 
 func (app *bsApp) loadTokens(user arc.User) (arc.AppCell, error) {
@@ -178,7 +175,7 @@ func (categories *stationCategories) CellDataModel() string {
 	return api.CellDataModel_Playlist
 }
 
-func (categories *stationCategories) PushCellState(req *arc.CellReq) error {
+func (categories *stationCategories) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
 	schema := req.ContentSchema
 
 	if schema == nil {
@@ -192,7 +189,7 @@ func (categories *stationCategories) PushCellState(req *arc.CellReq) error {
 	}
 
 	for _, cat := range categories.catsByCellID {
-		cat.pushCellState(req, true)
+		cat.PushCellState(req, arc.PushAsChild)
 	}
 
 	return nil
@@ -232,22 +229,9 @@ func (cat *category) CellDataModel() string {
 	return api.CellDataModel_Playlist
 }
 
-func (cat *category) PushCellState(req *arc.CellReq) error {
-	return cat.pushCellState(req, false)
-
-	// if len(categories.catsByCellID) == 0 {
-	// 	categories.loadCategories(req)
-	// }
-
-	// for _, cat := range categories.catsByCellID {
-	// 	cat.pushCellState(req, true)
-	// }
-
-}
-
-func (cat *category) pushCellState(req *arc.CellReq, asChild bool) error {
+func (cat *category) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
 	var schema *arc.AttrSchema
-	if asChild {
+	if opts.PushAsChild() {
 		schema = req.GetChildSchema(api.CellDataModel_Playlist)
 	} else {
 		schema = req.ContentSchema
@@ -256,7 +240,7 @@ func (cat *category) pushCellState(req *arc.CellReq, asChild bool) error {
 		return nil
 	}
 
-	if asChild {
+	if opts.PushAsChild() {
 		req.PushInsertCell(cat.CellID, schema)
 	}
 
@@ -269,7 +253,7 @@ func (cat *category) pushCellState(req *arc.CellReq, asChild bool) error {
 	}
 	req.PushAttr(cat.CellID, schema, api.Attr_Glyph, &glyph)
 
-	if !asChild {
+	if opts.PushAsParent() {
 		if len(cat.itemsByID) == 0 {
 			err := cat.loadItems(req)
 			if err != nil {
@@ -289,7 +273,7 @@ func (cat *category) pushCellState(req *arc.CellReq, asChild bool) error {
 
 		// // Push each dir sub item as a child cell
 		for _, item := range cat.itemsByID {
-			item.pushCellState(req, true)
+			item.PushCellState(req, arc.PushAsChild)
 		}
 	}
 
@@ -395,13 +379,9 @@ func (sta *station) CellDataModel() string {
 	return api.CellDataModel_Playable
 }
 
-func (sta *station) PushCellState(req *arc.CellReq) error {
-	return sta.pushCellState(req, false)
-}
-
-func (sta *station) pushCellState(req *arc.CellReq, asChild bool) error {
+func (sta *station) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
 	var schema *arc.AttrSchema
-	if asChild {
+	if opts.PushAsChild() {
 		schema = req.GetChildSchema(api.CellDataModel_Playable)
 	} else {
 		schema = req.ContentSchema
@@ -410,7 +390,7 @@ func (sta *station) pushCellState(req *arc.CellReq, asChild bool) error {
 		return nil
 	}
 
-	if asChild {
+	if opts.PushAsChild() {
 		req.PushInsertCell(sta.CellID, schema)
 	}
 

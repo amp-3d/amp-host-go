@@ -23,11 +23,8 @@ func (app *fsApp) AppURI() string {
 	return AppURI
 }
 
-func (app *fsApp) CellDataModels() []string {
-	return []string{
-		api.CellDataModel_Playlist,
-		api.CellDataModel_Playable,
-	}
+func (app *fsApp) SupportedDataModels() []string {
+	return api.SupportedDataModels
 }
 
 func (app *fsApp) PinCell(req *arc.CellReq) error {
@@ -206,7 +203,7 @@ func (dir *fsDir) readDir(req *arc.CellReq) error {
 	return nil
 }
 
-func (dir *fsDir) PushCellState(req *arc.CellReq) error {
+func (dir *fsDir) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
 
 	// Refresh if first time or too old
 	now := time.Now()
@@ -216,11 +213,11 @@ func (dir *fsDir) PushCellState(req *arc.CellReq) error {
 	}
 
 	// Push the dir as the content item (vs child)
-	dir.pushCellState(req, false)
+	dir.pushCellState(req, arc.PushAsParent)
 
 	// Push each dir sub item as a child cell
 	for _, itemID := range dir.items {
-		dir.itemsByID[itemID].pushCellState(req, true)
+		dir.itemsByID[itemID].pushCellState(req, arc.PushAsChild)
 	}
 
 	return nil
@@ -257,8 +254,8 @@ func (file *fsFile) PinCell(req *arc.CellReq) error {
 	return arc.ErrCode_InvalidCell.Error("item is a file; no children to pin")
 }
 
-func (item *fsInfo) PushCellState(req *arc.CellReq) error {
-	return item.pushCellState(req, false)
+func (item *fsInfo) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
+	return item.pushCellState(req, opts)
 }
 
 var (
@@ -267,9 +264,9 @@ var (
 	}
 )
 
-func (item *fsInfo) pushCellState(req *arc.CellReq, asChild bool) error {
+func (item *fsInfo) pushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
 	var schema *arc.AttrSchema
-	if asChild {
+	if opts.PushAsChild() {
 		schema = req.GetChildSchema(item.CellDataModel())
 	} else {
 		schema = req.ContentSchema
@@ -278,7 +275,7 @@ func (item *fsInfo) pushCellState(req *arc.CellReq, asChild bool) error {
 		return nil
 	}
 
-	if asChild {
+	if opts.PushAsChild() {
 		req.PushInsertCell(item.CellID, schema)
 	}
 

@@ -28,12 +28,21 @@ const (
 const (
 	CellDataModel_Playlist = "amp.playlist.v1.model"
 	CellDataModel_Playable = "amp.playable.v1.model"
+	CellDataModel_Dir      = "amp.directory.v1.model"
 )
+
+var SupportedDataModels = []string{
+	CellDataModel_Playlist,
+	CellDataModel_Playable,
+	CellDataModel_Dir,
+}
 
 // AttrURI
 const (
 	Attr_Title        = "name.string"
 	Attr_Subtitle     = "subtitle.string"
+	Attr_ArtistDesc   = "artist-desc.string"
+	Attr_AlbumDesc    = "album-desc.string"
 	Attr_Glyph        = "glyph.AssetRef"    // a 2D or 3D symbolic representation of something, similar in purpose to a thumbnail or icon.
 	Attr_World        = "world.AssetRef"    // a 3D visually detailed volume (e.g. a world to step into or even a scene; a screen saver)
 	Attr_Playable     = "playable.AssetRef" // a media item experience described as "playable" and typically having a set duration (but could be a live feed).

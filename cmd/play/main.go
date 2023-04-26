@@ -1,17 +1,65 @@
 package main
 
+/////  /// #  cgo LDFLAGS: -Wl,-rpath,@executable_path -lfmod
+
+// https://stackoverflow.com/questions/75666660/how-can-i-specify-a-relative-dylib-path-in-cgo-on-macos
+
+/*
+#include <inc/fmod.h>
+#include <inc/fmod_errors.h>
+#cgo LDFLAGS: -L. -lfmod
+*/
+import "C"
+
 import (
 	"fmt"
+	"log"
 	"os"
+	"time"
+	"unsafe"
 
 	"github.com/arcspace/go-arcspace/shoutcast"
 	"github.com/arcspace/go-cedar/utils"
 )
 
+const FALSE = 0
+
+func ERRCHECK(desc string, result C.FMOD_RESULT) {
+    if result != C.FMOD_OK {
+        log.Fatalf("FMOD error! %s (%d) %s \n", desc, result, C.GoString(C.FMOD_ErrorString(result)))
+    }
+}
 
 func main() {
 	
-    playFrisky()
+    var fsys *C.FMOD_SYSTEM
+	ERRCHECK("FMOD_System_Create", C.FMOD_System_Create(&fsys, C.FMOD_VERSION))
+	
+	ERRCHECK("FMOD_System_Init", C.FMOD_System_Init(fsys, 4, C.FMOD_INIT_NORMAL, nil))
+	
+    //ERRCHECK("SetStreamBufferSize", C.FMOD_System_SetStreamBufferSize(fsys, 128*1024, C.FMOD_TIMEUNIT_RAWBYTES))
+    
+	soundInfo := C.FMOD_CREATESOUNDEXINFO{}
+	soundInfo.cbsize = C.int(unsafe.Sizeof(soundInfo))
+	
+	var sound *C.FMOD_SOUND 
+	flags := C.uint(C.FMOD_2D) // | C.FMOD_CREATESTREAM | C.FMOD_NONBLOCKING | C.FMOD_IGNORETAGS)
+    ERRCHECK("FMOD_System_CreateStream", C.FMOD_System_CreateStream(fsys, C.CString("jaguar.wav"), flags, &soundInfo, &sound))
+
+
+
+    var ch *C.FMOD_CHANNEL
+    ERRCHECK("FMOD_System_PlaySound", C.FMOD_System_PlaySound(fsys, sound, nil, FALSE, &ch))
+
+    time.Sleep(10 * time.Second) 
+
+    C.FMOD_Sound_Release(sound)
+    C.FMOD_System_Close(fsys)
+    C.FMOD_System_Release(fsys)
+    
+
+	
+    //playFrisky()
 }
 
 
