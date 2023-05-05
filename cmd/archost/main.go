@@ -13,7 +13,6 @@ import (
 	"github.com/arcspace/go-cedar/log"
 	"github.com/arcspace/go-cedar/process"
 	"github.com/arcspace/go-cedar/utils"
-	"github.com/brynbellomy/klog"
 )
 
 func main() {
@@ -32,15 +31,11 @@ func main() {
 	flag.Set("v", "2")
 
 	fset := flag.NewFlagSet("", flag.ContinueOnError)
-	klog.InitFlags(fset)
+	log.InitFlags(fset)
 	fset.Set("logtostderr", "true")
 	fset.Set("v", "2")
-	klog.SetFormatter(&klog.FmtConstWidth{
-		FileNameCharWidth: 24,
-		UseColor:          true,
-	})
+	log.UseStockFormatter(24, true)
 
-	klog.Flush()
 	flag.Parse()
 
 	hostOpts := host.DefaultHostOpts()
@@ -82,5 +77,5 @@ func main() {
 	// Block on host shutdown completion
 	<-host.Done()
 
-	klog.Flush()
+	log.Flush()
 }
