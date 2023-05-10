@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/arcspace/go-arcspace/arc"
+	"github.com/arcspace/go-arcspace/arc/assets"
 	"github.com/arcspace/go-arcspace/symbol"
 	"github.com/arcspace/go-cedar/bufs"
 	"github.com/arcspace/go-cedar/process"
@@ -71,6 +72,12 @@ func startNewHost(opts HostOpts) (arc.Host, error) {
 		},
 	})
 	if err != nil {
+		return nil, err
+	}
+
+	err = host.opts.AssetServer.StartService(host.Context)
+	if err != nil {
+		host.Close()
 		return nil, err
 	}
 
@@ -328,7 +335,7 @@ func (host *host) StartNewSession(from arc.HostService, via arc.ServerStream) (a
 		return nil, err
 	}
 
-	hostSessDesc := fmt.Sprintf("%s(%d)", sess.ContextLabel(), sess.ContextID())
+	hostSessDesc := fmt.Sprintf("%s(%d)", sess.Label(), sess.ContextID())
 
 	// Start a child contexts for send & recv that drives hostSess the inbox & outbox.
 	// We start them as children of the HostService, not the HostSession since we want to keep the stream running until hostSess completes closing.
@@ -406,8 +413,8 @@ type hostSess struct {
 	process.Context
 	arc.TypeRegistry
 
-	nextID     atomic.Uint64	   // next CellID to be issued
-	user       arc.User             // current user
+	nextID     atomic.Uint64       // next CellID to be issued
+	user       arc.User            // current user
 	host       *host               // parent host
 	msgsIn     chan *arc.Msg       // msgs inbound to this hostSess
 	msgsOut    chan *arc.Msg       // msgs outbound from this hostSess
@@ -545,6 +552,10 @@ func (sess *hostSess) LoggedIn() arc.User {
 	return sess.user
 }
 
+func (sess *hostSess) AssetServer() assets.AssetServer {
+	return sess.host.opts.AssetServer
+}
+
 func (sess *hostSess) IssueCellID() arc.CellID {
 	return arc.CellID(sess.nextID.Add(1) + 2701)
 }
@@ -590,33 +601,31 @@ func (sess *hostSess) consumeInbox() {
 }
 
 func (sess *hostSess) login(msg *arc.Msg) error {
-	var loginReq arc.LoginReq
-	if err := msg.LoadVal(&loginReq); err != nil {
+	if sess.user != nil {
+		return arc.ErrCode_InvalidLogin.Error("already logged in")
+	}
+
+	u := &user{
+		sess: sess,
+	}
+	if err := msg.LoadVal(&u.LoginReq); err != nil {
 		return err
 	}
 
 	//
 	// FUTURE: a "user home" app would start here and is bound to the userUID on the host's home arc.
 	//
-	seat, err := sess.host.home.getUser(loginReq, true)
+	seat, err := sess.host.home.getUser(u.LoginReq, true)
 	if err != nil {
 		return err
 	}
 
-	userPlanet, err := sess.host.getPlanet(seat.HomePlanetID)
+	u.home, err = sess.host.getPlanet(seat.HomePlanetID)
 	if err != nil {
 		return err
 	}
 
-	if sess.user != nil {
-		return arc.ErrCode_InvalidLogin.Error("already logged in")
-	}
-
-	sess.user = &user{
-		home: userPlanet,
-		sess: sess,
-	}
-
+	sess.user = u
 	return nil
 }
 
@@ -749,6 +758,7 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 }
 
 type user struct {
+	arc.LoginReq
 	home         arc.Planet
 	sess         *hostSess
 	nextSchemaID atomic.Int32
@@ -756,6 +766,10 @@ type user struct {
 
 func (usr *user) Session() arc.HostSession {
 	return usr.sess
+}
+
+func (usr *user) LoginInfo() arc.LoginReq {
+	return usr.LoginReq
 }
 
 func (usr *user) HomePlanet() arc.Planet {

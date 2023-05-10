@@ -338,8 +338,11 @@ message UserSeat {
 message LoginReq {
 
     // A byte string identifying user who is logging in (lot limited to UTF8)
-    // This is typically the persistent UID given by the device OS that only changes when the app is reinstalled. 
-    bytes               UserUID         = 1;
+    // This is typically a username or a persistent UID issued by the device OS when the app is (re)installed. 
+    string              UserUID         = 1;
+    
+    string              DeviceLabel     = 8;
+    string              DeviceUID       = 9; 
 }
 
 

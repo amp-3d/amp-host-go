@@ -1,18 +1,30 @@
 package host
 
-import "github.com/arcspace/go-arcspace/arc"
+import (
+	"time"
+
+	"github.com/arcspace/go-arcspace/arc"
+	"github.com/arcspace/go-arcspace/arc/assets"
+)
 
 type HostOpts struct {
-	Label     string // label of this host
-	StatePath string // local fs path where user and state data is stored
-	CachePath string // local fs path where purgeable data is stored
+	assets.AssetServer
+	Label              string // label of this host
+	StatePath          string // local fs path where user and state data is stored
+	CachePath          string // local fs path where purgeable data is stored
 }
 
-func DefaultHostOpts() HostOpts {
+func DefaultHostOpts(assetPort int) HostOpts {
 	opts := HostOpts{
-		Label:     "Host",
+		Label:     "arc.Host",
 		StatePath: "~/_.archost",
 	}
+	
+	if assetPort <= 0 { 
+		assetPort = 60000 + (int(time.Now().UnixNano()) & 0x7FF)
+	}
+	assetSrvOpts := assets.DefaultHttpServerOpts(assetPort)
+	opts.AssetServer = assets.NewAssetServer(assetSrvOpts)
 	return opts
 }
 

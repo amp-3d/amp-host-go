@@ -1,6 +1,7 @@
 package arc
 
 import (
+	"github.com/arcspace/go-arcspace/arc/assets"
 	"github.com/arcspace/go-cedar/process"
 )
 
@@ -85,8 +86,11 @@ type Host interface {
 type HostSession interface {
 	Context
 
-	// Threadsafe
+	// Thread-safe
 	TypeRegistry
+	
+	// Returns the running AssetServer instance for this session.
+	AssetServer() assets.AssetServer
 
 	// Atomically issues a new and unique ID that will remain unique for the duration of this session.
 	// An ID may still expire, go out of scope, or otherwise become meaningless.
@@ -95,7 +99,8 @@ type HostSession interface {
 	LoggedIn() User
 }
 
-// HostService attaches to a arc.Host as a child process, extending host functionality (e.g. Grpc Msg transport).
+// HostService attaches to a arc.Host as a child process, extending host functionality.
+// For example. it wraps a Grpc-based Msg transport as well as a dll-based Msg transport implementation.
 type HostService interface {
 	Context
 
@@ -242,6 +247,8 @@ type User interface {
 	Session() HostSession
 
 	HomePlanet() Planet
+	
+	LoginInfo() LoginReq
 
 	// Uses reflection to build an AttrSchema given a ptr to a struct.
 	MakeSchemaForStruct(app App, structPtr any) (*AttrSchema, error)

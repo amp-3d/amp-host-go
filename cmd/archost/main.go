@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"os"
 	"path"
 	"time"
 
@@ -24,6 +23,7 @@ func main() {
 	defaultDataPath := path.Join(exePath, "archost.data")
 
 	hostPort := flag.Int("host-port", int(arc.Const_DefaultGrpcServicePort), "Sets the port used to bind HostGrpc service")
+	asserPort := flag.Int("asset-port", int(arc.Const_DefaultGrpcServicePort+1), "Sets the port used for serving pinned assets")
 	showTree := flag.Int("show-tree", 0, "Prints the process tree periodically, checking every given number of seconds")
 	dataPath := flag.String("data-path", defaultDataPath, "Specifies the path for all file access and storage")
 
@@ -38,7 +38,7 @@ func main() {
 
 	flag.Parse()
 
-	hostOpts := host.DefaultHostOpts()
+	hostOpts := host.DefaultHostOpts(*asserPort)
 	hostOpts.StatePath = *dataPath
 	host := archost.StartNewHost(hostOpts)
 
@@ -50,8 +50,6 @@ func main() {
 	}
 
 	gracefulStop, immediateStop := log.AwaitInterrupt()
-
-	host.Infof(0, "Graceful stop: \x1b[1m^C\x1b[0m or \x1b[1mkill -s SIGINT %d\x1b[0m" /*, or \x1b[1mkill -9 %d\x1b[0m", os.Getpid(),*/, os.Getpid())
 
 	go func() {
 		<-gracefulStop

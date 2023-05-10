@@ -3,15 +3,16 @@ package filesys
 import (
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/arcspace/go-arcspace/arc"
 	"github.com/arcspace/go-arcspace/arc/apps/amp/api"
+	"github.com/arcspace/go-arcspace/arc/assets"
 	"github.com/h2non/filetype"
 )
+
 func init() {
 	filetype.AddType("jpeg", "image/jpeg")
 }
@@ -248,6 +249,11 @@ func (file *fsFile) PinCell(req *arc.CellReq) error {
 	// In the future pinning a file can do fancy things but for now, just use the same item
 	if req.CellID == file.CellID {
 		req.Cell = file
+		asset, err := assets.AssetForFilePathname(file.pathname, "")
+		if err != nil {
+			return err
+		}
+		req.User.Session().AssetServer().PublishAsset(asset)
 		return nil
 	}
 
@@ -279,10 +285,10 @@ func (item *fsInfo) pushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 		req.PushInsertCell(item.CellID, schema)
 	}
 
-	fileExt := filepath.Ext(item.basename)
+	mediaType, extLen := assets.GetMediaTypeForExt(item.basename)
 
 	{
-		base := item.basename[:len(item.basename)-len(fileExt)]
+		base := item.basename[:len(item.basename)-extLen]
 		left := ""
 		right := ""
 		splitAt := strings.LastIndex(base, " - ")
@@ -303,11 +309,8 @@ func (item *fsInfo) pushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 		req.PushAttr(item.CellID, schema, api.Attr_Glyph, dirGlyph)
 	} else {
 
-		if len(fileExt) > 0 {
-			fileExt = fileExt[1:] // remove '.' prefix from extension
-		}
 		asset := arc.AssetRef{
-			MediaType: filetype.GetType(fileExt).MIME.Value,
+			MediaType: mediaType,
 		}
 		req.PushAttr(item.CellID, schema, api.Attr_Glyph, &asset)
 		if item.pathname != "" {
