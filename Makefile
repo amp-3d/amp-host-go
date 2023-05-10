@@ -7,7 +7,7 @@ UNITY_PROJ := ${PARENT_PATH}/arcspace.unity-app
 ARC_LIBS = ${UNITY_PROJ}/Assets/Plugins/Arcspace/Plugins
 ARC_UNITY_PATH = ${UNITY_PROJ}/Assets/Arcspace
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
-LIB_PROJ := ${BUILD_PATH}/cmd/archost-lib
+LIB_PROJ := ${BUILD_PATH}/cmd/libarchost
 
 #UNITY_PATH = "${HOME}/Applications/2021.3.16f1"
 UNITY_PATH := $(shell python3 ${UNITY_PROJ}/arc-utils.py UNITY_PATH "${UNITY_PROJ}")
@@ -37,8 +37,8 @@ GOFILES = $(shell find . -type f -name '*.go')
 	
 .PHONY: build protos tools
 
-## build archost and archost-lib
-build:  archost archost-lib
+## build archost and libarchost
+build:  archost libarchost
 
 
 #
@@ -49,7 +49,7 @@ build:  archost archost-lib
 
 
 ## build archost.dylib for OSX (build on x86_64 mac)
-archost-lib-osx:
+libarchost-osx:
 # Beware of a Unity bug where *not* selecting "Any CPU" causes the app builder to not add the .dylib to the app bundle!
 # Also note that a .dylib is identical to the binary in an OS X .bundle.  Also: https://stackoverflow.com/questions/2339679/what-are-the-differences-between-so-and-dylib-on-macos 
 # Info on cross-compiling Go: https://freshman.tech/snippets/go/cross-compile-go-programs/
@@ -58,29 +58,29 @@ archost-lib-osx:
 	PLATFORM=OSX                    GOARCH=amd64        "${LIB_PROJ}/build.sh"
 
 ## build archost.a for iOS (build on x86_64 mac)
-archost-lib-ios:
+libarchost-ios:
 	OUT_DIR="${ARC_LIBS}"           CC="${LIB_PROJ}/clangwrap.sh" \
 	PLATFORM=iOS                    GOARCH=arm64        "${LIB_PROJ}/build.sh"
 
 
-## build archost-lib for arm64-v8a
-archost-lib-android-arm64-v8a:
+## build libarchost for arm64-v8a
+libarchost-android-arm64-v8a:
 	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/aarch64-linux-android27-clang" \
 	PLATFORM=Android/arm64-v8a      GOARCH=arm64        "${LIB_PROJ}/build.sh"
 
-## build archost-lib for armeabi-v7a 
-archost-lib-android-armeabi-v7a:
+## build libarchost for armeabi-v7a 
+libarchost-android-armeabi-v7a:
 	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/armv7a-linux-androideabi27-clang" \
 	PLATFORM=Android/armeabi-v7a    GOARCH=arm          "${LIB_PROJ}/build.sh"
 		
-## build archost-lib for armeabi-v7a 
-archost-lib-android-x86_64:
+## build libarchost for armeabi-v7a 
+libarchost-android-x86_64:
 	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/x86_64-linux-android27-clang" \
 	PLATFORM=Android/x86_64         GOARCH=amd64        "${LIB_PROJ}/build.sh"
 
 
 ## build archost.dylib/so/.a for all platforms
-archost-lib:  archost-lib-osx archost-lib-ios archost-lib-android-arm64-v8a archost-lib-android-armeabi-v7a archost-lib-android-x86_64
+libarchost:  libarchost-osx libarchost-ios libarchost-android-arm64-v8a libarchost-android-armeabi-v7a libarchost-android-x86_64
 
 
 ## build archost "headless" daemon

@@ -8,7 +8,7 @@ NAME="archost"
 export CGO_ENABLED=1
 export BUILDMODE="c-shared"
 VERIFY="stat -l "
-GO_ARCHOST_LIB="./cmd/archost-lib"
+GO_ARCHOST_LIB="./cmd/libarchost"
 
 if [[ $PLATFORM =~ ^Android ]]; then
     export GOOS=android

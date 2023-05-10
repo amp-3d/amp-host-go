@@ -5,7 +5,7 @@ cmd/archost/*.data
 cmd/archost/*.archost
 cmd/archost/archost
 
-cmd/archost-lib/tmp
+cmd/libarchost/tmp
 
 cmd/play/play
 __debug_bin

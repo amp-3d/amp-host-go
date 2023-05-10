@@ -1,4 +1,4 @@
-// go/cmd/archost-lib/main.go
+// go/cmd/libarchost/main.go
 package main
 
 import "C"
@@ -24,7 +24,7 @@ func Call_SessionBegin(userID, userDataPath, sharedCachePath string) int64 {
 		return 0
 	}
 
-	hostOpts := host.DefaultHostOpts()
+	hostOpts := host.DefaultHostOpts(0)
 	hostOpts.CachePath = sharedCachePath
 	hostOpts.StatePath = userDataPath
 	h := archost.StartNewHost(hostOpts)
