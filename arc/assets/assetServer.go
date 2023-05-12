@@ -10,7 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/arcspace/go-cedar/process"
+	"github.com/arcspace/go-arc-sdk/apis/arc"
+	"github.com/arcspace/go-arc-sdk/stdlib/process"
 )
 
 const kAssetLinkPrefix = "/asset/"
@@ -29,7 +30,7 @@ type httpServer struct {
 
 type assetEntry struct {
 	process.Context
-	MediaAsset
+	arc.MediaAsset
 }
 
 func newHttpServer(opts HttpServerOpts) AssetServer {
@@ -128,7 +129,7 @@ func (srv *httpServer) GracefulStop() {
 	}
 }
 
-func (srv *httpServer) PublishAsset(asset MediaAsset) (URL string, err error) {
+func (srv *httpServer) PublishAsset(asset arc.MediaAsset) (URL string, err error) {
 	assetID := GenerateAssetID(srv.rng, 28)
 
 	assetCtx, err := srv.Context.StartChild(&process.Task{

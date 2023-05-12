@@ -5,13 +5,13 @@ import (
 	"path"
 	"time"
 
+	"github.com/arcspace/go-arc-sdk/stdlib/log"
+	"github.com/arcspace/go-arc-sdk/stdlib/process"
+	"github.com/arcspace/go-arc-sdk/stdlib/utils"
 	"github.com/arcspace/go-arcspace/arc"
 	"github.com/arcspace/go-arcspace/arc/archost"
 	"github.com/arcspace/go-arcspace/arc/grpc_service"
 	"github.com/arcspace/go-arcspace/arc/host"
-	"github.com/arcspace/go-cedar/log"
-	"github.com/arcspace/go-cedar/process"
-	"github.com/arcspace/go-cedar/utils"
 )
 
 func main() {

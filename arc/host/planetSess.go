@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/arcspace/go-arc-sdk/stdlib/process"
 	"github.com/arcspace/go-arcspace/arc"
 	"github.com/arcspace/go-arcspace/symbol"
-	"github.com/arcspace/go-cedar/process"
 	"github.com/dgraph-io/badger/v4"
 )
 

@@ -3,21 +3,24 @@ module github.com/arcspace/go-arcspace
 go 1.18
 
 // List versions of a module:
-//    go list -m -versions github.com/arcspace/go-cedar
+//    go list -m -versions -json github.com/arcspace/go-arc-sdk
 //
 // go list & get cheatsheet:
 //    https://stackoverflow.com/a/61312937/3958082
 //
 
-//replace github.com/arcspace/go-cedar => ../go-cedar
+//replace github.com/arcspace/go-arc-sdk => ../go-arc-sdk
+
+replace github.com/arcspace/go-librespot => ../go-librespot
 
 require (
-	github.com/arcspace/go-cedar v1.2.0
+	github.com/arcspace/go-arc-sdk v0.0.0-20230512170303-7b88893310c8
+	github.com/arcspace/go-librespot v0.0.0-20230512173622-3d03d35460be
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/pkg/errors v0.9.1
 	github.com/zmb3/spotify/v2 v2.3.1
-	golang.org/x/crypto v0.8.0
+	golang.org/x/crypto v0.9.0
 	google.golang.org/grpc v1.55.0
 )
 
@@ -30,13 +33,13 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/google/flatbuffers v23.3.3+incompatible // indirect
+	github.com/google/flatbuffers v23.5.9+incompatible // indirect
 	github.com/h2non/filetype v1.1.3
 	github.com/klauspost/compress v1.16.5 // indirect
 	github.com/rs/cors v1.9.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/net v0.9.0 // indirect
-	golang.org/x/oauth2 v0.7.0
+	golang.org/x/net v0.10.0 // indirect
+	golang.org/x/oauth2 v0.8.0
 	golang.org/x/sync v0.2.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect

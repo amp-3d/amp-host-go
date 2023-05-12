@@ -4,7 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/arcspace/go-cedar/process"
+	"github.com/arcspace/go-arc-sdk/apis/arc"
+	"github.com/arcspace/go-arc-sdk/stdlib/process"
 	"github.com/h2non/filetype"
 )
 
@@ -22,7 +23,7 @@ func GetMediaTypeForExt(pathname string) (mediaType string, extLen int) {
 	return
 }
 
-func AssetForFilePathname(pathname, mediaType string) (MediaAsset, error) {
+func AssetForFilePathname(pathname, mediaType string) (arc.MediaAsset, error) {
 	a := &fileAsset{
 		pathname:  pathname,
 		mediaType: mediaType,
@@ -46,7 +47,7 @@ func (a *fileAsset) OnStart(ctx process.Context) error {
 	return nil
 }
 
-func (a *fileAsset) NewAssetReader() (AssetReader, error) {
+func (a *fileAsset) NewAssetReader() (arc.AssetReader, error) {
 	file, err := os.Open(a.pathname)
 	if err != nil {
 		return nil, err
