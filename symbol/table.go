@@ -3,8 +3,9 @@ package symbol
 import (
 	"bytes"
 	"sync"
+	"sync/atomic"
 
-	"github.com/arcspace/go-cedar/bufs"
+	"github.com/arcspace/go-arc-sdk/stdlib/bufs"
 	"github.com/dgraph-io/badger/v4"
 )
 
@@ -34,11 +35,13 @@ const (
 )
 
 func openTable(db *badger.DB, opts TableOpts) (Table, error) {
+	dbOwned := false
 	var err error
-
 	if opts.Issuer == nil {
-		opts.Issuer, err = openIssuer(db, opts)
-		opts.IssuerOwned = true
+		opts.Issuer, err = newIssuer(db, opts)
+	} else {
+		opts.Issuer.AddRef()
+		dbOwned = true
 	}
 	if err != nil {
 		return nil, err
@@ -47,11 +50,13 @@ func openTable(db *badger.DB, opts TableOpts) (Table, error) {
 	st := &symbolTable{
 		opts:          opts,
 		db:            db,
+		dbOwned:       dbOwned,
 		curBufPoolIdx: -1,
 		valueCache:    make(map[uint64]kvEntry, opts.WorkingSizeHint),
 		tokenCache:    make(map[ID]kvEntry, opts.WorkingSizeHint),
 	}
 
+	st.refCount.Store(1)
 	return st, nil
 }
 
@@ -59,15 +64,29 @@ func (st *symbolTable) Issuer() Issuer {
 	return st.opts.Issuer
 }
 
-func (st *symbolTable) Close() {
-	if st.opts.IssuerOwned {
-		st.opts.Issuer.Close()
+func (st *symbolTable) AddRef() {
+	st.refCount.Add(1)
+}
+
+func (st *symbolTable) Close() error {
+	if st.refCount.Add(-1) > 0 {
+		return nil
 	}
+	return st.close()
+}
+
+func (st *symbolTable) close() error {
+	err := st.opts.Issuer.Close()
 	st.opts.Issuer = nil
+
+	if st.dbOwned {
+		err = st.db.Close()
+	}
+	st.db = nil
 	st.valueCache = nil
 	st.tokenCache = nil
 	st.bufPools = nil
-	st.db = nil
+	return err
 }
 
 type kvEntry struct {
@@ -95,6 +114,8 @@ func (st *symbolTable) bufForEntry(kv *kvEntry) []byte {
 // symbolTable implements symbol.Table
 type symbolTable struct {
 	opts          TableOpts
+	refCount      atomic.Int32
+	dbOwned       bool
 	db            *badger.DB
 	valueCacheMu  sync.RWMutex       // Protects valueCache
 	valueCache    map[uint64]kvEntry // Maps a entry value hash to a kvEntry
@@ -191,17 +212,16 @@ func (st *symbolTable) SetSymbolID(val []byte, symID ID) ID {
 // getsetValueIDPair loads and returns the ID for the given value, and/or writes the ID and value assignment to the db,
 // also updating the cache in the process.
 //
-//  if symID == 0:
-//    if the given value has an existing value-ID association:
-//        the existing ID is cached and returned (mapID is ignored).
-//    if the given value does NOT have an existing value-ID association:
-//        if mapID == false, the call has no effect and 0 is returned.
-//        if mapID == true, a new ID is issued and new value-to-ID and ID-to-value assignments are written,
+//	if symID == 0:
+//	  if the given value has an existing value-ID association:
+//	      the existing ID is cached and returned (mapID is ignored).
+//	  if the given value does NOT have an existing value-ID association:
+//	      if mapID == false, the call has no effect and 0 is returned.
+//	      if mapID == true, a new ID is issued and new value-to-ID and ID-to-value assignments are written,
 //
-//  if symID != 0:
-//      if mapID == false, a new value-to-ID assignment is (over)written and any existing ID-to-value assignment remains.
-//      if mapID == true, both value-to-ID and ID-to-value assignments are (over)written.
-//
+//	if symID != 0:
+//	    if mapID == false, a new value-to-ID assignment is (over)written and any existing ID-to-value assignment remains.
+//	    if mapID == true, both value-to-ID and ID-to-value assignments are (over)written.
 func (st *symbolTable) getsetValueIDPair(val []byte, symID ID, mapID bool) ID {
 
 	if st.db == nil {

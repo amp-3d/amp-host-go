@@ -1,6 +1,7 @@
 package symbol
 
 import (
+	"github.com/arcspace/go-arc-sdk/stdlib/generics"
 	"github.com/dgraph-io/badger/v4"
 )
 
@@ -28,26 +29,26 @@ const IDSz = 5
 const MinIssuedID = 1000
 
 type Issuer interface {
+	generics.RefCloser
 
 	// Issues the next sequential unique ID, starting at MinIssuedID.
 	IssueNextID() (ID, error)
-
-	// Releases internal references to the underlying database.
-	Close()
 }
 
 // Table stores value-ID pairs, designed for high-performance lookup of an ID or byte string.
-// This implementation is indended to handle extreme loads, leveraging:
-//      - ID-value pairs are cached once read, offering subsequent O(1) access
-//      - Internal value allocations are pooled. The default TableOpts.PoolSz of 16k means
-//        thousands of buffers can be issued or read under only a single allocation.
+// This implementation is intended to handle extreme loads, leveraging:
+//   - ID-value pairs are cached once read, offering subsequent O(1) access
+//   - Internal value allocations are pooled. The default TableOpts.PoolSz of 16k means
+//     thousands of buffers can be issued or read under only a single allocation.
 //
 // All calls are threadsafe.
 type Table interface {
+	generics.RefCloser
 
-	// Returns the Issuer being used by this Table (passed via TableOpts.Issuer or auto-created if TableOpts.Issuer was not given)
-	Issuer() Issuer 
-	
+	// Returns the Issuer being used by this Table (passed via TableOpts.Issuer or auto-created if no TableOpts.Issuer was given)
+	// Note that retained references should make use of generics.RefCloser to ensure proper closure.
+	Issuer() Issuer
+
 	// Returns the symbol ID previously associated with the given string/buffer value.
 	// The given value buffer is never retained.
 	//
@@ -65,15 +66,10 @@ type Table interface {
 	// The returned buf conveniently retains scope indefinitely (and is read only).
 	// If ID is invalid or not found, nil is returned.
 	LookupID(ID ID) []byte
-
-	// Releases internal references to the underlying database.
-	// Subsequent access to this Table instance is defined but limited to what is already cached.
-	Close()
 }
 
 type TableOpts struct {
 	Issuer          Issuer // How this table will issue new IDs.  If nil, this table's db will be used as the Issuer
-	IssuerOwned     bool   // If set, Issuer.Close() will be called when this table is closed
 	DbKeyPrefix     byte   // Key prefix for persistent db mode (n/a when in memory-only mode)
 	WorkingSizeHint int    // anticipated number of entries in working set
 	PoolSz          int32  // Value backing buffer allocation pool sz

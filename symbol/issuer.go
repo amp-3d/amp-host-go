@@ -15,9 +15,10 @@ type issuer struct {
 	db        *badger.DB
 	nextIDSeq *badger.Sequence
 	nextID    uint64 // Only used if db == nil
+	refCount  atomic.Int32
 }
 
-func openIssuer(db *badger.DB, opts TableOpts) (Issuer, error) {
+func newIssuer(db *badger.DB, opts TableOpts) (Issuer, error) {
 	iss := &issuer{
 		db:     db,
 		nextID: MinIssuedID,
@@ -49,6 +50,7 @@ func openIssuer(db *badger.DB, opts TableOpts) (Issuer, error) {
 		}
 	}
 
+	iss.refCount.Store(1)
 	return iss, nil
 }
 
@@ -68,13 +70,26 @@ func (iss *issuer) IssueNextID() (ID, error) {
 	return ID(nextID), nil
 }
 
-func (iss *issuer) Close() {
-	if iss.db != nil {
-		if iss.nextIDSeq != nil {
-			iss.nextIDSeq.Release()
-			iss.nextIDSeq = nil
-		}
-		iss.db = nil
+func (iss *issuer) AddRef() {
+	iss.refCount.Add(1)
+}
+
+func (iss *issuer) Close() error {
+	if iss.refCount.Add(-1) > 0 {
+		return nil
 	}
-	iss.nextID = 0
+	return iss.close()
+}
+
+func (iss *issuer) close() error {
+	if iss.db == nil {
+		return nil
+	}
+	if iss.nextIDSeq != nil {
+		iss.nextIDSeq.Release()
+		iss.nextIDSeq = nil
+	}
+	err := iss.db.Close()
+	iss.db = nil
+	return err
 }

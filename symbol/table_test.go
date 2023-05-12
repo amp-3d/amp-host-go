@@ -58,7 +58,6 @@ func doFullTableTest(totalEntries int) {
 			gTest <- err
 		}
 		fillTable(db, vals, IDs)
-		db.Close()
 	}
 
 	// 2) tortuously read and check the table
@@ -68,7 +67,6 @@ func doFullTableTest(totalEntries int) {
 			gTest <- err
 		}
 		checkTable(db, vals, IDs)
-		db.Close()
 	}
 }
 
