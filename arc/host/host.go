@@ -11,10 +11,11 @@ import (
 
 	"github.com/arcspace/go-arc-sdk/stdlib/bufs"
 	"github.com/arcspace/go-arc-sdk/stdlib/process"
+	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
 	"github.com/arcspace/go-arc-sdk/stdlib/utils"
 	"github.com/arcspace/go-arcspace/arc"
 	"github.com/arcspace/go-arcspace/arc/assets"
-	"github.com/arcspace/go-arcspace/symbol"
+	"github.com/arcspace/go-arcspace/arc/badger/symbol_table"
 	"github.com/dgraph-io/badger/v4"
 )
 
@@ -211,8 +212,8 @@ func (host *host) mountPlanet(
 	if planetID == host.homePlanetID {
 		fsName = "HostHomePlanet"
 	} else if planetID != 0 {
-		fsName = string(host.home.LookupID(planetID))
-		if len(fsName) == 0 && genesis == nil {
+		fsName = string(host.home.GetSymbol(planetID, nil))
+		if fsName == "" && genesis == nil {
 			return nil, arc.ErrCode_PlanetFailure.Errorf("planet ID=%v failed to resolve", planetID)
 		}
 	} else {
@@ -244,7 +245,7 @@ func (host *host) mountPlanet(
 		OnStart: func(process.Context) error {
 
 			// The host's home planet is ID issuer of all other planets
-			opts := symbol.DefaultTableOpts
+			opts := symbol_table.DefaultOpts()
 			if host.home.symTable != nil {
 				opts.Issuer = host.home.symTable.Issuer()
 			}

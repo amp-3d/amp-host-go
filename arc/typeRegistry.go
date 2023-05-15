@@ -3,7 +3,7 @@ package arc
 import (
 	"sync"
 
-	"github.com/arcspace/go-arcspace/symbol"
+	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
 )
 
 type schemaDef struct {
@@ -66,7 +66,7 @@ func (reg *typeRegistry) ResolveAndRegister(defs *Defs) error {
 				sym.ID = uint64(reg.table.GetSymbolID(sym.Value, true))
 			}
 		} else if len(sym.Value) == 0 {
-			sym.Value = reg.table.LookupID(symbol.ID(sym.ID))
+			sym.Value = reg.table.GetSymbol(symbol.ID(sym.ID), sym.Value[:0])
 		}
 	}
 

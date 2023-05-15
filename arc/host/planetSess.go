@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/stdlib/process"
+	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
 	"github.com/arcspace/go-arcspace/arc"
-	"github.com/arcspace/go-arcspace/symbol"
+	"github.com/arcspace/go-arcspace/arc/badger/symbol_table"
 	"github.com/dgraph-io/badger/v4"
 )
 
@@ -26,7 +27,7 @@ type cellInst struct {
 	idleSecs int32              // ticks up as time passes when there are no subs
 }
 
-func (pl *planetSess) onStart(opts symbol.TableOpts) error {
+func (pl *planetSess) onStart(opts symbol_table.TableOpts) error {
 	var err error
 
 	dbOpts := badger.DefaultOptions(pl.dbPath)
@@ -40,7 +41,8 @@ func (pl *planetSess) onStart(opts symbol.TableOpts) error {
 		return err
 	}
 
-	pl.symTable, err = symbol.OpenTable(pl.db, opts)
+	opts.Db = pl.db
+	pl.symTable, err = opts.CreateTable()
 	if err != nil {
 		return err
 	}
@@ -81,8 +83,8 @@ func (pl *planetSess) GetSymbolID(value []byte, autoIssue bool) uint64 {
 	return uint64(pl.symTable.GetSymbolID(value, autoIssue))
 }
 
-func (pl *planetSess) LookupID(ID uint64) []byte {
-	return pl.symTable.LookupID(symbol.ID(ID))
+func (pl *planetSess) GetSymbol(ID uint64, io []byte) []byte {
+	return pl.symTable.GetSymbol(symbol.ID(ID), io)
 }
 
 func (pl *planetSess) SetSymbolID(value []byte, ID uint64) uint64 {

@@ -154,7 +154,7 @@ type Planet interface {
 
 	// A planet offers a persistent symbol table, allowing efficient compression of byte symbols into uint64s
 	GetSymbolID(value []byte, autoIssue bool) (ID uint64)
-	LookupID(ID uint64) []byte
+	GetSymbol(ID uint64, io []byte) []byte
 
 	// WIP
 	PushTx(tx *MsgBatch) error

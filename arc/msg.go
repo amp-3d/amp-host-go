@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/arcspace/go-arcspace/symbol"
+	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
 )
 
 // Sets a reasonable size beyond which buffers should be shared rather than copied.

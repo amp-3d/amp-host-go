@@ -1,16 +1,17 @@
-package symbol
+package symbol_table
 
 import (
 	"encoding/binary"
 	"errors"
 	"sync/atomic"
 
+	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
 	"github.com/dgraph-io/badger/v4"
 )
 
-var ErrClosed = errors.New("issuer is closed")
+var ErrIssuerClosed = errors.New("issuer is closed")
 
-// issuer implements symbol.Issuer
+// issuer implements symbol.Issuer using badger.DB
 type issuer struct {
 	db        *badger.DB
 	nextIDSeq *badger.Sequence
@@ -18,10 +19,10 @@ type issuer struct {
 	refCount  atomic.Int32
 }
 
-func newIssuer(db *badger.DB, opts TableOpts) (Issuer, error) {
+func newIssuer(db *badger.DB, opts TableOpts) (symbol.Issuer, error) {
 	iss := &issuer{
 		db:     db,
-		nextID: MinIssuedID,
+		nextID: symbol.MinIssuedID,
 	}
 
 	if iss.db != nil {
@@ -35,7 +36,7 @@ func newIssuer(db *badger.DB, opts TableOpts) (Issuer, error) {
 			var buf [8]byte
 
 			// TODO: re-implement with the ID value being IDSz (vs 8)
-			binary.BigEndian.PutUint64(buf[:], MinIssuedID)
+			binary.BigEndian.PutUint64(buf[:], symbol.MinIssuedID)
 			err = txn.Set(seqKey, buf[:])
 			if err == nil {
 				err = txn.Commit()
@@ -54,7 +55,7 @@ func newIssuer(db *badger.DB, opts TableOpts) (Issuer, error) {
 	return iss, nil
 }
 
-func (iss *issuer) IssueNextID() (ID, error) {
+func (iss *issuer) IssueNextID() (symbol.ID, error) {
 	var nextID uint64
 	var err error
 
@@ -67,7 +68,7 @@ func (iss *issuer) IssueNextID() (ID, error) {
 		nextID = atomic.AddUint64(&iss.nextID, 1)
 	}
 
-	return ID(nextID), nil
+	return symbol.ID(nextID), nil
 }
 
 func (iss *issuer) AddRef() {
