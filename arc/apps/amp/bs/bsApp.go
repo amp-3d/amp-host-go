@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/arcspace/go-arcspace/arc"
-	"github.com/arcspace/go-arcspace/arc/apps/amp/api"
+	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-archost/arc/apps/amp/api"
 )
 
 type bsApp struct {

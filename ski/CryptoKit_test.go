@@ -7,10 +7,10 @@ import (
 
 	"testing"
 
-	"github.com/arcspace/go-arcspace/ski"
+	"github.com/arcspace/go-archost/ski"
 
-	_ "github.com/arcspace/go-arcspace/ski/ed25519"
-	_ "github.com/arcspace/go-arcspace/ski/nacl"
+	_ "github.com/arcspace/go-archost/ski/ed25519"
+	_ "github.com/arcspace/go-archost/ski/nacl"
 )
 
 var gTesting *testing.T

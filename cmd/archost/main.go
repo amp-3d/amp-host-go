@@ -8,10 +8,10 @@ import (
 	"github.com/arcspace/go-arc-sdk/stdlib/log"
 	"github.com/arcspace/go-arc-sdk/stdlib/process"
 	"github.com/arcspace/go-arc-sdk/stdlib/utils"
-	"github.com/arcspace/go-arcspace/arc"
-	"github.com/arcspace/go-arcspace/arc/archost"
-	"github.com/arcspace/go-arcspace/arc/grpc_service"
-	"github.com/arcspace/go-arcspace/arc/host"
+	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-archost/arc/archost"
+	"github.com/arcspace/go-archost/arc/grpc_service"
+	"github.com/arcspace/go-archost/arc/host"
 )
 
 func main() {

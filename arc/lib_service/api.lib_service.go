@@ -1,6 +1,6 @@
 package lib_service
 
-import "github.com/arcspace/go-arcspace/arc"
+import "github.com/arcspace/go-archost/arc"
 
 // LibServiceOpts exposes options and settings
 type LibServiceOpts struct {

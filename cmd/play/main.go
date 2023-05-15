@@ -18,8 +18,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/arcspace/go-arcspace/shoutcast"
-	"github.com/arcspace/go-cedar/utils"
+	"github.com/arcspace/go-arc-sdk/stdlib/utils"
+	"github.com/arcspace/go-archost/shoutcast"
 )
 
 const FALSE = 0

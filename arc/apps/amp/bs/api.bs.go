@@ -1,6 +1,6 @@
 package bs
 
-import "github.com/arcspace/go-arcspace/arc"
+import "github.com/arcspace/go-archost/arc"
 
 func NewApp() arc.App {
 	return &bsApp{}

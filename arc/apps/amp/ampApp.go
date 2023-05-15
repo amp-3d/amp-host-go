@@ -1,11 +1,11 @@
 package amp
 
 import (
-	"github.com/arcspace/go-arcspace/arc"
-	"github.com/arcspace/go-arcspace/arc/apps/amp/amp_spotify"
-	"github.com/arcspace/go-arcspace/arc/apps/amp/api"
-	"github.com/arcspace/go-arcspace/arc/apps/amp/bs"
-	"github.com/arcspace/go-arcspace/arc/apps/amp/filesys"
+	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-archost/arc/apps/amp/amp_spotify"
+	"github.com/arcspace/go-archost/arc/apps/amp/api"
+	"github.com/arcspace/go-archost/arc/apps/amp/bs"
+	"github.com/arcspace/go-archost/arc/apps/amp/filesys"
 )
 
 func NewApp() arc.App {

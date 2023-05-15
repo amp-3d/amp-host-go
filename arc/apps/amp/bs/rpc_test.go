@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/arcspace/go-arcspace/arc/apps/amp/api"
+	"github.com/arcspace/go-archost/arc/apps/amp/api"
 )
 
 func TestLogin(t *testing.T) {

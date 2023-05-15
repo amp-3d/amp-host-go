@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/arcspace/go-arcspace/arc"
-	"github.com/arcspace/go-arcspace/arc/archost"
-	"github.com/arcspace/go-arcspace/arc/host"
-	"github.com/arcspace/go-arcspace/arc/lib_service"
+	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-archost/arc/archost"
+	"github.com/arcspace/go-archost/arc/host"
+	"github.com/arcspace/go-archost/arc/lib_service"
 )
 
 var (

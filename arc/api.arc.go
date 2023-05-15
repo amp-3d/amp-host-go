@@ -2,7 +2,7 @@ package arc
 
 import (
 	"github.com/arcspace/go-arc-sdk/stdlib/process"
-	"github.com/arcspace/go-arcspace/arc/assets"
+	"github.com/arcspace/go-archost/arc/assets"
 )
 
 /*

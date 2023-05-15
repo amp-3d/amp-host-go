@@ -1,4 +1,4 @@
-module github.com/arcspace/go-arcspace
+module github.com/arcspace/go-archost
 
 go 1.18
 
@@ -10,12 +10,11 @@ go 1.18
 //
 
 //replace github.com/arcspace/go-arc-sdk => ../go-arc-sdk
-
-replace github.com/arcspace/go-librespot => ../go-librespot
+//replace github.com/arcspace/go-librespot => ../go-librespot
 
 require (
-	github.com/arcspace/go-arc-sdk v0.0.0-20230512170303-7b88893310c8
-	github.com/arcspace/go-librespot v0.0.0-20230512173622-3d03d35460be
+	github.com/arcspace/go-arc-sdk v0.0.0-20230515171510-a7903dbeb29e
+	github.com/arcspace/go-librespot v0.0.0-20230512175359-a749a4bfb6a4
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/pkg/errors v0.9.1

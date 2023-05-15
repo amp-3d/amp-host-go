@@ -19,7 +19,7 @@ ANDROID_CC := ${ANDROID_NDK}/toolchains/llvm/prebuilt/darwin-x86_64/bin
 ## display this help message
 help:
 	@echo -e "\033[32m"
-	@echo "go-arcspace"
+	@echo "go-archost"
 	@echo "  PARENT_PATH:     ${PARENT_PATH}"
 	@echo "  BUILD_PATH:      ${BUILD_PATH}"
 	@echo "  UNITY_PROJ:      ${UNITY_PROJ}"

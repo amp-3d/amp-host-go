@@ -33,8 +33,10 @@ cloud.google.com/go/storage v1.10.0/go.mod h1:FLPqc6j+Ki4BU591ie1oL6qBQGu2Bl/tZ9
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
-github.com/arcspace/go-arc-sdk v0.0.0-20230512170303-7b88893310c8 h1:EQVNv58MAB8EHu6o18D0+THzfs/XQQr9faBMp0i3N80=
-github.com/arcspace/go-arc-sdk v0.0.0-20230512170303-7b88893310c8/go.mod h1:H9VafuwVN/Ara71F34vS7BLOtgYuEvRp6d9F9yxBHw4=
+github.com/arcspace/go-arc-sdk v0.0.0-20230515171510-a7903dbeb29e h1:73JE2PD8YgVytKO784w0j6MKOhX+I3hathkO97Ke95I=
+github.com/arcspace/go-arc-sdk v0.0.0-20230515171510-a7903dbeb29e/go.mod h1:H9VafuwVN/Ara71F34vS7BLOtgYuEvRp6d9F9yxBHw4=
+github.com/arcspace/go-librespot v0.0.0-20230512175359-a749a4bfb6a4 h1:QGXYZZIGOHSuEs1DLj7EFwS53Mi5ezZGq87O2j1yp7A=
+github.com/arcspace/go-librespot v0.0.0-20230512175359-a749a4bfb6a4/go.mod h1:2tq5wLtWkci86amYvRz5ZpUmpOU4VQQ3FuwraW1kPss=
 github.com/brynbellomy/klog v0.0.0-20200414031930-87fbf2e555ae h1:FO8VxsnMvWNRzx3vGjBmS2kotWl9f455Yj0H+9k01zk=
 github.com/brynbellomy/klog v0.0.0-20200414031930-87fbf2e555ae/go.mod h1:ZecQZYfGLYeVNx5ooyrBwTVsXx+7mi7bpuQLgTxClfQ=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=

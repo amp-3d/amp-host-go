@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/arcspace/go-arcspace/arc"
-	"github.com/arcspace/go-arcspace/arc/apps/amp/api"
-	"github.com/arcspace/go-arcspace/arc/assets"
+	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-archost/arc/apps/amp/api"
+	"github.com/arcspace/go-archost/arc/assets"
 	"github.com/h2non/filetype"
 )
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/stdlib/process"
-	"github.com/arcspace/go-arcspace/arc"
+	"github.com/arcspace/go-archost/arc"
 )
 
 // libService offers Msg transport over direct dll calls.
