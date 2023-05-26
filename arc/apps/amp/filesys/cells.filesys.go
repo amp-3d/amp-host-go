@@ -7,65 +7,19 @@ import (
 	"strings"
 	"time"
 
+	arc_sdk "github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/arc"
 	"github.com/arcspace/go-archost/arc/apps/amp/api"
 	"github.com/arcspace/go-archost/arc/assets"
-	"github.com/h2non/filetype"
 )
-
-func init() {
-	filetype.AddType("jpeg", "image/jpeg")
-}
-
-type fsApp struct {
-}
-
-func (app *fsApp) AppURI() string {
-	return AppURI
-}
-
-func (app *fsApp) SupportedDataModels() []string {
-	return api.SupportedDataModels
-}
-
-func (app *fsApp) PinCell(req *arc.CellReq) error {
-
-	if req.CellID == 0 {
-		pathname, _ := req.GetKwArg(api.KwArg_CellURI)
-		if pathname == "" {
-			return arc.ErrCode_InvalidCell.Errorf("filesys: missing %q pathname", api.KwArg_CellURI)
-		}
-		item := fsInfo{}
-		pathname = path.Clean(pathname)
-		fi, err := os.Stat(pathname)
-		if err != nil {
-			return arc.ErrCode_InvalidCell.Errorf("path not found: %q", item.pathname)
-		}
-		item.pathname = pathname
-		item.setFrom(fi)
-		item.CellID = req.IssueCellID()
-		req.Cell = item.newAppCell()
-
-	} else {
-		panic("ampApp should have caught this")
-		// if req.ParentReq == nil || req.ParentReq.Cell == nil {
-		// 	return arc.ErrCode_InvalidCell.Error("missing parent cell")
-		// }
-
-		// if err := req.ParentReq.Cell.PinCell(req); err != nil {
-		// 	return err
-		// }
-	}
-
-	return nil
-}
 
 type fsInfo struct {
 	arc.CellID
 
-	dataModel   string // TODO: make this a read-only util struct to facilitate cell schema access??
-	basename    string // base file name
-	pathname    string // only set for pinned items (could be alternative OS handle)
+	app         *appCtx // TODO: move this
+	dataModel   string  // TODO: make this a read-only util struct to facilitate cell schema access??
+	basename    string  // base file name
+	pathname    string  // only set for pinned items (could be alternative OS handle)
 	lastRefresh time.Time
 	isHidden    bool
 	mode        os.FileMode
@@ -173,7 +127,9 @@ func (dir *fsDir) readDir(req *arc.CellReq) error {
 		for _, fi := range fsInfos {
 			sub := tmp
 			if sub == nil {
-				sub = &fsInfo{}
+				sub = &fsInfo{
+					app: dir.app,
+				}
 			}
 			sub.setFrom(fi)
 			if sub.isHidden {
@@ -183,7 +139,7 @@ func (dir *fsDir) readDir(req *arc.CellReq) error {
 			// preserve items that have not changed
 			old := lookup[sub.basename]
 			if old == nil || old.Compare(sub) != 0 {
-				sub.CellID = req.IssueCellID()
+				sub.CellID = dir.app.IssueCellID()
 				tmp = nil
 			} else {
 				sub = old
@@ -225,39 +181,36 @@ func (dir *fsDir) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
 }
 
 // TODO: use generics
-func (dir *fsDir) PinCell(req *arc.CellReq) error {
-	if req.CellID == dir.CellID {
-		req.Cell = dir // FUTURE: a pinned dir returns more detailed attrs (e.g. reads mpeg tags)
-		return nil
+func (dir *fsDir) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+	if req.PinCell == dir.CellID {
+		return dir, nil // FUTURE: a pinned dir returns more detailed attrs (e.g. reads mpeg tags)
 	}
 
-	itemRef := dir.itemsByID[req.CellID]
+	itemRef := dir.itemsByID[req.PinCell]
 	if itemRef == nil {
-		return arc.ErrCode_InvalidCell.Error("invalid child cell")
+		return nil, arc.ErrCellNotFound
 	}
 
 	itemRef.pathname = path.Join(dir.pathname, itemRef.basename)
-	req.Cell = itemRef.newAppCell()
-	return nil
+	return itemRef.newAppCell(), nil
 }
 
-func (file *fsFile) PinCell(req *arc.CellReq) error {
+func (file *fsFile) PinCell(req *arc.CellReq) (arc.AppCell, error) {
 	// if err := file.setPathnameUsingParent(req); err != nil {
 	// 	return err
 	// }
 
 	// In the future pinning a file can do fancy things but for now, just use the same item
-	if req.CellID == file.CellID {
-		req.Cell = file
+	if req.PinCell == file.CellID {
 		asset, err := assets.AssetForFilePathname(file.pathname, "")
 		if err != nil {
-			return err
+			return nil, err
 		}
-		req.User.Session().AssetServer().PublishAsset(asset)
-		return nil
+		file.app.PublishAsset(asset, arc_sdk.PublishOpts{})
+		return file, nil
 	}
 
-	return arc.ErrCode_InvalidCell.Error("item is a file; no children to pin")
+	return nil, arc.ErrCellNotFound
 }
 
 func (item *fsInfo) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {

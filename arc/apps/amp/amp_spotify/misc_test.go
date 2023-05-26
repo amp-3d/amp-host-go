@@ -9,13 +9,27 @@ import (
 	"os"
 	"testing"
 
+	"github.com/arcspace/go-arc-sdk/stdlib/platform"
 	"github.com/zmb3/spotify/v2"
+	spotifyauth "github.com/zmb3/spotify/v2/auth"
 )
 
 var (
 	ch    = make(chan *spotify.Client)
 	state = "abc123"
 )
+
+var auth = spotifyauth.New(
+	spotifyauth.WithClientID(kSpotifyClientID),
+	spotifyauth.WithClientSecret(kSpotifyClientSecret),
+	spotifyauth.WithRedirectURL(kRedirectURL),
+	spotifyauth.WithScopes(
+		spotifyauth.ScopeUserReadPrivate,
+		spotifyauth.ScopeUserReadCurrentlyPlaying,
+		spotifyauth.ScopeUserReadPlaybackState,
+		spotifyauth.ScopeUserModifyPlaybackState,
+		spotifyauth.ScopeStreaming,
+	))
 
 func TestLogin(t *testing.T) {
 
@@ -31,8 +45,9 @@ func TestLogin(t *testing.T) {
 		}
 	}()
 
-	url := gAuth.AuthURL(state)
-	fmt.Println("Please log in to Spotify by visiting the following page in your browser:", url)
+	url := auth.AuthURL(state)
+	fmt.Println("Launching ", url)
+	platform.LaunchURL(url)
 
 	// wait for auth to complete
 	client := <-ch
@@ -58,10 +73,8 @@ func TestLogin(t *testing.T) {
 
 }
 
-
-
 func completeAuth(w http.ResponseWriter, r *http.Request) {
-	tok, err := gAuth.Token(r.Context(), state, r)
+	tok, err := auth.Token(r.Context(), state, r)
 	if err != nil {
 		http.Error(w, "Couldn't get token", http.StatusForbidden)
 		log.Fatal(err)
@@ -72,15 +85,14 @@ func completeAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tokenJson, err := json.Marshal(tok)
-    if err == nil {
-        os.WriteFile("spotify_token.json", tokenJson, 0666)
-        fmt.Println("Wrote token to spotify_token.json:\n", string(tokenJson))
-        return
-    }
-    
+	if err == nil {
+		os.WriteFile("spotify_token.json", tokenJson, 0666)
+		fmt.Println("Wrote token to spotify_token.json:\n", string(tokenJson))
+		return
+	}
+
 	// use the token to get an authenticated client
-	client := spotify.New(gAuth.Client(r.Context(), tok))
+	client := spotify.New(auth.Client(r.Context(), tok))
 	fmt.Fprintf(w, "Login Completed!")
 	ch <- client
 }
-

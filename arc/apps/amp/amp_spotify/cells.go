@@ -1,148 +1,12 @@
 package amp_spotify
 
 import (
-	"context"
-	"encoding/json"
-
+	arc_sdk "github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/arc"
 	"github.com/arcspace/go-archost/arc/apps/amp/api"
-	"github.com/zmb3/spotify/v2"
-	spotifyauth "github.com/zmb3/spotify/v2/auth"
-	"golang.org/x/oauth2"
-
 	respot "github.com/arcspace/go-librespot/librespot/api-respot"
-	_ "github.com/arcspace/go-librespot/librespot/core" // bootstrap
+	"github.com/zmb3/spotify/v2"
 )
-
-const kRedirectURL = "http://localhost:5000/callback"
-const kSpotifyClientID = "8de730d205474e1490e696adfc10d61c"
-const kSpotifyClientSecret = "f7e632155cf445248a2e16e068a78d97"
-
-var (
-	gAuth = spotifyauth.New(
-		spotifyauth.WithClientID(kSpotifyClientID),
-		spotifyauth.WithClientSecret(kSpotifyClientSecret),
-		spotifyauth.WithRedirectURL(kRedirectURL),
-		spotifyauth.WithScopes(
-			spotifyauth.ScopeUserReadPrivate,
-			spotifyauth.ScopeUserReadCurrentlyPlaying,
-			spotifyauth.ScopeUserReadPlaybackState,
-			spotifyauth.ScopeUserModifyPlaybackState,
-			spotifyauth.ScopeStreaming,
-		))
-)
-
-type spotifyApp struct {
-	client *spotify.Client // nil if not signed in
-	token  oauth2.Token
-	user   arc.User
-	me     *spotify.PrivateUser
-	root   AmpCell
-	sess   respot.Session
-}
-
-func (app *spotifyApp) AppURI() string {
-	return AppURI
-}
-
-func (app *spotifyApp) SupportedDataModels() []string {
-	return api.SupportedDataModels
-}
-
-func (app *spotifyApp) PinCell(req *arc.CellReq) error {
-
-	if req.CellID == 0 {
-		err := app.signIn(req.User)
-		if err != nil {
-			return err
-		}
-		if app.root == nil {
-			app.root = newRootCell(app)
-			//app.root.loadChildren =
-		}
-		req.Cell = app.root
-
-	} else {
-		panic("ampApp should have caught this")
-		// if req.ParentReq == nil || req.ParentReq.Cell == nil {
-		// 	return arc.ErrCode_InvalidCell.Error("missing parent cell")
-		// }
-
-		// if err := req.ParentReq.Cell.PinCell(req); err != nil {
-		// 	return err
-		// }
-	}
-	return nil
-}
-
-func (app *spotifyApp) Context() context.Context {
-	return app.user.Session()
-}
-
-func (app *spotifyApp) signIn(user arc.User) error {
-	if app.client != nil {
-		return nil
-	}
-
-	app.root = nil
-	app.user = user
-	app.token = oauth2.Token{}
-	app.me = nil
-
-	//
-	const kTokenOfDrew = `{"access_token":"BQCh31qtQvn9wp6Ctf3AdXwho0t_5YgNuYy4A4Ezdfb8Z8Khoeg3ZjRzua-csI1C0UBABkKyEAsgzTyeey8v7XKjtQEYnV4TYfr0E6F85VWTXVhezaDBSwH655TQqkGIrpUudLIpfayV3CTnENitC-FRSO_mFmXtEsYp-xh6AVawOcO3rNBqLDfKYUpmy-Dr_szfHokuLA","token_type":"Bearer","refresh_token":"AQBm8dQz0202tHKl0ss9p83VOt6pTjvckICFgQfHKK8UpRkWwu0jXNlbpp4HK2kXXK_ogA0vAIpDuv5ZFJLaQgL9baPx8KSIMvI4tL7L8nnS52BvclG3NpF3rNOYWg4ZthA","expiry":"2023-05-06T20:59:51.500682-05:00"}`
-
-	err := json.Unmarshal([]byte(kTokenOfDrew), &app.token)
-	if err != nil {
-		panic(err)
-	}
-	
-	if app.sess == nil {
-		if app.sess == nil {
-			info := user.LoginInfo()
-			ctx := respot.DefaultSessionCtx(info.DeviceLabel)
-			ctx.Context = user.Session()
-			app.sess, err = respot.StartNewSession(ctx)
-			if err != nil {
-				return arc.ErrCode_ProviderErr.Errorf("StartSession error: %v", err)
-			}
-			
-			ctx.Login.Username = "1228340827"
-			ctx.Login.Password = "ellipse007"
-			err = app.sess.Login()
-		}
-
-		// err = app.sess.LoginOAuthToken(app.token.AccessToken)
-		// if err != nil {
-		// 	app.token.AccessToken, err = respot.LoginOAuth(kSpotifyClientID, kSpotifyClientSecret, kRedirectURL)
-		// 	if err == nil {
-		// 		err = app.sess.LoginOAuthToken(app.token.AccessToken)
-		// 	}
-		// }
-	}
-	
-	if err != nil {
-		return err
-	}
-
-	// use the token to get an authenticated client
-	app.client = spotify.New(gAuth.Client(user.Session(), &app.token))
-
-	app.me, err = app.client.CurrentUser(app.Context())
-	if err != nil {
-		app.client = nil
-		return arc.ErrCode_ProviderErr.Error("failed to get current user")
-	}
-
-	return nil
-}
-
-func (app *spotifyApp) signOut(user arc.User) {
-	if app.client != nil {
-		app.client = nil
-	}
-	app.me = nil
-}
 
 type ampAttr struct {
 	attrID string
@@ -152,7 +16,7 @@ type ampAttr struct {
 
 type ampCell struct {
 	arc.CellID
-	app      *spotifyApp
+	app      *appCtx
 	loadedAt arc.TimeFS
 	attrs    []ampAttr
 	self     AmpCell
@@ -161,12 +25,11 @@ type ampCell struct {
 	//childByID     map[arc.CellID]arc.AppCell
 }
 
-func (cell *ampCell) init(self AmpCell, app *spotifyApp) {
+func (cell *ampCell) init(self AmpCell, app *appCtx) {
 	cell.app = app
 	cell.self = self
-	cell.CellID = app.user.Session().IssueCellID()
+	cell.CellID = app.IssueCellID()
 	cell.attrs = make([]ampAttr, 0, 4)
-
 }
 
 func (cell *ampCell) ID() arc.CellID {
@@ -206,7 +69,7 @@ func (cell *ampCell) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) erro
 			//child := cell.childByID[subID]
 			err := child.PushCellState(req, arc.PushAsChild)
 			if err != nil {
-				req.User.Session().Warnf("pushCellState: %v", err)
+				cell.app.Warnf("pushCellState: %v", err)
 			}
 		}
 	}
@@ -214,27 +77,22 @@ func (cell *ampCell) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) erro
 	return nil
 }
 
-// func (cell *ampCell) Context() context.Context {
-// 	return cell.app.Context()
-// }
-
-func (cell *ampCell) PinCell(req *arc.CellReq) error {
-	if req.CellID == cell.CellID {
+func (cell *ampCell) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+	if req.PinCell == cell.CellID {
 		return cell.self.pinSelf(req)
 	}
 
 	// TODO: build a map on demand when needed
 	for _, child := range cell.childCells {
-		if child.ID() == req.CellID {
+		if child.ID() == req.PinCell {
 			return child.pinSelf(req)
 		}
 	}
-	return arc.ErrCode_InvalidCell.Error("child cell not found")
+	return nil, arc.ErrCellNotFound
 }
 
-func (cell *ampCell) pinSelf(req *arc.CellReq) error {
-	req.Cell = cell.self
-	return nil
+func (cell *ampCell) pinSelf(req *arc.CellReq) (arc.AppCell, error) {
+	return cell.self, nil
 }
 
 func (cell *ampCell) SetAttr(attrID string, val interface{}) {
@@ -260,7 +118,7 @@ func (cell *ampCell) AddAttr(attrID string, val interface{}) {
 type AmpCell interface {
 	arc.AppCell
 
-	pinSelf(req *arc.CellReq) error
+	pinSelf(req *arc.CellReq) (arc.AppCell, error)
 	loadChildren(req *arc.CellReq) error
 }
 
@@ -268,7 +126,7 @@ type rootCell struct {
 	ampCell
 }
 
-func newRootCell(app *spotifyApp) *rootCell {
+func newRootCell(app *appCtx) *rootCell {
 	cell := &rootCell{}
 	cell.init(cell, app)
 	return cell
@@ -280,7 +138,11 @@ func (cell *rootCell) CellDataModel() string {
 
 func (cell *rootCell) loadChildren(req *arc.CellReq) error {
 	app := cell.app
-	lists, err := app.client.CurrentUsersPlaylists(app.Context())
+	if err := app.waitForSession(); err != nil {
+		return err
+	}
+
+	lists, err := app.client.CurrentUsersPlaylists(app)
 	if err != nil {
 		return arc.ErrCode_ProviderErr.Errorf("failed to get current user: %v", err)
 	}
@@ -299,7 +161,7 @@ type playlistCell struct {
 	playlist spotify.SimplePlaylist
 }
 
-func newPlaylistCell(app *spotifyApp, playlist spotify.SimplePlaylist) *playlistCell {
+func newPlaylistCell(app *appCtx, playlist spotify.SimplePlaylist) *playlistCell {
 	cell := &playlistCell{
 		playlist: playlist,
 	}
@@ -319,7 +181,11 @@ func (cell *playlistCell) CellDataModel() string {
 
 func (cell *playlistCell) loadChildren(req *arc.CellReq) error {
 	app := cell.app
-	itemPage, err := app.client.GetPlaylistItems(app.Context(), cell.playlist.ID)
+	if err := app.waitForSession(); err != nil {
+		return err
+	}
+
+	itemPage, err := app.client.GetPlaylistItems(app, cell.playlist.ID)
 	if err != nil {
 		return arc.ErrCode_ProviderErr.Errorf("failed to get playlist: %v", err)
 	}
@@ -341,10 +207,10 @@ func (cell *playlistCell) loadChildren(req *arc.CellReq) error {
 type trackCell struct {
 	ampCell
 	assetURI string
-	track *spotify.FullTrack
+	track    *spotify.FullTrack
 }
 
-func newTrackCell(app *spotifyApp, track *spotify.FullTrack) *trackCell {
+func newTrackCell(app *appCtx, track *spotify.FullTrack) *trackCell {
 	if track.IsPlayable != nil && !*track.IsPlayable {
 		return nil
 	}
@@ -352,9 +218,7 @@ func newTrackCell(app *spotifyApp, track *spotify.FullTrack) *trackCell {
 		track: track,
 	}
 	cell.init(AmpCell(cell), app)
-
 	cell.AddAttr(api.Attr_Title, track.Name)
-
 	{
 		artistDesc := ""
 		if len(track.Artists) > 0 {
@@ -377,10 +241,10 @@ func newTrackCell(app *spotifyApp, track *spotify.FullTrack) *trackCell {
 		cell.AddAttr(api.Attr_Glyph, glyph)
 	}
 
-	cell.AddAttr(api.Attr_Playable, &arc.AssetRef{
-		MediaType: "audio/x-spotify",
-		URI:       string(track.URI),
-	})
+	// cell.AddAttr(api.Attr_Playable, &arc.AssetRef{
+	// 	MediaType: "audio/x-spotify",
+	// 	URI:       string(track.URI),
+	// })
 
 	return cell
 }
@@ -389,30 +253,27 @@ func (cell *trackCell) CellDataModel() string {
 	return api.CellDataModel_Playable
 }
 
-func (cell *trackCell) pinSelf(req *arc.CellReq) error {
-	asset, err := cell.app.sess.PinTrack(string(cell.track.URI), respot.PinOpts{})
+func (cell *trackCell) pinSelf(req *arc.CellReq) (arc.AppCell, error) {
+	asset, err := cell.app.respot.PinTrack(string(cell.track.URI), respot.PinOpts{})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	
+
 	assetRef := &arc.AssetRef{}
-	assetRef.URI, err = req.User.Session().AssetServer().PublishAsset(asset)
+	assetRef.URI, err = cell.app.PublishAsset(asset, arc_sdk.PublishOpts{})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	assetRef.MediaType = asset.MediaType()
 	cell.SetAttr(api.Attr_Playable, assetRef)
 
-	req.Cell = cell.self 
-	return nil
+	return cell.self, nil
 }
-
 
 // Must be present for above PinCell() override to work
 func (cell *trackCell) loadChildren(req *arc.CellReq) error {
 	return nil
 }
-
 
 /**********************************************************
 *  Helpers

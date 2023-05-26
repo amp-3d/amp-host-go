@@ -1,7 +1,9 @@
 package api
 
+import "github.com/arcspace/go-archost/arc"
+
 const (
-	AmpAppURI = "arcspace.systems/amp.app/v1.2023.1"
+	AmpAppURI = "arcspace.systems.amp.app"
 
 	// KwArg names
 	KwArg_Provider = "amp.provider" // specifies an amp media or system provider - e.g. "amp:", "filesys:", "spotify:"
@@ -31,10 +33,12 @@ const (
 	CellDataModel_Dir      = "amp.directory.v1.model"
 )
 
-var SupportedDataModels = []string{
-	CellDataModel_Playlist,
-	CellDataModel_Playable,
-	CellDataModel_Dir,
+var DataModels = arc.DataModelMap{
+	ModelsByID: map[string]arc.DataModel{
+		CellDataModel_Playlist: {},
+		CellDataModel_Playable: {},
+		CellDataModel_Dir:      {},
+	},
 }
 
 // AttrURI

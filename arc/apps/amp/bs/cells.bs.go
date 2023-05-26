@@ -8,102 +8,16 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/arcspace/go-archost/arc"
 	"github.com/arcspace/go-archost/arc/apps/amp/api"
 )
 
-type bsApp struct {
-	client *http.Client
-
-	categories *stationCategories
-}
-
-func (app *bsApp) AppURI() string {
-	return AppURI
-}
-
-func (app *bsApp) SupportedDataModels() []string {
-	return api.SupportedDataModels
-}
-
-func (app *bsApp) loadTokens(user arc.User) (arc.AppCell, error) {
-
-	// TODO: the right way to do this is like in the Unity client: register all ValTypes and then dynamically build AttrSpecs
-	// Since we're not doing that, for onw just build an AttrSpec from primitive types.
-
-	//usr.MakeSchemaForStruct(app, LoginInfo)
-
-	// Pins the named cell relative to the user's home planet and app URI (guaranteeing app and user scope)
-	var login api.LoginInfo
-	err := user.ReadCell(app, ".bookmark-server-client-login", &login)
-	if err != nil {
-		if arc.GetErrCode(err) == arc.ErrCode_CellNotFound {
-
-		}
-	}
-
-	return nil, nil
-}
-
-func (app *bsApp) resetLogin() {
-
-}
-
-func (app *bsApp) PinCell(req *arc.CellReq) error {
-
-	if req.CellID == 0 {
-		if app.categories == nil {
-			app.categories = &stationCategories{
-				app:            app,
-				CellID:         req.IssueCellID(),
-				catsByServerID: make(map[uint32]*category),
-				catsByCellID:   make(map[arc.CellID]*category),
-			}
-		}
-		req.Cell = app.categories
-	} else {
-		panic("ampApp should have caught this")
-		// if req.ParentReq == nil || req.ParentReq.Cell == nil {
-		// 	return arc.ErrCode_InvalidCell.Error("missing parent cell")
-		// }
-
-		// if err := req.ParentReq.Cell.PinCell(req); err != nil {
-		// 	return err
-		// }
-	}
-
-	return nil
-}
-
-const (
-	kTokenHack = "cd19b0da9069086d1ec3b4acf01d7bd77110a333"
-	kUsername  = "DrewZ"
-	kPassword  = "trdtrtvrtretttetrbrtbertb"
-)
-
-func (app *bsApp) makeReady() error {
-
-	if app.client != nil {
-		return nil
-	}
-
-	app.client = &http.Client{
-		Transport: &http.Transport{
-			MaxIdleConns:       10,
-			IdleConnTimeout:    5 * time.Second,
-			DisableCompression: true,
-		},
-	}
-
-	return nil
-}
 
 type stationCategories struct {
 	arc.CellID
 
-	app            *bsApp
+	app            *appCtx
 	catsByServerID map[uint32]*category
 	catsByCellID   map[arc.CellID]*category
 }
@@ -151,8 +65,8 @@ func (categories *stationCategories) loadCategories(cellReq *arc.CellReq) error 
 		}
 		cat := &category{
 			app:          categories.app,
+			CellID:       categories.app.IssueCellID(),
 			CategoryInfo: entry,
-			CellID:       cellReq.IssueCellID(),
 		}
 		categories.catsByServerID[entry.Id] = cat
 		categories.catsByCellID[cat.CellID] = cat
@@ -196,19 +110,17 @@ func (categories *stationCategories) PushCellState(req *arc.CellReq, opts arc.Pu
 }
 
 // TODO: use generics
-func (categories *stationCategories) PinCell(req *arc.CellReq) error {
-	if req.CellID == categories.CellID {
-		req.Cell = categories // FUTURE: a pinned dir returns more detailed attrs (e.g. reads mpeg tags)
-		return nil
+func (categories *stationCategories) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+	if req.PinCell == categories.CellID {
+		return categories, nil
 	}
 
-	cat := categories.catsByCellID[req.CellID]
+	cat := categories.catsByCellID[req.PinCell]
 	if cat == nil {
-		return arc.ErrCode_InvalidCell.Error("invalid child cell")
+		return nil, arc.ErrCellNotFound
 	}
 
-	req.Cell = cat
-	return nil
+	return cat, nil
 }
 
 type category struct {
@@ -217,7 +129,7 @@ type category struct {
 
 	api.CategoryInfo
 
-	app       *bsApp
+	app       *appCtx
 	itemsByID map[arc.CellID]*station
 }
 
@@ -280,22 +192,21 @@ func (cat *category) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) erro
 	return nil
 }
 
-func (cat *category) PinCell(req *arc.CellReq) error {
+func (cat *category) PinCell(req *arc.CellReq) (arc.AppCell, error) {
 
 	if len(cat.itemsByID) == 0 {
 		err := cat.loadItems(req)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	if req.CellID == cat.CellID {
-		req.Cell = cat // FUTURE: a pinned dir returns more detailed attrs (e.g. reads mpeg tags)
-		return nil
+	if req.PinCell == cat.CellID {
+		return cat, nil // FUTURE: a pinned dir returns more detailed attrs (e.g. reads mpeg tags)
 	}
 
-	req.Cell = cat.itemsByID[req.CellID]
-	return nil
+	cell := cat.itemsByID[req.PinCell]
+	return cell, nil
 }
 
 func (cat *category) loadItems(cellReq *arc.CellReq) error {
@@ -342,8 +253,8 @@ func (cat *category) loadItems(cellReq *arc.CellReq) error {
 		}
 		sta := &station{
 			app:         cat.app,
+			CellID:      cat.app.IssueCellID(),
 			StationInfo: entry,
-			CellID:      cellReq.IssueCellID(),
 		}
 		cat.itemsByID[sta.CellID] = sta
 
@@ -361,14 +272,9 @@ func (cat *category) loadItems(cellReq *arc.CellReq) error {
 }
 
 type station struct {
-	//playlist
 	arc.CellID
-
 	api.StationInfo
-
-	app *bsApp
-
-	//items []*station
+	app *appCtx
 }
 
 func (sta *station) ID() arc.CellID {
@@ -441,16 +347,15 @@ func (sta *station) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 	return nil
 }
 
-func (sta *station) PinCell(req *arc.CellReq) error {
+func (sta *station) PinCell(req *arc.CellReq) (arc.AppCell, error) {
 	// if err := file.setPathnameUsingParent(req); err != nil {
 	// 	return err
 	// }
 
 	// In the future pinning a file can do fancy things but for now, just use the same item
-	if req.CellID == sta.CellID {
-		req.Cell = sta
-		return nil
+	if req.PinCell == sta.CellID {
+		return sta, nil
 	}
 
-	return arc.ErrCode_InvalidCell.Error("item is a file; no children to pin")
+	return nil, arc.ErrCellNotFound
 }
