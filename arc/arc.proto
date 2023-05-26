@@ -89,6 +89,7 @@ enum ValType {
     ValType_Err                 = 50; // .ValBuf is a Err 
     ValType_AssetRef            = 51; // .ValBuf is an AssetRef
     ValType_DataSegment         = 52; // .ValBuf is an DataSegment
+    ValType_AppMsg              = 53; // .ValBuf is an AppMsg
     ValType_Content             = 54; // .ValBuf is an Content
     ValType_CryptoKey           = 56; // .ValBuf is a CryptoKey
     ValType_Txn                 = 58; // .ValBuf is a Txn
@@ -142,6 +143,14 @@ enum MsgOp {
     
     */
 
+    // MsgOp_AppMsg posts a high-level event to the receiver, serving as a mechanism to send app-specific events.
+    MsgOp_AppMsg = 4;
+    // Params: 
+    //      Msg.ReqID:      client-generated (unique) request ID 
+    //      Msg.ValType:    ValType_AppMsg   
+    //      Msg.ValBuf:     AppMsg    
+
+
     // MsgOp_ResolveAndRegister allows a client to send the host a set of Defs to the Host, defining all session CellTypes and identifiers.
     //
     // Params: 
@@ -162,6 +171,7 @@ enum MsgOp {
     //      Msg.ValBuf:     PinReq                  (client to host, otherwise nil)
     MsgOp_PinCell = 6;
 
+
     // Requests a given CellID to be pinned under a unique client-generated PinID
     //
     // Params: 
@@ -171,7 +181,6 @@ enum MsgOp {
     //      Msg.ValInt:     cell type ID specifying the AttrSchema (the expected cell and format)
     //MsgOp_PinAttrRange = 8;
     
-    //MsgOp_StartTxn =  
 
     // Used to push attr values.
     // A cell attr item us specified by the host via ReqID+AttrID+SI and its value type via ValType. 
@@ -359,14 +368,6 @@ message Defs {
 
 
 
-// enum AutoPin {
-//     AutoPin_0              = 0; // Unless the attr is SeriesType_Fixed, attr sub-ranges must be explicitly pinned.
-//     AutoPin_All_Ascending  = 1; // Auto-pins the attr's entire series range when the parent cell is first pinned
-//     AutoPin_All_Descending = 2;
-//     //AutoPin_Smallest = 2; // Auto pins only the largest SI value
-//     //AutoPin_Largest  = 3; // Auto pins only the largest SI value
-// }
-
 
 // AttrSchema is a Cell protocol specifier as well as a data packaging schema.
 //
@@ -376,12 +377,9 @@ message Defs {
 // Otherwise, data corruption is possible.
 message AttrSchema {
     
-    // AppURI specifies which specific app and optional version should handle requests with this schema.
-    // The reserved value "." tells the host to choose the default app registered to handle the below CellDataModel (common).
-    // e.g. 
-    //      "."
-    //      "planet.tools/amp.app/v1.2022.1"
-    string              AppURI = 1;
+    // ScopeID specifies an app or scope that should handle this schema's requests.
+    // The reserved value "." denotes the app / scope ID that has registered for AttrSchema.CellDataModel (typical).
+    string              ScopeID = 1;
     
     // CellDataModel identifies a data model this schema conforms to, in effect it specifies a scope for the attached Attrs.
     // This URI names a complete data protocol / specification that this collection of AttrSpecs conforms to (and is a subset of).
@@ -402,10 +400,6 @@ message AttrSchema {
 
 }
 
-// message AttrEnum {
-//     int64  Index = 1;
-//     string Name  = 2;
-// }
 
 // AttrSpec binds an app data model attr URI to a client-provided AttrID, corresponding to a handler on the client side (typically a UI element).
 message AttrSpec {
@@ -444,9 +438,6 @@ message AttrSpec {
     // This enum is placed in Msg.ValType in a MsgOp_PushAttr msg.
     ValType             ValTypeID = 13;
     
-    // An open-ended revision or custom identifier.
-    //int64               VariantID = 16;
-    
 }
 
 
@@ -456,10 +447,20 @@ message KwArg {
     bytes               ValBuf = 6;
 }
 
+enum AppMsgType {
+    AppMsgType_Unspecified  = 0; 
+    AppMsgType_URI          = 1; // The kv entry "uri" contains a URI / URL
+}
+
+message AppMsg {
+    AppMsgType          MsgType = 1;
+    map<string,string>  Entries = 2;
+}
+
 // PinReq is a client request to "pin" a cell, meaning selected attrs and child cells will be pushed to the client.  
 message PinReq {
 
-    // Specifies the request that pushed PinCell to the client, providing context for the cell to be pinned.
+    // ParentReqID specifies the request ID that pushed PinCell (as a child), providing context.
     // Set to 0 if PinCell and/or PinURI implies that no parent req exists.
     uint64              ParentReqID = 1;
     
@@ -525,14 +526,6 @@ message GeoFix {
     float               PosROU          = 11; // radius of uncertainty (meters)
 }
 
-// enum AssetKind {
-//     AssetKind_Nil       = 0;
-//     AssetKind_Image     = 1;
-//     AssetKind_Video     = 2;
-//     AssetKind_Audio     = 3;
-//     AssetKind_XR_Volume = 4;
-//     AssetKind_3D        = 5;
-// }
 
 // URIScheme is used to accompany a URI to specify a URI scheme without it being being a prefix of the URI .
 enum URIScheme {
@@ -545,17 +538,15 @@ enum URIScheme {
 }
 
 message AssetRef {
-    string              Label = 1;     // Describes the asset (optional)
-    string              MediaType = 3; // Describes content of URI; MIME type (or '/' separated type pathname)
-    URIScheme           Scheme = 5;    // Describes URI scheme such that the pa URL scheme is not required to prefix URI
-    string              URI = 6;       // URI to the asset (has scheme prefix if URIScheme == URL, otherwise, scheme prefix is optional)
+    string              Label      = 1;  // Describes the asset (optional)
+    string              MediaType  = 3;  // Describes content of URI; MIME type (or '/' separated type pathname)
+    URIScheme           Scheme     = 5;  // Describes URI scheme such that the pa URL scheme is not required to prefix URI
+    string              URI        = 6;  // URI to the asset (has scheme prefix if URIScheme == URL, otherwise, scheme prefix is optional)
     
-    int32               PixWidth   = 10;   // Width in pixels  (0 -> not specified)
-    int32               PixHeight  = 11;   // Height in pixels (0 -> not specified)
-    float               PhysWidth  = 12;   // Width in mm      (0 -> not specified)
-    float               PhysHeight = 13;   // Height in mm     (0 -> not specified)
-    
-    //string              UUID = 2;   // Asset's hashname (optional); contains only A-Z, a-z, 0-9, _, and - (no spaces) 
+    int32               PixWidth   = 10; // Width in pixels  (0 -> not specified)
+    int32               PixHeight  = 11; // Height in pixels (0 -> not specified)
+    float               PhysWidth  = 12; // Width in mm      (0 -> not specified)
+    float               PhysHeight = 13; // Height in mm     (0 -> not specified)
 }
 
 
@@ -575,8 +566,6 @@ message Content {
     
     
     GeoFix              Location        = 11;
-    
-    //uint64 TimeScale   = 4; // How many TSI ticks there are per second (or 0 if n/a)
     
 }
 
@@ -683,6 +672,7 @@ enum ErrCode {
     ErrCode_ShuttingDown                = 5005;
     ErrCode_Disconnected                = 5006;
     ErrCode_InvalidLogin                = 5007;
+    ErrCode_SessionExpired              = 5008;
     
     ErrCode_ReqNotFound                 = 5010;
     ErrCode_InvalidReq                  = 5020;
@@ -702,8 +692,6 @@ enum ErrCode {
     ErrCode_BadSchema                   = 5052;
     ErrCode_DataFailure                 = 5053;
     ErrCode_ExportErr                   = 5054;
-    ErrCode_InvalidCell                 = 5055;
-    ErrCode_NotPinnable                 = 5056;   
     ErrCode_CellNotFound                = 5058;
     ErrCode_ProviderErr                 = 5059;
     

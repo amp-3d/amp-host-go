@@ -1,6 +1,9 @@
 package arc
 
 import (
+	"reflect"
+
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-arc-sdk/stdlib/process"
 	"github.com/arcspace/go-archost/arc/assets"
 )
@@ -44,6 +47,16 @@ type TID []byte
 // TIDBuf is the blob version of a TID
 type TIDBuf [TIDBinaryLen]byte
 
+// Registers the given app module for invocation -- threadsafe
+func RegisterApp(app *AppModule) error {
+	return gAppRegistry.RegisterApp(app)
+}
+
+// Gets an AppModule by URI -- threadsafe
+func GetRegisteredApp(appID string) (*AppModule, error) {
+	return gAppRegistry.GetAppByID(appID)
+}
+
 type Context interface {
 	process.Context
 }
@@ -70,13 +83,6 @@ type Host interface {
 
 	HostPlanet() Planet
 
-	// Registers an App for invocation based on its AppURI and SupportedDataModels.
-	RegisterApp(app App) error
-
-	// Selects an App, typically based on schema.CellDataModel (or schema.AppURI if given).
-	// The given schema is READ ONLY.
-	SelectAppForSchema(schema *AttrSchema) (App, error)
-
 	// StartNewSession creates a new HostSession and binds its Msg transport to the given steam.
 	StartNewSession(parent HostService, via ServerStream) (HostSession, error)
 }
@@ -88,13 +94,9 @@ type HostSession interface {
 
 	// Thread-safe
 	TypeRegistry
-	
+
 	// Returns the running AssetServer instance for this session.
 	AssetServer() assets.AssetServer
-
-	// Atomically issues a new and unique ID that will remain unique for the duration of this session.
-	// An ID may still expire, go out of scope, or otherwise become meaningless.
-	IssueCellID() CellID
 
 	LoggedIn() User
 }
@@ -121,7 +123,11 @@ type HostService interface {
 	GracefulStop()
 }
 
-var ErrStreamClosed = ErrCode_Disconnected.Error("stream closed")
+var (
+	ErrStreamClosed = ErrCode_Disconnected.Error("stream closed")
+	ErrCellNotFound = ErrCode_CellNotFound.Error("cell not found")
+	ErrShuttingDown = ErrCode_ShuttingDown.Error("shutting down")
+)
 
 // ServerStream wraps a Msg transport abstraction, allowing a Host to connect over any data transport layer.
 // This is intended to be implemented by a grpc and other transport layers.
@@ -176,49 +182,99 @@ func (ID CellID) U64() uint64 { return uint64(ID) }
 type CellReq struct {
 	CellSub
 
-	ReqID         uint64        // Client-set request ID
 	Args          []*KwArg      // Client-set args (typically used when pinning a root where CellID is not known)
-	CellID        CellID        // Client-set cell ID to pin (or 0 if Args sufficient).  Use req.Cell.ID() for the resolved CellID.
+	PinCell       CellID        // Client-set cell ID to pin (or 0 if Args sufficient).  Use req.Cell.ID() for the resolved CellID.
 	ContentSchema *AttrSchema   // Client-set schema specifying the cell attr model for the cell being pinned.
 	ChildSchemas  []*AttrSchema // Client-set schema(s) specifying which child cells (and attrs) should be pushed to the client.
-	User          User          // Runtime-set; the user that initiated this request
-	ParentReq     *CellReq      // Runtime-set; allows arc.App and arc.AppCell to access the parent context
-	ParentApp     App           // Runtime-set using SelectAppForSchema()
-	Cell          AppCell       // Runtime-set from AppCell.PinCell()
 }
 
-// Signals to use the default App for a given AttrSchema CellDataModel.
-// See AttrSchema.AppURI in arc.proto
-const DefaultAppForDataModel = "."
+// See AttrSchema.ScopeID in arc.proto
+const ImpliedScopeForDataModel = "."
 
-// App creates a new Channel instance on demand when arc.GetChannel() is called.
-// App and AppChannel consume the Planet and Channel interfaces to perform specialized functionality.
-// In general, a channel app should be specialized for a specific, taking inspiration from the legacy of unix util way-of-thinking.
-type App interface {
+// type DataModel map[string]*Attr
+type DataModel struct {
+}
 
-	// Identifies this App and usually has the form: "{domain_name}/{app_identifier}/v{MAJOR}.{MINOR}.{REV}"
-	AppURI() string
+type DataModelMap struct {
+	ModelsByID map[string]DataModel // Maps a data model ID to a data model definition
+}
 
-	// SupportedDataModels lists data models that this app supports / handles.
-	// When the host session receives a client request for a specific data model URI, it will route it to the app that registered for it here.
-	SupportedDataModels() []string
+// AppModule declares a 3rd-party module this is registered with an archost.
+// An app is invoked by its AppID directly or a client requesting a data model this app declares to support.
+type AppModule struct {
+	AppID      string       // "{domain_name}/{module_identifier}"
+	Version    string       // "v{MAJOR}.{MINOR}.{REV}"
+	DataModels DataModelMap // Data models that this app defines and handles.
 
-	// Handles a client request to pin a cell, potentially looking at KwArgs and ChildSchemas to make choices.
-	// The implementation sets req.Cell so that subsequent calls to PushCellState() are possible.
-	PinCell(req *CellReq) error
+	// Called when an App is invoked on an active User session and is not yet running.
+	// Msg processing is blocked until this returns -- only AppRuntime calls should block.
+	NewAppInstance func(ctx AppContext) (AppRuntime, error)
+}
+
+type CellContext interface {
+	//Label() string
+
+	// PinCell pins a requested cell, typically specified by req.PinCell.
+	// req.KwArgs and ChildSchemas can also be used to specify the cell to pin.
+	PinCell(req *CellReq) (AppCell, error)
+}
+
+type AppRuntime interface {
+	CellContext
+
+	HandleAppMsg(msg *AppMsg) (handled bool, err error)
+
+	OnClosing()
+}
+
+type AppContext interface {
+	process.Context    // Container for AppRuntime
+	arc.AssetPublisher // Allows an app to publish assets for client consumption
+	User() User        // Access to user operations and io
+	CellContext        // How to pin cells
+
+	// Atomically issues a new and unique ID that will remain globally unique for the duration of this session.
+	// An ID may still expire, go out of scope, or otherwise become meaningless.
+	IssueCellID() CellID
+
+	// Unique state scope ID for this app instance -- defaults to AppID
+	StateScope() string
+
+	// Uses reflection to build and register (as necessary) an AttrSchema for a given a ptr to a struct.
+	GetSchemaForType(typ reflect.Type) (*AttrSchema, error)
+
+	// Loads the data stored at the given key, appends it to the given buffer, and returns the result (or an error).
+	// The given subKey is scoped by both the app and the user so key collision with other users or apps is not possible.
+	// Typically used by apps for holding high-level state or settings.
+	GetAppValue(subKey string) (val []byte, err error)
+
+	// Write analog for GetAppValue()
+	PutAppValue(subKey string, val []byte) error
 }
 
 // PushCellOpts specifies how an AppCell should be pushed to the client
 type PushCellOpts uint32
+
 const (
 	PushAsParent PushCellOpts = 1 << iota
 	PushAsChild
 )
-func (opts PushCellOpts) PushAsParent() bool { return opts&PushAsParent != 0 }
-func (opts PushCellOpts) PushAsChild() bool { return opts&PushAsChild != 0 }
 
+func (opts PushCellOpts) PushAsParent() bool { return opts&PushAsParent != 0 }
+func (opts PushCellOpts) PushAsChild() bool  { return opts&PushAsChild != 0 }
+
+// type CellInfo struct {
+// 	CellID
+// 	CellDataModel string
+// 	AppContext
+// }
+
+// PinnedCell?
 // AppCell is how an App offers a cell instance to the planet runtime.
 type AppCell interface {
+	CellContext
+
+	//AppContext() AppContext
 
 	// Returns the CellID of this cell
 	ID() CellID
@@ -230,10 +286,6 @@ type AppCell interface {
 	// The implementation uses req.CellSub.PushMsg(...) to push attributes and child cells to the client.
 	// Called on the goroutine owned by the the target CellID.
 	PushCellState(req *CellReq, opts PushCellOpts) error
-
-	// PinCell is called when a client requests to either pin the cell itself or one of its children (based on req.CellID and req.ParentReq)
-	// This allows Apps to interoperate and query other App cells through the Arc runtime (without direct dependencies).
-	PinCell(req *CellReq) error
 }
 
 type CellSub interface {
@@ -243,22 +295,17 @@ type CellSub interface {
 	PushMsg(msg *Msg) error
 }
 
+// User + HostSession --> UserSession?
 type User interface {
 	Session() HostSession
 
 	HomePlanet() Planet
-	
+
 	LoginInfo() LoginReq
 
-	// Uses reflection to build an AttrSchema given a ptr to a struct.
-	MakeSchemaForStruct(app App, structPtr any) (*AttrSchema, error)
-
-	// High level function that loads a cell with the given URI having the inferred schema (built from its fields using reflection).
-	// The URI is scoped from the user's home planet and App URI.
-	ReadCell(ctx App, URI string, dst any) error
-
-	// WriteCell is the write analog of ReadCell.
-	WriteCell(ctx App, URI string, src any) error
+	// Gets the currently active AppContext for an AppID.
+	// If does not exist and autoCreate is set, a new AppContext is created, started, and returned.
+	GetAppContext(appID string, autoCreate bool) (AppContext, error)
 }
 
 // MsgBatch is an ordered list os Msgs

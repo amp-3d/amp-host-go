@@ -1,8 +1,10 @@
 package arc
 
 import (
-	bytes "bytes"
+	"bytes"
 	"path"
+	"reflect"
+	"sync"
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/stdlib/bufs"
@@ -205,7 +207,7 @@ func (tid TID) CopyNext(inTID TID) {
 }
 
 func (schema *AttrSchema) SchemaDesc() string {
-	return path.Join(schema.AppURI, schema.CellDataModel, schema.SchemaName)
+	return path.Join(schema.ScopeID, schema.CellDataModel, schema.SchemaName)
 }
 
 func (schema *AttrSchema) LookupAttr(attrURI string) *AttrSpec {
@@ -217,8 +219,151 @@ func (schema *AttrSchema) LookupAttr(attrURI string) *AttrSpec {
 	return nil
 }
 
-func (req *CellReq) IssueCellID() CellID {
-	return req.User.Session().IssueCellID()
+func (schema *AttrSchema) SelectAppForSchema() (*AppModule, error) {
+	return gAppRegistry.SelectAppForSchema(schema)
+}
+
+func MakeSchemaForType(scopeID string, valTyp reflect.Type) (*AttrSchema, error) {
+	numFields := valTyp.NumField()
+
+	schema := &AttrSchema{
+		ScopeID:       scopeID,
+		CellDataModel: valTyp.Name(),
+		SchemaName:    "on-demand-reflect",
+		Attrs:         make([]*AttrSpec, 0, numFields),
+	}
+
+	for i := 0; i < numFields; i++ {
+
+		// Importantly, AttrID is always set to the field index + 1, so we know what field to inspect when given an AttrID.
+		field := valTyp.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+
+		attr := &AttrSpec{
+			AttrURI: field.Name,
+			AttrID:  int32(i + 1),
+		}
+
+		attrType := field.Type
+		attrKind := attrType.Kind()
+		switch attrKind {
+		case reflect.Int32, reflect.Uint32, reflect.Int64, reflect.Uint64:
+			attr.ValTypeID = ValType_int
+		case reflect.String:
+			attr.ValTypeID = ValType_string
+		case reflect.Slice:
+			elementType := attrType.Elem().Kind()
+			switch elementType {
+			case reflect.Uint8, reflect.Int8:
+				attr.ValTypeID = ValType_bytes
+			}
+		}
+
+		if attr.ValTypeID == 0 {
+			return nil, ErrCode_ExportErr.Errorf("unsupported type '%s.%s (%v)", schema.CellDataModel, attr.AttrURI, attrKind)
+		}
+
+		schema.Attrs = append(schema.Attrs, attr)
+	}
+	return schema, nil
+}
+
+// ReadCell loads a cell with the given URI having the inferred schema (built from its fields using reflection).
+// The URI is scoped into the user's home planet and AppID.
+func ReadCell(ctx AppContext, subKey string, schema *AttrSchema, dstStruct any) error {
+
+	dst := reflect.Indirect(reflect.ValueOf(dstStruct))
+	switch dst.Kind() {
+	case reflect.Pointer:
+		dst = dst.Elem()
+	case reflect.Struct:
+	default:
+		return ErrCode_ExportErr.Errorf("expected struct, got %v", dst.Kind())
+	}
+
+	var keyBuf [128]byte
+	cellKey := append(append(keyBuf[:0], []byte(ctx.StateScope())...), []byte(subKey)...)
+
+	msgs := make([]*Msg, 0, len(schema.Attrs))
+	err := ctx.User().HomePlanet().ReadCell(cellKey, schema, func(msg *Msg) {
+		switch msg.Op {
+		case MsgOp_PushAttr:
+			msgs = append(msgs, msg)
+		}
+	})
+	if err != nil {
+		return err
+	}
+
+	numFields := dst.NumField()
+	valType := dst.Type()
+
+	for fi := 0; fi < numFields; fi++ {
+		field := valType.Field(fi)
+		for _, ai := range schema.Attrs {
+			if ai.AttrURI == field.Name {
+				for _, msg := range msgs {
+					if msg.AttrID == ai.AttrID {
+						msg.LoadVal(dst.Field(fi).Addr().Interface())
+						goto nextField
+					}
+				}
+			}
+		}
+	nextField:
+	}
+	return err
+}
+
+// WriteCell is the write analog of ReadCell.
+func WriteCell(ctx AppContext, subKey string, schema *AttrSchema, srcStruct any) error {
+
+	src := reflect.Indirect(reflect.ValueOf(srcStruct))
+	switch src.Kind() {
+	case reflect.Pointer:
+		src = src.Elem()
+	case reflect.Struct:
+	default:
+		return ErrCode_ExportErr.Errorf("expected struct, got %v", src.Kind())
+	}
+
+	{
+		tx := NewMsgBatch()
+		msg := tx.AddMsg()
+		msg.Op = MsgOp_UpsertCell
+		msg.ValType = ValType_SchemaID
+		msg.ValInt = int64(schema.SchemaID)
+		msg.ValBuf = append(append(msg.ValBuf[:0], []byte(ctx.StateScope())...), []byte(subKey)...)
+
+		numFields := src.NumField()
+		valType := src.Type()
+
+		for _, attr := range schema.Attrs {
+			msg := tx.AddMsg()
+			msg.Op = MsgOp_PushAttr
+			msg.AttrID = attr.AttrID
+			for i := 0; i < numFields; i++ {
+				if valType.Field(i).Name == attr.AttrURI {
+					msg.SetVal(src.Field(i).Interface())
+					break
+				}
+			}
+			if msg.ValType == ValType_nil {
+				panic("missing field")
+			}
+		}
+
+		msg = tx.AddMsg()
+		msg.Op = MsgOp_Commit
+
+		if err := ctx.User().HomePlanet().PushTx(tx); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (req *CellReq) GetKwArg(argKey string) (string, bool) {
@@ -284,22 +429,74 @@ func (req *CellReq) PushAttr(target CellID, schema *AttrSchema, attrURI string, 
 func (req *CellReq) PushCheckpoint(err error) {
 	m := NewMsg()
 	m.Op = MsgOp_Commit
-	m.CellID = req.Cell.ID().U64()
+	m.CellID = req.PinCell.U64()
 	if err != nil {
 		m.SetVal(err)
 	}
 	req.PushMsg(m)
 }
 
-// type StdApp struct {
-// 	appID      string
-// }
+var gAppRegistry = appRegistry{
+	appsByID:    make(map[string]*AppModule),
+	appsByModel: make(map[string]*AppModule),
+}
 
-// func (app *StdApp) AppURI() string {
-// 	return app.appID
-// }
+type appRegistry struct {
+	mu          sync.RWMutex
+	appsByID    map[string]*AppModule // index by symbol.ID instead?
+	appsByModel map[string]*AppModule // index by symbol.ID instead?
+}
 
-// func (app *StdApp) StartApp(appID string) error {
-// 	app.appID = appID
-// 	return nil
-// }
+func (reg *appRegistry) RegisterApp(app *AppModule) error {
+	reg.mu.Lock()
+	defer reg.mu.Unlock()
+
+	if app.AppID == "" {
+		return ErrCode_InvalidURI.Error("invalid app ID")
+	}
+	reg.appsByID[app.AppID] = app
+
+	for ID := range app.DataModels.ModelsByID {
+		if ID != "" {
+			reg.appsByModel[ID] = app
+		}
+	}
+
+	return nil
+}
+
+// Selects the app that can handle the requested schema / model.
+func (reg *appRegistry) GetAppByID(appID string) (*AppModule, error) {
+	reg.mu.RLock()
+	defer reg.mu.RUnlock()
+	app := reg.appsByID[appID]
+	if app != nil {
+		return app, nil
+	}
+
+	return nil, ErrCode_AppNotFound.Errorf("App not found for URI: %s", appID)
+}
+
+// Selects the app that can handle the requested schema / model.
+func (reg *appRegistry) SelectAppForSchema(schema *AttrSchema) (*AppModule, error) {
+	if schema == nil {
+		return nil, ErrCode_AppNotFound.Errorf("missing schema")
+	}
+
+	reg.mu.RLock()
+	defer reg.mu.RUnlock()
+
+	if schema.ScopeID != ImpliedScopeForDataModel {
+		app := reg.appsByID[schema.ScopeID]
+		if app != nil {
+			return app, nil
+		}
+	}
+
+	app := reg.appsByModel[schema.CellDataModel]
+	if app == nil {
+		return nil, ErrCode_AppNotFound.Errorf("App not found for schema: %s", schema.SchemaDesc())
+	}
+
+	return app, nil
+}

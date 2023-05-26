@@ -133,13 +133,11 @@ func (pl *planetSess) getCell(ID arc.CellID) (cell *cellInst, err error) {
 				select {
 				case req := <-cell.newReqs:
 					var err error
-					if req.Cell == nil {
-						err = arc.ErrCode_InternalErr.Errorf("parent arc.App instance %q did got provide a cell", req.ParentApp.AppURI())
-					} else {
+					{
 						req.PushBeginPin(cell.CellID)
 
 						// TODO: verify that a cell pushing state doesn't escape idle or close analysis
-						err = req.Cell.PushCellState(&req.CellReq, arc.PushAsParent)
+						err = req.pinned.PushCellState(&req.CellReq, arc.PushAsParent)
 					}
 					req.PushCheckpoint(err)
 
@@ -170,7 +168,7 @@ func (pl *planetSess) queueReq(cell *cellInst, req *openReq) error {
 
 	var err error
 	if cell == nil {
-		cell, err = pl.getCell(req.Cell.ID())
+		cell, err = pl.getCell(req.pinned.ID())
 		if err != nil {
 			return err
 		}
@@ -310,8 +308,8 @@ func (pl *planetSess) PushTx(tx *arc.MsgBatch) error {
 	txn := arc.Txn{
 		Msgs: tx.Msgs,
 	}
-
 	txData, _ := txn.Marshal()
+	tx.Reclaim()
 
 	dbTx := pl.db.NewTransaction(true)
 	defer dbTx.Discard()
@@ -348,7 +346,6 @@ func (pl *planetSess) ReadCell(cellKey []byte, schema *arc.AttrSchema, msgs func
 
 	if err != nil {
 		return arc.ErrCode_CellNotFound.Errorf("failed to read cell: %v", err)
-		//return ErrCode_CellNotFound
 	}
 
 	for _, msg := range txn.Msgs {

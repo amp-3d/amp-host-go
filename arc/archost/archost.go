@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/arcspace/go-archost/arc"
-	"github.com/arcspace/go-archost/arc/apps/amp"
+	_ "github.com/arcspace/go-archost/arc/apps/amp"
 	"github.com/arcspace/go-archost/arc/host"
 )
 
@@ -14,8 +14,6 @@ func StartNewHost(opts host.HostOpts) arc.Host {
 	if err != nil {
 		log.Fatalf("failed to start new host: %v", err)
 	}
-
-	h.RegisterApp(amp.NewApp())
 
 	return h
 }

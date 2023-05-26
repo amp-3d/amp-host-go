@@ -60,6 +60,7 @@ func (batch *MsgBatch) Reclaim() {
 		batch.Msgs[i] = nil
 	}
 	batch.Msgs = batch.Msgs[:0]
+	gMsgBatchPool.Put(batch)
 }
 
 func NewMsg() *Msg {
@@ -132,6 +133,14 @@ func (msg *Msg) SetVal(val interface{}) {
 		msg.SetValBuf(ValType_string, len(v))
 		copy(msg.ValBuf, v)
 
+	case *[]byte:
+		msg.SetValBuf(ValType_bytes, len(*v))
+		copy(msg.ValBuf, *v)
+
+	case []byte:
+		msg.SetValBuf(ValType_bytes, len(v))
+		copy(msg.ValBuf, v)
+
 	case time.Time:
 		msg.SetValInt(ValType_DateTime, int64(ConvertToTimeFS(v)))
 
@@ -193,10 +202,15 @@ func (msg *Msg) LoadVal(dst interface{}) error {
 			ok = false
 		}
 
-	case ValType_string:
-		if v, match := dst.(*string); match {
+	case ValType_string, ValType_bytes:
+		ok = true
+		switch v := dst.(type) {
+		case *string:
 			*v = string(msg.ValBuf)
-			ok = true
+		case *[]byte:
+			*v = append(*v, msg.ValBuf...)
+		default:
+			ok = false
 		}
 
 	case ValType_PinReq:
@@ -211,6 +225,15 @@ func (msg *Msg) LoadVal(dst interface{}) error {
 	case ValType_Defs:
 		if v, match := dst.(*Defs); match {
 			tmp := Defs{}
+			if tmp.Unmarshal(msg.ValBuf) == nil {
+				*v = tmp
+				ok = true
+			}
+		}
+
+	case ValType_AppMsg:
+		if v, match := dst.(*AppMsg); match {
+			tmp := AppMsg{}
 			if tmp.Unmarshal(msg.ValBuf) == nil {
 				*v = tmp
 				ok = true

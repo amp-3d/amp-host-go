@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	arc_sdk "github.com/arcspace/go-arc-sdk/apis/arc"
+
 	"github.com/arcspace/go-arc-sdk/stdlib/bufs"
 	"github.com/arcspace/go-arc-sdk/stdlib/process"
 	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
@@ -25,8 +27,6 @@ type host struct {
 
 	homePlanetID uint64
 	home         *planetSess // Home planet of this host
-	appsByURI    map[string]arc.App
-	appsByModel  map[string]arc.App
 	plSess       map[uint64]*planetSess
 	plMu         sync.RWMutex
 }
@@ -48,10 +48,8 @@ func startNewHost(opts HostOpts) (arc.Host, error) {
 	}
 
 	host := &host{
-		opts:        opts,
-		appsByURI:   make(map[string]arc.App),
-		appsByModel: make(map[string]arc.App),
-		plSess:      make(map[uint64]*planetSess),
+		opts:   opts,
+		plSess: make(map[uint64]*planetSess),
 	}
 
 	// err = host.loadSeat()
@@ -276,41 +274,6 @@ func (host *host) mountPlanet(
 	return pl, nil
 }
 
-func (host *host) RegisterApp(app arc.App) error {
-	appURI := app.AppURI()
-	if appURI == "" {
-		return arc.ErrCode_InvalidURI.Error("invalid app URI")
-	}
-	host.appsByURI[appURI] = app
-
-	for _, modelURI := range app.SupportedDataModels() {
-		if modelURI != "" {
-			host.appsByModel[modelURI] = app
-		}
-	}
-	return nil
-}
-
-func (host *host) SelectAppForSchema(schema *arc.AttrSchema) (arc.App, error) {
-	if schema == nil {
-		return nil, arc.ErrCode_AppNotFound.Errorf("missing schema")
-	}
-
-	if schema.AppURI != arc.DefaultAppForDataModel {
-		app := host.appsByURI[schema.AppURI]
-		if app != nil {
-			return app, nil
-		}
-	}
-
-	app := host.appsByModel[schema.CellDataModel]
-	if app == nil {
-		return nil, arc.ErrCode_AppNotFound.Errorf("App not found for schema: %s", schema.SchemaDesc())
-	}
-
-	return app, nil
-}
-
 func (host *host) HostPlanet() arc.Planet {
 	return host.home
 }
@@ -415,7 +378,7 @@ type hostSess struct {
 	arc.TypeRegistry
 
 	nextID     atomic.Uint64       // next CellID to be issued
-	user       arc.User            // current user
+	user       *user               // current user
 	host       *host               // parent host
 	msgsIn     chan *arc.Msg       // msgs inbound to this hostSess
 	msgsOut    chan *arc.Msg       // msgs outbound from this hostSess
@@ -438,6 +401,8 @@ type planetSess struct {
 type openReq struct {
 	arc.CellReq
 
+	reqID  uint64
+	pinned arc.AppCell
 	sess   *hostSess
 	cell   *cellInst
 	cancel chan struct{}
@@ -483,7 +448,7 @@ func (req *openReq) PushMsg(msg *arc.Msg) error {
 	var err error
 
 	{
-		msg.ReqID = req.ReqID
+		msg.ReqID = req.reqID
 
 		// If the client backs up, this will back up too which is the desired effect.
 		// Otherwise, something like reading from a db reading would quickly fill up the Msg outbox chan (and have no gain)
@@ -557,10 +522,6 @@ func (sess *hostSess) AssetServer() assets.AssetServer {
 	return sess.host.opts.AssetServer
 }
 
-func (sess *hostSess) IssueCellID() arc.CellID {
-	return arc.CellID(sess.nextID.Add(1) + 2701)
-}
-
 func (sess *hostSess) consumeInbox() {
 	for running := true; running; {
 		select {
@@ -579,6 +540,8 @@ func (sess *hostSess) consumeInbox() {
 				case arc.MsgOp_PinCell:
 					err = sess.pinCell(msg)
 					closeReq = err != nil
+				case arc.MsgOp_AppMsg:
+					err = sess.dispatchAppMsg(msg)
 				case arc.MsgOp_ResolveAndRegister:
 					err = sess.resolveAndRegister(msg)
 				case arc.MsgOp_Login:
@@ -606,27 +569,42 @@ func (sess *hostSess) login(msg *arc.Msg) error {
 		return arc.ErrCode_InvalidLogin.Error("already logged in")
 	}
 
-	u := &user{
-		sess: sess,
+	usr := &user{
+		openApps: make(map[string]*appContext),
+		sess:     sess,
 	}
-	if err := msg.LoadVal(&u.LoginReq); err != nil {
+	if err := msg.LoadVal(&usr.LoginReq); err != nil {
 		return err
 	}
+
+	//usr.getSchemaForStruct(
 
 	//
 	// FUTURE: a "user home" app would start here and is bound to the userUID on the host's home arc.
 	//
-	seat, err := sess.host.home.getUser(u.LoginReq, true)
+	seat, err := sess.host.home.getUser(usr.LoginReq, true)
 	if err != nil {
 		return err
 	}
 
-	u.home, err = sess.host.getPlanet(seat.HomePlanetID)
+	usr.home, err = sess.host.getPlanet(seat.HomePlanetID)
 	if err != nil {
 		return err
 	}
 
-	sess.user = u
+	sess.user = usr
+	return nil
+}
+
+func (sess *hostSess) dispatchAppMsg(msg *arc.Msg) error {
+	var appMsg arc.AppMsg
+	if err := msg.LoadVal(&appMsg); err != nil {
+		return err
+	}
+
+	for _, appCtx := range sess.user.openApps {
+		appCtx.HandleAppMsg(&appMsg)
+	}
 	return nil
 }
 
@@ -639,8 +617,6 @@ func (sess *hostSess) resolveAndRegister(msg *arc.Msg) error {
 	if err := sess.TypeRegistry.ResolveAndRegister(&defs); err != nil {
 		return err
 	}
-
-	sess.pushMsg(msg.ReqID, arc.MsgOp_CloseReq, nil)
 	return nil
 }
 
@@ -681,8 +657,8 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *openReq, err erro
 				req = &openReq{
 					sess:   sess,
 					cancel: make(chan struct{}),
+					reqID:  reqID,
 				}
-				req.ReqID = reqID
 				req.CellSub = req
 				sess.openReqs[reqID] = req
 			}
@@ -705,29 +681,31 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 		return err
 	}
 
-	if pinReq.ParentReqID != 0 {
-		parentReq, _ := sess.getReq(pinReq.ParentReqID, getReq)
-		if parentReq == nil {
-			err = arc.ErrCode_InvalidReq.Error("invalid ParentReqID")
-			return err
-		}
-		req.ParentReq = &parentReq.CellReq
-	}
-
 	// Recover the referenced cell model the client wants to pin
 	req.ContentSchema, err = sess.TypeRegistry.GetSchemaByID(pinReq.ContentSchemaID)
 	if err != nil {
 		return err
 	}
 
-	// Select the app that can handle the requested schema / model.
-	req.ParentApp, err = sess.host.SelectAppForSchema(req.ContentSchema)
-	if err != nil {
-		return err
+	var ctx arc.CellContext
+	if pinReq.ParentReqID != 0 {
+		parentReq, _ := sess.getReq(pinReq.ParentReqID, getReq)
+		if parentReq == nil {
+			err = arc.ErrCode_InvalidReq.Error("invalid ParentReqID")
+			return err
+		}
+		ctx = parentReq.pinned
 	}
 
-	req.CellID = arc.CellID(pinReq.PinCell)
-	req.User = sess.user
+	// If no app context is available, choose an app based on the schema
+	if ctx == nil {
+		ctx, err = sess.user.cellContextForSchema(req.ContentSchema)
+		if err != nil {
+			return err
+		}
+	}
+
+	req.PinCell = arc.CellID(pinReq.PinCell)
 	req.Args = pinReq.Args
 	req.ChildSchemas = make([]*arc.AttrSchema, len(pinReq.ChildSchemas))
 	for i, child := range pinReq.ChildSchemas {
@@ -737,13 +715,17 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 		}
 	}
 
-	err = req.ParentApp.PinCell(&req.CellReq)
+	// TODO: move this to within the App context so it doesn't block handling of other requests
+	req.pinned, err = ctx.PinCell(&req.CellReq)
 	if err != nil {
 		return err
 	}
-	if req.Cell == nil {
-		return arc.ErrCode_Unimplemented.Errorf("app %s failed to pin cell", req.ParentApp.AppURI())
+	if req.pinned == nil {
+		return arc.ErrCode_Unimplemented.Errorf("cell context %v failed to pin cell", reflect.ValueOf(ctx).Elem().Type())
 	}
+
+	// What was pinned may not be what was requested (e.g. 0) so update req
+	req.PinCell = req.pinned.ID()
 
 	pl, err := sess.host.getPlanet(sess.user.HomePlanet().PlanetID())
 	if err != nil {
@@ -760,9 +742,12 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 
 type user struct {
 	arc.LoginReq
-	home         arc.Planet
-	sess         *hostSess
-	nextSchemaID atomic.Int32
+	home             arc.Planet
+	sess             *hostSess
+	nextSchemaID     atomic.Int32
+	openAppsMu       sync.Mutex
+	openApps         map[string]*appContext
+	valStoreSchemaID int32
 }
 
 func (usr *user) Session() arc.HostSession {
@@ -777,54 +762,82 @@ func (usr *user) HomePlanet() arc.Planet {
 	return usr.home
 }
 
-func (usr *user) MakeSchemaForStruct(app arc.App, structPtr any) (*arc.AttrSchema, error) {
+func (usr *user) onAppClosing(appID string) {
+	usr.openAppsMu.Lock()
+	delete(usr.openApps, appID)
+	usr.openAppsMu.Unlock()
+}
 
-	// Build and AttrSchema for the struct (use Elem() to deref the pointer)
-	val := reflect.Indirect(reflect.ValueOf(structPtr))
-	switch val.Kind() {
-	case reflect.Pointer:
-		val = val.Elem()
-	case reflect.Struct:
-	default:
-		return nil, arc.ErrCode_ExportErr.Errorf("expected pointer to struct or struct, got %v", val.Kind())
-	}
-	valTyp := val.Type()
+func (usr *user) GetAppContext(appID string, autoCreate bool) (arc.AppContext, error) {
+	return usr.getAppContext(appID, autoCreate)
+}
 
-	numFields := val.NumField()
+func (usr *user) getAppContext(appID string, autoCreate bool) (*appContext, error) {
+	usr.openAppsMu.Lock()
+	defer usr.openAppsMu.Unlock()
 
-	schema := &arc.AttrSchema{
-		AppURI:        app.AppURI(),
-		CellDataModel: valTyp.Name(),
-		SchemaName:    "on-demand-reflect",
-		Attrs:         make([]*arc.AttrSpec, numFields),
-		SchemaID:      usr.nextSchemaID.Add(-1), // negative IDs reserved for host-side schemas
-	}
-
-	for i := range schema.Attrs {
-		field := val.Field(i)
-		attr := &arc.AttrSpec{
-			AttrURI: valTyp.Field(i).Name,
-			AttrID:  int32(i + 1),
+	app := usr.openApps[appID]
+	if app == nil && autoCreate {
+		appModule, err := arc.GetRegisteredApp(appID)
+		if err != nil {
+			return nil, err
 		}
-		schema.Attrs[i] = attr
 
-		switch field.Type().Kind() {
-		case reflect.Int32:
-		case reflect.Uint32:
-		case reflect.Int64:
-		case reflect.Uint64:
-			attr.ValTypeID = arc.ValType_int
-		case reflect.String:
-			attr.ValTypeID = arc.ValType_string
-		default:
-			return nil, arc.ErrCode_ExportErr.Errorf("unsupported type '%s.%s: %v", schema.CellDataModel, attr.AttrURI, field.Type().Kind())
+		app = &appContext{
+			user:  usr,
+			appID: appID,
 		}
+		app.AppRuntime, err = appModule.NewAppInstance(app)
+		if err != nil {
+			return nil, err
+		}
+		app.Context, err = usr.Session().StartChild(&process.Task{
+			Label:     appID,
+			IdleClose: 1 * time.Minute,
+			OnClosing: func() {
+				app.user.onAppClosing(app.appID)
+				app.AppRuntime.OnClosing()
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		usr.openApps[appModule.AppID] = app
 	}
 
+	return app, nil
+}
+
+func (usr *user) cellContextForSchema(schema *arc.AttrSchema) (arc.CellContext, error) {
+	appModule, err := schema.SelectAppForSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, err := usr.getAppContext(appModule.AppID, true)
+	if err != nil {
+		return nil, err
+	}
+	return ctx.AppRuntime, nil
+}
+
+func (usr *user) GetSchemaForType(typ reflect.Type) (*arc.AttrSchema, error) {
+
+	// TODO: skip if already registered
+	{
+	}
+
+	schema, err := arc.MakeSchemaForType(".sys", typ)
+	if err != nil {
+		return nil, err
+	}
+
+	schema.SchemaID = usr.nextSchemaID.Add(-1) // negative IDs reserved for host-side schemas
 	defs := arc.Defs{
 		Schemas: []*arc.AttrSchema{schema},
 	}
-	err := usr.Session().ResolveAndRegister(&defs)
+	err = usr.Session().ResolveAndRegister(&defs)
 	if err != nil {
 		return nil, err
 	}
@@ -832,91 +845,71 @@ func (usr *user) MakeSchemaForStruct(app arc.App, structPtr any) (*arc.AttrSchem
 	return schema, nil
 }
 
-func (usr *user) WriteCell(app arc.App, cellURI string, src any) error {
-
-	schema, err := usr.MakeSchemaForStruct(app, src)
-	if err != nil {
-		return err
-	}
-
-	{
-		tx := arc.NewMsgBatch()
-		msg := tx.AddMsg()
-		msg.Op = arc.MsgOp_UpsertCell
-		msg.ValType = arc.ValType_SchemaID
-		msg.ValInt = int64(schema.SchemaID)
-		msg.ValBuf = append(append(msg.ValBuf[:0], []byte(app.AppURI())...), []byte(cellURI)...)
-
-		val := reflect.ValueOf(src)
-		numFields := val.NumField()
-
-		valTyp := val.Type()
-
-		for _, attr := range schema.Attrs {
-			msg := tx.AddMsg()
-			msg.Op = arc.MsgOp_PushAttr
-			msg.AttrID = attr.AttrID
-			for i := 0; i < numFields; i++ {
-				if valTyp.Field(i).Name == attr.AttrURI {
-					msg.SetVal(val.Field(i).Interface())
-					break
-				}
-			}
-			if msg.ValType == arc.ValType_nil {
-				panic("missing field")
-			}
+func (usr *user) getValStoreSchema() (schema *arc.AttrSchema, err error) {
+	if usr.valStoreSchemaID == 0 {
+		schema, err = usr.GetSchemaForType(reflect.TypeOf(valStore{}))
+		if err != nil {
+			return
 		}
-
-		msg = tx.AddMsg()
-		msg.Op = arc.MsgOp_Commit
-
-		if err := usr.HomePlanet().PushTx(tx); err != nil {
-			return err
-		}
+		usr.valStoreSchemaID = schema.SchemaID
+	} else {
+		schema, err = usr.Session().GetSchemaByID(usr.valStoreSchemaID)
 	}
-
-	return nil
+	return
 }
 
-func (usr *user) ReadCell(app arc.App, cellURI string, dst any) error {
+// valStore is used to build an ad-hoc schema that we use to store app-specific values.
+type valStore struct {
+	Value []byte
+}
 
-	schema, err := usr.MakeSchemaForStruct(app, dst)
+type appContext struct {
+	process.Context
+	*user
+	arc.AppRuntime
+	appID string
+}
+
+func (ctx *appContext) IssueCellID() arc.CellID {
+	return arc.CellID(ctx.sess.nextID.Add(1) + 2701)
+}
+
+func (ctx *appContext) User() arc.User {
+	return ctx.user
+}
+
+func (ctx *appContext) StateScope() string {
+	return ctx.appID
+}
+
+func (ctx *appContext) PublishAsset(asset arc_sdk.MediaAsset, opts arc_sdk.PublishOpts) (URL string, err error) {
+	return ctx.user.sess.AssetServer().PublishAsset(asset, opts)
+}
+
+func (ctx *appContext) GetAppValue(subKey string) ([]byte, error) {
+	schema, err := ctx.user.getValStoreSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	var v valStore
+	err = arc.ReadCell(ctx, subKey, schema, &v)
+	if err != nil {
+		return nil, err
+	}
+
+	return v.Value, nil
+}
+
+func (ctx *appContext) PutAppValue(subKey string, value []byte) error {
+	schema, err := ctx.user.getValStoreSchema()
 	if err != nil {
 		return err
 	}
 
-	val := reflect.ValueOf(dst)
-
-	var keyBuf [256]byte
-	cellKey := append(append(keyBuf[:0], []byte(app.AppURI())...), []byte(cellURI)...)
-
-	err = usr.HomePlanet().ReadCell(cellKey, schema, func(msg *arc.Msg) {
-		switch msg.Op {
-		case arc.MsgOp_PushAttr:
-			for ai, attr := range schema.Attrs {
-				if attr.AttrID == msg.AttrID {
-					msg.LoadVal(val.Field(ai).Interface())
-				}
-			}
-		}
-	})
-
+	v := valStore{value}
+	err = arc.WriteCell(ctx, subKey, schema, &v)
 	return err
-	// {
-	// 	tx := arc.NewMsgBatch()
-
-	// 	val := reflect.ValueOf(dst)
-
-	// 	for i := 0; i < numFields; i++ {
-	// 		msg := tx.AddMsg()
-	// 		msg.Op = arc.MsgOp_PushAttr
-	// 		switch
-	// 		msg.SetVal(
-
-	//       fieldValue := field.Interface()
-	//       fmt.Println(fieldName, " -> ", fieldValue)
-	// }
-
 }
 
 /*

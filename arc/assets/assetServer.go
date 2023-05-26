@@ -44,8 +44,10 @@ func newHttpServer(opts HttpServerOpts) AssetServer {
 	srv.rng.Seed(time.Now().UnixNano())
 
 	srv.server = &http.Server{
-		Addr:    srv.opts.ListenAddr,
-		Handler: srv.serverMux,
+		Addr:        srv.opts.ListenAddr,
+		ReadTimeout: 60 * time.Second,
+		IdleTimeout: 1 * time.Hour,
+		Handler:     srv.serverMux,
 	}
 
 	// format: "asset/{asset_ident}"
@@ -129,7 +131,7 @@ func (srv *httpServer) GracefulStop() {
 	}
 }
 
-func (srv *httpServer) PublishAsset(asset arc.MediaAsset) (URL string, err error) {
+func (srv *httpServer) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) (URL string, err error) {
 	assetID := GenerateAssetID(srv.rng, 28)
 
 	assetCtx, err := srv.Context.StartChild(&process.Task{
@@ -144,7 +146,10 @@ func (srv *httpServer) PublishAsset(asset arc.MediaAsset) (URL string, err error
 	if err != nil {
 		return
 	}
-	assetCtx.CloseWhenIdle(srv.opts.IdleExpire)
+	if opts.Expiry <= 0 {
+		opts.Expiry = srv.opts.IdleExpire
+	}
+	assetCtx.CloseWhenIdle(opts.Expiry)
 
 	srv.assetMu.Lock()
 	srv.assets[assetID] = assetEntry{

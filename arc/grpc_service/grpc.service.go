@@ -94,11 +94,6 @@ func (srv *grpcServer) HostSession(rpc arc.HostGrpc_HostSessionServer) error {
 		return err
 	}
 
-	// sess.Context, err = sess.hostSess.StartTransport(srv.Context, sess)
-	// if err != nil {
-	// 	return err
-	// }
-
 	// Block until the associated host session enters a closing state
 	select {
 	case <-sess.hostSess.Closing():

@@ -11,9 +11,9 @@ import (
 // Consumed by client wishing to post an data asset
 type AssetServer interface {
 	process.Context
+	arc.AssetPublisher
 	StartService(host process.Context) error
 	GracefulStop()
-	PublishAsset(asset arc.MediaAsset) (URL string, err error)
 }
 
 // HttpServerOpts exposes options and params
