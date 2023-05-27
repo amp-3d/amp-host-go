@@ -2,13 +2,11 @@ package amp_spotify
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/arcspace/go-arc-sdk/stdlib/platform"
 	"github.com/arcspace/go-archost/arc"
 	respot "github.com/arcspace/go-librespot/librespot/api-respot"
 	_ "github.com/arcspace/go-librespot/librespot/core" // bootstrap
@@ -43,25 +41,25 @@ const (
 
 type appCtx struct {
 	arc.AppContext
-	client        *spotify.Client // nil if not signed in
-	token         oauth2.Token
-	tokenLoaded   bool // set if token is loaded (regardless of validity)
-	loginAttempts int
-	me            *spotify.PrivateUser
-	auth          *spotifyauth.Authenticator
-	home          AmpCell
-	respot        respot.Session
-	sessReady     chan struct{} // closed when login is complete
+	sessReady   chan struct{}        // closed once session is established
+	client      *spotify.Client      // nil if not signed in
+	me          *spotify.PrivateUser // nil if not signed in
+	respot      respot.Session       // nil if not signed in
+	token       oauth2.Token
+	auth        *spotifyauth.Authenticator
+	home        AmpCell
+	isConnected bool
 }
 
 func (app *appCtx) OnClosing() {
+	app.endSession()
 }
 
-const kTokenNameID = ".oauth.Token"
+const kTokenNameID = ".oauth.Token.v5"
 
-func (app *appCtx) HandleAppMsg(m *arc.AppMsg) (handled bool, err error) {
-	if m.MsgType == arc.AppMsgType_URI {
-		uri := m.Entries["uri"]
+func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
+	if msg.ValType == arc.ValType_HandleURI {
+		uri := string(msg.ValBuf)
 		if strings.Contains(uri, "://spotify/auth") {
 			var err error
 			faux := http.Request{}
@@ -70,49 +68,21 @@ func (app *appCtx) HandleAppMsg(m *arc.AppMsg) (handled bool, err error) {
 				return true, err
 			}
 
+			// redeem the code for the token and store it as the latest token -- this is blocking but handled properly since we pass in the app's process.Context
 			token, err := app.auth.Token(app, "", &faux)
 			if err == nil {
 				var tokenJson []byte
 				tokenJson, err = json.Marshal(token)
 				if err == nil {
-					err = app.PutAppValue(kTokenNameID, tokenJson)
+					if err = app.PutAppValue(kTokenNameID, tokenJson); err == nil {
+						app.Info(2, "wrote %s", kTokenNameID)
+
+						err = app.trySession()
+					}
 				}
 			}
-			if err != nil {
-				return true, err
-			}
 
-			// TODO: handle race condition
-			app.tokenLoaded = false
-			app.retryLogin()
-
-			// if err != nil {
-			// 	return // TODO: alert of failure
-			// }
-
-			/*
-				app.StartChild(&process.Task{
-					Label:     "retrieving token",
-					IdleClose: time.Nanosecond,
-					OnRun: func(ctx process.Context) {
-						token, err := app.auth.Token(app, "", &faux)
-						if err != nil {
-							return // TODO: alert of failure
-						}
-						//tryLogin(token oauth2.Token, isNewToken bool) error
-						var cookie sessCookie
-						cookie.TokenJSON, err = json.Marshal(token)
-						if err != nil {
-							return // TODO: alert of failure
-						}
-						err = arc.WriteCell(app, kCookieNameID, &cookie)
-						if err != nil {
-							return // TODO: alert of failure
-						}
-						// TODO: alert of new token
-					},
-				})
-			*/
+			return true, err
 		}
 	}
 	return false, nil
@@ -124,30 +94,30 @@ func (app *appCtx) waitForSession() error {
 	select {
 	case <-app.sessReady:
 		return nil
-	case <-app.Closing():
-		return arc.ErrShuttingDown
 	default:
-	}
-
-	for {
-		err := app.retryLogin()
+		err := app.trySession()
 		if err != nil {
 			return err
 		}
-
-		select {
-		case <-app.sessReady:
-			return nil
-		case <-app.Closing():
-			return arc.ErrShuttingDown
-		}
 	}
+
+	select {
+	case <-app.sessReady:
+		return nil
+	case <-app.Closing():
+		return arc.ErrShuttingDown
+	}
+
 }
 
-func (app *appCtx) retryLogin() error {
-	var err error
-
-	app.close()
+func (app *appCtx) trySession() error {
+	if app.isConnected {
+		return nil
+	}
+	
+	if app.sessReady == nil {
+		app.sessReady = make(chan struct{})
+	}
 
 	if app.auth == nil {
 
@@ -190,21 +160,25 @@ func (app *appCtx) retryLogin() error {
 		)
 	}
 
-	// If we need a token, launch the auth URL and wait
-	if !app.tokenLoaded {
+	var err error
+
+	// If there's an error loading the token, push a oauth URL to the client
+	{
 		err = app.loadStoredToken()
 		if err != nil {
 			url := app.auth.AuthURL("")
-			fmt.Println("Launching ", url)
-			platform.LaunchURL(url)
+			msg := arc.NewMsg()
+			msg.SetValBuf(arc.ValType_HandleURI, []byte(url))
+			app.User().PushMetaMsg(msg)
 			return nil
 		}
 	}
 
+	// At this point we have a token -- TODO it may be expired
 	{
 		if app.respot == nil {
 			info := app.User().LoginInfo()
-			ctx := respot.DefaultSessionCtx(info.DeviceLabel)
+			ctx := respot.DefaultSessionContext(info.DeviceLabel)
 			ctx.Context = app
 			app.respot, err = respot.StartNewSession(ctx)
 			if err != nil {
@@ -237,43 +211,38 @@ func (app *appCtx) retryLogin() error {
 
 	// signal that that the session is ready!
 	close(app.sessReady)
-
 	return nil
 }
 
-func (app *appCtx) close() {
-	app.home = nil
-	app.me = nil
-
-	// TODO: Hacky but works for now
-	oldSignal := app.sessReady
-	app.sessReady = make(chan struct{})
-	if oldSignal != nil {
-		select {
-		case <-oldSignal:
-		default:
-			close(oldSignal)
+func (app *appCtx) endSession() {
+	app.sessReady = nil
+	
+	if app.isConnected {
+		app.home = nil
+		app.me = nil
+		app.client = nil
+		app.auth = nil
+		if app.respot != nil {
+			app.respot.Close()
+			app.respot = nil
 		}
+		app.isConnected = false
 	}
-
-	app.client = nil
-
-	//app.client.Close
-
-	// 	for waiting := true; waiting; {
-	// 		select {
-	// 		case oldSignal<-struct{}{}:
-	// 		default:
-	// 			waiting = false
-	// 		}
+	// // TODO: Hacky but works for now
+	// oldSignal := app.sessReady
+	// app.sessReady = make(chan struct{})
+	// if oldSignal != nil {
+	// 	select {
+	// 	case <-oldSignal:
+	// 	default:
+	// 		close(oldSignal)
 	// 	}
 	// }
 
+	app.client = nil
 }
 
 func (app *appCtx) loadStoredToken() error {
-
-	app.tokenLoaded = true
 	app.token = oauth2.Token{}
 	tokenJson, err := app.GetAppValue(kTokenNameID)
 	if err == nil {
@@ -285,14 +254,6 @@ func (app *appCtx) loadStoredToken() error {
 		}
 	}
 	return err
-}
-
-func (app *appCtx) signOut(user arc.User) {
-	if app.client != nil {
-		app.client = nil
-	}
-	app.me = nil
-	//app.sessReady = nil
 }
 
 func (app *appCtx) PinCell(req *arc.CellReq) (arc.AppCell, error) {
