@@ -14,9 +14,8 @@ const (
 
 func init() {
 	arc.RegisterApp(&arc.AppModule{
-		AppID:      AppID,
-		Version:    "v1.2023.2",
-		//DataModels: api.DataModels,
+		AppID:   AppID,
+		Version: "v1.2023.2",
 		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {
 			app := &appCtx{
 				AppContext: ctx,
@@ -26,24 +25,18 @@ func init() {
 	})
 }
 
-
 type appCtx struct {
 	arc.AppContext
-	client *http.Client
+	client     *http.Client
 	categories *stationCategories
 }
 
-func (app *appCtx) AppID() string {
-	return api.AmpAppURI
-}
-
-func (app *appCtx) HandleAppMsg(m *arc.AppMsg) (handled bool, err error) {
+func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
 	return false, nil
 }
 
 func (app *appCtx) OnClosing() {
 }
-
 
 func (app *appCtx) loadTokens(user arc.User) (arc.AppCell, error) {
 

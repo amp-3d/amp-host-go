@@ -83,13 +83,14 @@ enum ValType {
     ValType_DateTime            = 23; // .ValInt is a TimeFS value (1 sec == 1<<16 ticks)
     ValType_Duration            = 24; // .ValInt is a TimeFS delta (1 sec == 1<<16 ticks)
     ValType_URL                 = 26; // .ValBuf is a UTF8 URL
+    ValType_HandleURI           = 27; // .ValBuf is a UTF8 URI / URL to be handled
     
     /******     Builtin protobufs       ******/
     
     ValType_Err                 = 50; // .ValBuf is a Err 
     ValType_AssetRef            = 51; // .ValBuf is an AssetRef
     ValType_DataSegment         = 52; // .ValBuf is an DataSegment
-    ValType_AppMsg              = 53; // .ValBuf is an AppMsg
+    ValType_MetaMsg             = 53; // .ValBuf is an MetaMsg
     ValType_Content             = 54; // .ValBuf is an Content
     ValType_CryptoKey           = 56; // .ValBuf is a CryptoKey
     ValType_Txn                 = 58; // .ValBuf is a Txn
@@ -143,12 +144,12 @@ enum MsgOp {
     
     */
 
-    // MsgOp_AppMsg posts a high-level event to the receiver, serving as a mechanism to send app-specific events.
-    MsgOp_AppMsg = 4;
+    // MsgOp_MetaMsg posts a high-level event to the receiver, serving as a mechanism to send app-specific events.
+    MsgOp_MetaMsg = 4;
     // Params: 
-    //      Msg.ReqID:      client-generated (unique) request ID 
-    //      Msg.ValType:    ValType_AppMsg   
-    //      Msg.ValBuf:     AppMsg    
+    //      Msg.ReqID:      originating request ID
+    //      Msg.ValType:    ValType_MetaMsg   
+    //      Msg.ValBuf:     MetaMsg    
 
 
     // MsgOp_ResolveAndRegister allows a client to send the host a set of Defs to the Host, defining all session CellTypes and identifiers.
@@ -269,8 +270,8 @@ message Msg {
     // AttrID names the attribute associated with this Msg (used for MsgOp_PushAttr)
     int32               AttrID          = 8;
     
-    // CellID corresponding to a user or agent that authored the content of this Msg.
-    uint64              FromID          = 11;
+    // // CellID corresponding to a user or agent that authored the content of this Msg.
+    // uint64              FromID          = 11;
 
     // SI ("Series Index") associates and binds a value to and int64 key.
     // By convention, this is 48.16 fixed signed fractional seconds (one second == 0x10000 ticks), naming a time duration or timestamp.
@@ -287,9 +288,9 @@ message Msg {
     // Flags contains MsgFlags
     MsgFlags            Flags           = 24;
     
-    int64               RevID_TimeFS    = 26;  // When was this rev authored
-    uint64              RevID_TxnID     = 27;  // Which txn contains this rev 
-    uint64              RevID_FromID    = 28;  // Who authored this rev    
+    // int64               RevID_TimeFS    = 26;  // When was this rev authored
+    // uint64              RevID_TxnID     = 27;  // Which txn contains this rev 
+    // uint64              RevID_FromID    = 28;  // Who authored this rev    
     
     // Allows a sequence of Msgs to be chained together.
     Msg                 Next            = 32;
@@ -447,15 +448,10 @@ message KwArg {
     bytes               ValBuf = 6;
 }
 
-enum AppMsgType {
-    AppMsgType_Unspecified  = 0; 
-    AppMsgType_URI          = 1; // The kv entry "uri" contains a URI / URL
+message HandleURI {
+    string              URI = 1;
 }
 
-message AppMsg {
-    AppMsgType          MsgType = 1;
-    map<string,string>  Entries = 2;
-}
 
 // PinReq is a client request to "pin" a cell, meaning selected attrs and child cells will be pushed to the client.  
 message PinReq {

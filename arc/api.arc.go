@@ -178,6 +178,7 @@ type CellID uint64
 // U64 is a convenience method that converts a CellID to a uint64.
 func (ID CellID) U64() uint64 { return uint64(ID) }
 
+// PinReq?
 // See api.support.go for CellReq helper methods such as PushMsg.
 type CellReq struct {
 	CellSub
@@ -212,7 +213,6 @@ type AppModule struct {
 }
 
 type CellContext interface {
-	//Label() string
 
 	// PinCell pins a requested cell, typically specified by req.PinCell.
 	// req.KwArgs and ChildSchemas can also be used to specify the cell to pin.
@@ -222,13 +222,15 @@ type CellContext interface {
 type AppRuntime interface {
 	CellContext
 
-	HandleAppMsg(msg *AppMsg) (handled bool, err error)
+	// Pre: msg.Op == MsgOp_MetaMsg
+	HandleMetaMsg(msg *Msg) (handled bool, err error)
 
+	// Called exactly once when an app is signaled to close.
 	OnClosing()
 }
 
 type AppContext interface {
-	process.Context    // Container for AppRuntime
+	process.Context    // Each app instance has a process.Context 
 	arc.AssetPublisher // Allows an app to publish assets for client consumption
 	User() User        // Access to user operations and io
 	CellContext        // How to pin cells
@@ -242,6 +244,9 @@ type AppContext interface {
 
 	// Uses reflection to build and register (as necessary) an AttrSchema for a given a ptr to a struct.
 	GetSchemaForType(typ reflect.Type) (*AttrSchema, error)
+	
+	// Starts a child process 
+	// StartChild(task *process.Task) (process.Context, error)
 
 	// Loads the data stored at the given key, appends it to the given buffer, and returns the result (or an error).
 	// The given subKey is scoped by both the app and the user so key collision with other users or apps is not possible.
@@ -266,16 +271,18 @@ func (opts PushCellOpts) PushAsChild() bool  { return opts&PushAsChild != 0 }
 // type CellInfo struct {
 // 	CellID
 // 	CellDataModel string
-// 	AppContext
+// 	Label         string
 // }
 
 // PinnedCell?
 // AppCell is how an App offers a cell instance to the planet runtime.
 type AppCell interface {
+	//process.Context    // Started as sub of the app's AppContext
+
 	CellContext
 
-	//AppContext() AppContext
-
+	//Info() CellInfo
+	
 	// Returns the CellID of this cell
 	ID() CellID
 
@@ -302,6 +309,9 @@ type User interface {
 	HomePlanet() Planet
 
 	LoginInfo() LoginReq
+	
+	// Move to AppContext?
+	PushMetaMsg(msg *Msg) error
 
 	// Gets the currently active AppContext for an AppID.
 	// If does not exist and autoCreate is set, a new AppContext is created, started, and returned.

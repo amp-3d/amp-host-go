@@ -15,15 +15,10 @@ const (
 
 func init() {
 	filetype.AddType("jpeg", "image/jpeg")
-}
-
-func init() {
-	filetype.AddType("jpeg", "image/jpeg")
 
 	arc.RegisterApp(&arc.AppModule{
 		AppID:   AppID,
 		Version: "v1.2023.2",
-		//DataModels: api.DataModels,
 		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {
 			app := &appCtx{
 				AppContext: ctx,
@@ -37,11 +32,7 @@ type appCtx struct {
 	arc.AppContext
 }
 
-func (app *appCtx) AppID() string {
-	return api.AmpAppURI
-}
-
-func (app *appCtx) HandleAppMsg(m *arc.AppMsg) (handled bool, err error) {
+func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
 	return false, nil
 }
 

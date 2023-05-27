@@ -496,18 +496,17 @@ func (sess *hostSess) closeReq(reqID uint64, pushClose bool, msgVal interface{})
 	if req != nil {
 		req.closeReq(pushClose, msgVal)
 	} else if pushClose {
-		sess.pushMsg(reqID, arc.MsgOp_CloseReq, msgVal)
+		msg := arc.NewMsg()
+		msg.ReqID = reqID
+		msg.Op = arc.MsgOp_CloseReq
+		if msgVal != nil {
+			msg.SetVal(msgVal)
+		}
+		sess.pushMsg(msg)
 	}
 }
 
-func (sess *hostSess) pushMsg(reqID uint64, msgOp arc.MsgOp, msgVal interface{}) {
-	msg := arc.NewMsg()
-	msg.ReqID = reqID
-	msg.Op = msgOp
-
-	if msgVal != nil {
-		msg.SetVal(msgVal)
-	}
+func (sess *hostSess) pushMsg(msg *arc.Msg) {
 	select {
 	case sess.msgsOut <- msg:
 	case <-sess.Closing():
@@ -540,12 +539,13 @@ func (sess *hostSess) consumeInbox() {
 				case arc.MsgOp_PinCell:
 					err = sess.pinCell(msg)
 					closeReq = err != nil
-				case arc.MsgOp_AppMsg:
-					err = sess.dispatchAppMsg(msg)
+				case arc.MsgOp_MetaMsg:
+					err = sess.dispatchMetaMsg(msg)
 				case arc.MsgOp_ResolveAndRegister:
 					err = sess.resolveAndRegister(msg)
 				case arc.MsgOp_Login:
 					err = sess.login(msg)
+					closeReq = err != nil
 				case arc.MsgOp_CloseReq:
 				default:
 					err = arc.ErrCode_UnsupportedOp.Errorf("unknown MsgOp: %v", msg.Op)
@@ -570,18 +570,14 @@ func (sess *hostSess) login(msg *arc.Msg) error {
 	}
 
 	usr := &user{
-		openApps: make(map[string]*appContext),
-		sess:     sess,
+		loginReqID: msg.ReqID,
+		openApps:   make(map[string]*appContext),
+		sess:       sess,
 	}
 	if err := msg.LoadVal(&usr.LoginReq); err != nil {
 		return err
 	}
 
-	//usr.getSchemaForStruct(
-
-	//
-	// FUTURE: a "user home" app would start here and is bound to the userUID on the host's home arc.
-	//
 	seat, err := sess.host.home.getUser(usr.LoginReq, true)
 	if err != nil {
 		return err
@@ -593,17 +589,21 @@ func (sess *hostSess) login(msg *arc.Msg) error {
 	}
 
 	sess.user = usr
+
+	// Send response (nil denotes no error)
+	reply := arc.NewMsg()
+	sess.user.PushMetaMsg(reply)
 	return nil
 }
 
-func (sess *hostSess) dispatchAppMsg(msg *arc.Msg) error {
-	var appMsg arc.AppMsg
-	if err := msg.LoadVal(&appMsg); err != nil {
-		return err
-	}
+func (sess *hostSess) dispatchMetaMsg(msg *arc.Msg) error {
+
+	// TODO: deadlock if appCtx tries to open a new app
+	sess.user.openAppsMu.Lock()
+	defer sess.user.openAppsMu.Unlock()
 
 	for _, appCtx := range sess.user.openApps {
-		appCtx.HandleAppMsg(&appMsg)
+		appCtx.HandleMetaMsg(msg)
 	}
 	return nil
 }
@@ -699,7 +699,7 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 
 	// If no app context is available, choose an app based on the schema
 	if ctx == nil {
-		ctx, err = sess.user.cellContextForSchema(req.ContentSchema)
+		ctx, err = sess.user.appContextForSchema(req.ContentSchema, true)
 		if err != nil {
 			return err
 		}
@@ -732,6 +732,7 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 		return err
 	}
 
+	//err = ctx.startCell(req)
 	err = pl.queueReq(nil, req)
 	if err != nil {
 		return err
@@ -742,6 +743,7 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 
 type user struct {
 	arc.LoginReq
+	loginReqID       uint64
 	home             arc.Planet
 	sess             *hostSess
 	nextSchemaID     atomic.Int32
@@ -756,6 +758,23 @@ func (usr *user) Session() arc.HostSession {
 
 func (usr *user) LoginInfo() arc.LoginReq {
 	return usr.LoginReq
+}
+
+func (usr *user) PushMetaMsg(msg *arc.Msg) error {
+	msg.Op = arc.MsgOp_MetaMsg
+	if msg.ReqID == 0 {
+		msg.ReqID = usr.loginReqID
+	}
+
+	usr.sess.Infof(2, "PushMetaMsg to client: %v", msg.ValType)
+
+	req, err := usr.sess.getReq(msg.ReqID, getReq)
+	if req != nil && err == nil {
+		err = req.PushMsg(msg)
+	} else {
+		usr.sess.pushMsg(msg)
+	}
+	return err
 }
 
 func (usr *user) HomePlanet() arc.Planet {
@@ -786,6 +805,7 @@ func (usr *user) getAppContext(appID string, autoCreate bool) (*appContext, erro
 		app = &appContext{
 			user:  usr,
 			appID: appID,
+			//cells: make(map[arc.CellID]*cellInst),
 		}
 		app.AppRuntime, err = appModule.NewAppInstance(app)
 		if err != nil {
@@ -809,17 +829,17 @@ func (usr *user) getAppContext(appID string, autoCreate bool) (*appContext, erro
 	return app, nil
 }
 
-func (usr *user) cellContextForSchema(schema *arc.AttrSchema) (arc.CellContext, error) {
+func (usr *user) appContextForSchema(schema *arc.AttrSchema, autoCreate bool) (*appContext, error) {
 	appModule, err := schema.SelectAppForSchema()
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, err := usr.getAppContext(appModule.AppID, true)
+	ctx, err := usr.getAppContext(appModule.AppID, autoCreate)
 	if err != nil {
 		return nil, err
 	}
-	return ctx.AppRuntime, nil
+	return ctx, nil
 }
 
 func (usr *user) GetSchemaForType(typ reflect.Type) (*arc.AttrSchema, error) {
@@ -867,7 +887,9 @@ type appContext struct {
 	process.Context
 	*user
 	arc.AppRuntime
-	appID string
+	appID   string
+	cells   map[arc.CellID]*cellInst // cells that recently have one or more active cells (subscriptions)
+	cellsMu sync.Mutex               // cells mutex
 }
 
 func (ctx *appContext) IssueCellID() arc.CellID {
@@ -912,6 +934,92 @@ func (ctx *appContext) PutAppValue(subKey string, value []byte) error {
 	return err
 }
 
+/*
+func (ctx *appContext) startCell(req *openReq) error {
+	if req.cell != nil {
+		panic("already has sub")
+	}
+
+	cell, err := ctx.bindAndStart(req)
+	if err != nil {
+		return err
+	}
+	req.cell = cell
+
+	// Add incoming req to the cell IDs list of subs
+	cell.subsMu.Lock()
+	{
+		prev := &cell.subsHead
+		for *prev != nil {
+			prev = &((*prev).next)
+		}
+		*prev = req
+		req.next = nil
+
+		cell.newReqs <- req
+	}
+	cell.idleSecs = 0
+	cell.subsMu.Unlock()
+
+	return nil
+}
+
+func (ctx *appContext) bindAndStart(req *openReq) (cell *cellInst, err error) {
+	ctx.cellsMu.Lock()
+	defer ctx.cellsMu.Unlock()
+
+	ID := req.pinned.ID()
+
+	// If the cell is already open, we're done
+	cell = ctx.cells[ID]
+	if cell != nil {
+		return
+	}
+
+	cell = &cellInst{
+		CellID:  ID,
+		newReqs: make(chan *openReq),
+		newTxns: make(chan *arc.MsgBatch),
+	}
+
+	cell.Context, err = ctx.Context.StartChild(&process.Task{
+		//Label: req.pinned.Context.Label(),
+		Label: fmt.Sprintf("CellID %d", ID),
+		OnRun: func(ctx process.Context) {
+
+			for running := true; running; {
+
+				// Manage incoming subs, push state to subs, and then maintain state for each sub.
+				select {
+				case req := <-cell.newReqs:
+					var err error
+					{
+						req.PushBeginPin(cell.CellID)
+
+						// TODO: verify that a cell pushing state doesn't escape idle or close analysis
+						err = req.pinned.PushCellState(&req.CellReq, arc.PushAsParent)
+					}
+					req.PushCheckpoint(err)
+
+				case tx := <-cell.newTxns:
+					cell.pushToSubs(tx)
+
+				case <-cell.Context.Closing():
+					running = false
+				}
+
+			}
+
+		},
+	})
+	if err != nil {
+		return
+	}
+
+	ctx.cells[ID] = cell
+	return
+}
+*/
 /*
 
 

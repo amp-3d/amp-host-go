@@ -114,7 +114,8 @@ func (msg *Msg) SetValInt(valType ValType, valInt int64) {
 	msg.ValBuf = msg.ValBuf[:0]
 }
 
-func (msg *Msg) SetValBuf(valType ValType, sz int) {
+// Sets ValType to the given type and resizes ValBuf to the given size in preparation to receive value data.
+func (msg *Msg) SetupValBuf(valType ValType, sz int) {
 	msg.ValInt = int64(sz)
 	msg.ValType = valType
 	if sz > cap(msg.ValBuf) {
@@ -124,43 +125,46 @@ func (msg *Msg) SetValBuf(valType ValType, sz int) {
 	}
 }
 
+// Sets ValType to the given type and copies value data into ValBuf.
+func (msg *Msg) SetValBuf(valType ValType, valSrc []byte) {
+	msg.SetupValBuf(valType, len(valSrc))
+	copy(msg.ValBuf, valSrc)
+}
+
 func (msg *Msg) SetVal(val interface{}) {
 	var err error
 
 	switch v := val.(type) {
 
 	case string:
-		msg.SetValBuf(ValType_string, len(v))
-		copy(msg.ValBuf, v)
+		msg.SetValBuf(ValType_bytes, []byte(v))
 
 	case *[]byte:
-		msg.SetValBuf(ValType_bytes, len(*v))
-		copy(msg.ValBuf, *v)
+		msg.SetValBuf(ValType_bytes, *v)
 
 	case []byte:
-		msg.SetValBuf(ValType_bytes, len(v))
-		copy(msg.ValBuf, v)
+		msg.SetValBuf(ValType_bytes, v)
 
 	case time.Time:
 		msg.SetValInt(ValType_DateTime, int64(ConvertToTimeFS(v)))
 
 	case *AssetRef:
-		msg.SetValBuf(ValType_AssetRef, v.Size())
+		msg.SetupValBuf(ValType_AssetRef, v.Size())
 		_, err = v.MarshalToSizedBuffer(msg.ValBuf)
 
 	case TimeFS:
 		msg.SetValInt(ValType_DateTime, int64(v))
 
 	case *Defs:
-		msg.SetValBuf(ValType_Defs, v.Size())
+		msg.SetupValBuf(ValType_Defs, v.Size())
 		_, err = v.MarshalToSizedBuffer(msg.ValBuf)
 
 		// case *CellInfo:
-		// 	msg.SetValBuf(uint64(ValType_CellInfo), v.Size())
+		// 	msg.SetupValBuf(uint64(ValType_CellInfo), v.Size())
 		//     _, err = v.MarshalToSizedBuffer(msg.ValBuf)
 
 	case *Err:
-		msg.SetValBuf(ValType_Err, v.Size())
+		msg.SetupValBuf(ValType_Err, v.Size())
 		_, err = v.MarshalToSizedBuffer(msg.ValBuf)
 
 	case error:
@@ -169,11 +173,11 @@ func (msg *Msg) SetVal(val interface{}) {
 			err := ErrCode_UnnamedErr.Wrap(v)
 			plErr = err.(*Err)
 		}
-		msg.SetValBuf(ValType_Err, plErr.Size())
+		msg.SetupValBuf(ValType_Err, plErr.Size())
 		_, err = plErr.MarshalToSizedBuffer(msg.ValBuf)
 
 	case nil:
-		msg.SetValBuf(ValType_nil, 0)
+		msg.SetupValBuf(ValType_nil, 0)
 	}
 
 	if err != nil {
@@ -231,9 +235,9 @@ func (msg *Msg) LoadVal(dst interface{}) error {
 			}
 		}
 
-	case ValType_AppMsg:
-		if v, match := dst.(*AppMsg); match {
-			tmp := AppMsg{}
+	case ValType_HandleURI:
+		if v, match := dst.(*HandleURI); match {
+			tmp := HandleURI{}
 			if tmp.Unmarshal(msg.ValBuf) == nil {
 				*v = tmp
 				ok = true

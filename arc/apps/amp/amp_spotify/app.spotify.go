@@ -10,7 +10,6 @@ import (
 
 	"github.com/arcspace/go-arc-sdk/stdlib/platform"
 	"github.com/arcspace/go-archost/arc"
-	"github.com/arcspace/go-archost/arc/apps/amp/api"
 	respot "github.com/arcspace/go-librespot/librespot/api-respot"
 	_ "github.com/arcspace/go-librespot/librespot/core" // bootstrap
 	"github.com/zmb3/spotify/v2"
@@ -53,10 +52,6 @@ type appCtx struct {
 	home          AmpCell
 	respot        respot.Session
 	sessReady     chan struct{} // closed when login is complete
-}
-
-func (app *appCtx) AppID() string {
-	return api.AmpAppURI
 }
 
 func (app *appCtx) OnClosing() {

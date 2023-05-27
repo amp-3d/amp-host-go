@@ -38,7 +38,7 @@ type appCtx struct {
 	// spotifyApp arc.AppContext
 }
 
-func (app *appCtx) HandleAppMsg(m *arc.AppMsg) (handled bool, err error) {
+func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
 	return false, nil
 }
 
