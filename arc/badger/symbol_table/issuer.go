@@ -11,22 +11,50 @@ import (
 
 var ErrIssuerClosed = errors.New("issuer is closed")
 
-// issuer implements symbol.Issuer using badger.DB
-type issuer struct {
-	db        *badger.DB
-	nextIDSeq *badger.Sequence
-	nextID    uint64 // Only used if db == nil
-	refCount  atomic.Int32
+func NewVolatileIssuer() symbol.Issuer {
+	iss := &atomicIssuer{}
+	iss.nextID.Store(symbol.MinIssuedID)
+	iss.refCount.Store(1)
+	return iss
 }
 
-func newIssuer(db *badger.DB, opts TableOpts) (symbol.Issuer, error) {
-	iss := &issuer{
-		db:     db,
-		nextID: symbol.MinIssuedID,
+// atomicIssuer implements symbol.Issuer using an atomic int
+type atomicIssuer struct {
+	nextID   atomic.Uint64
+	refCount atomic.Int32
+	closed   bool
+}
+
+func (iss *atomicIssuer) IssueNextID() (symbol.ID, error) {
+	if iss.closed {
+		return 0, ErrIssuerClosed
+	}
+	nextID := iss.nextID.Add(1)
+	return symbol.ID(nextID), nil
+}
+
+func (iss *atomicIssuer) AddRef() {
+	iss.refCount.Add(1)
+}
+
+func (iss *atomicIssuer) Close() error {
+	if iss.refCount.Add(-1) > 0 {
+		return nil
+	}
+	if iss.closed {
+		return ErrIssuerClosed
+	}
+	iss.closed = true
+	return nil
+}
+
+func NewBadgerIssuer(db *badger.DB, dbKeyPrefix byte) (symbol.Issuer, error) {
+	iss := &badgerIssuer{
+		db: db,
 	}
 
 	if iss.db != nil {
-		seqKey := []byte{opts.DbKeyPrefix, 0xFF, xNextID}
+		seqKey := append([]byte{}, dbKeyPrefix, 0xFF, xNextID)
 		txn := db.NewTransaction(true)
 		defer txn.Discard()
 
@@ -55,34 +83,34 @@ func newIssuer(db *badger.DB, opts TableOpts) (symbol.Issuer, error) {
 	return iss, nil
 }
 
-func (iss *issuer) IssueNextID() (symbol.ID, error) {
-	var nextID uint64
-	var err error
-
-	if iss.db != nil {
-		nextID, err = iss.nextIDSeq.Next()
-		if err != nil {
-			panic(err)
-		}
-	} else if iss.nextID != 0 {
-		nextID = atomic.AddUint64(&iss.nextID, 1)
-	}
-
-	return symbol.ID(nextID), nil
+// badgerIssuer implements symbol.Issuer using badger.DB
+type badgerIssuer struct {
+	db        *badger.DB
+	nextIDSeq *badger.Sequence
+	refCount  atomic.Int32
 }
 
-func (iss *issuer) AddRef() {
+func (iss *badgerIssuer) IssueNextID() (symbol.ID, error) {
+	if iss.db == nil {
+		return 0, ErrIssuerClosed
+	}
+
+	nextID, err := iss.nextIDSeq.Next()
+	return symbol.ID(nextID), err
+}
+
+func (iss *badgerIssuer) AddRef() {
 	iss.refCount.Add(1)
 }
 
-func (iss *issuer) Close() error {
+func (iss *badgerIssuer) Close() error {
 	if iss.refCount.Add(-1) > 0 {
 		return nil
 	}
 	return iss.close()
 }
 
-func (iss *issuer) close() error {
+func (iss *badgerIssuer) close() error {
 	if iss.db == nil {
 		return nil
 	}

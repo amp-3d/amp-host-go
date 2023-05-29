@@ -27,7 +27,11 @@ func (opts TableOpts) CreateTable() (symbol.Table, error) {
 
 	var err error
 	if st.opts.Issuer == nil {
-		st.opts.Issuer, err = newIssuer(opts.Db, opts)
+		if opts.Db != nil {
+			st.opts.Issuer, err = NewBadgerIssuer(opts.Db, opts.DbKeyPrefix)
+		} else {
+			st.opts.Issuer = NewVolatileIssuer()	
+		}
 		if err != nil {
 			return nil, err
 		}

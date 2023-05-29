@@ -93,16 +93,16 @@ func (srv *httpServer) StartService(host process.Context) error {
 		panic("already started")
 	}
 
-	listen, err := net.Listen("tcp", srv.opts.ListenAddr)
+	lis, err := net.Listen("tcp", srv.opts.ListenAddr)
 	if err != nil {
 		return err
 	}
 
 	srv.host = host
 	srv.Context, err = srv.host.StartChild(&process.Task{
-		Label: fmt.Sprintf("AssetServer (%v)", srv.opts.ListenAddr),
+		Label: fmt.Sprintf("AssetServer %v", lis.Addr().String()),
 		OnRun: func(ctx process.Context) {
-			srv.server.Serve(listen)
+			srv.server.Serve(lis)
 			ctx.Info(2, "Serve COMPLETE")
 		},
 		OnClosing: func() {

@@ -50,7 +50,7 @@ func (srv *grpcServer) StartService(on arc.Host) error {
 	arc.RegisterHostGrpcServer(srv.server, srv)
 
 	srv.Context, err = srv.host.StartChild(&process.Task{
-		Label:     fmt.Sprint(srv.ServiceURI(), ".HostService"),
+		Label:     fmt.Sprintf("%s.HostService %v", srv.ServiceURI(), lis.Addr().String()),
 		IdleClose: time.Nanosecond,
 		OnRun: func(ctx process.Context) {
 			srv.Infof(0, "Serving on \x1b[1;32m%v %v\x1b[0m", srv.opts.ListenNetwork, srv.opts.ListenAddr)
