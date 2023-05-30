@@ -5,11 +5,11 @@ import "C"
 
 import (
 	"fmt"
+	"log"
 	"sync"
 
-	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/arc/archost"
-	"github.com/arcspace/go-archost/arc/host"
 	"github.com/arcspace/go-archost/arc/lib_service"
 )
 
@@ -24,22 +24,26 @@ func Call_SessionBegin(userID, userDataPath, sharedCachePath string) int64 {
 		return 0
 	}
 
-	hostOpts := host.DefaultHostOpts(0)
+	hostOpts := archost.DefaultOpts(0)
 	hostOpts.CachePath = sharedCachePath
 	hostOpts.StatePath = userDataPath
-	h := archost.StartNewHost(hostOpts)
+	host, err := archost.StartNewHost(hostOpts)
+	if err != nil {
+		log.Fatalf("failed to start new host: %v", err)
+	}
+
 
 	opts := lib_service.DefaultLibServiceOpts()
 	gLibService = opts.NewLibService()
-	err := gLibService.StartService(h)
+	err = gLibService.StartService(host)
 	if err == nil {
 		gLibSession, err = gLibService.NewLibSession()
 	}
 
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to start LibService: %v", err)
-		h.Error(errMsg)
-		h.Close()
+		host.Error(errMsg)
+		host.Close()
 		return 0
 	}
 

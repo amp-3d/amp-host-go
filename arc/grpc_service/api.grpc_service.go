@@ -3,7 +3,7 @@ package grpc_service
 import (
 	"fmt"
 
-	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 )
 
 // GrpcServerOpts exposes grpc server options and params

@@ -7,8 +7,7 @@ import (
 	"strings"
 	"time"
 
-	arc_sdk "github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/arc/apps/amp/api"
 	"github.com/arcspace/go-archost/arc/assets"
 )
@@ -206,7 +205,7 @@ func (file *fsFile) PinCell(req *arc.CellReq) (arc.AppCell, error) {
 		if err != nil {
 			return nil, err
 		}
-		file.app.PublishAsset(asset, arc_sdk.PublishOpts{})
+		file.app.PublishAsset(asset, arc.PublishOpts{})
 		return file, nil
 	}
 

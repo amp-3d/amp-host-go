@@ -1,8 +1,8 @@
 package amp_spotify
 
 import (
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	arc_sdk "github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/arc"
 	"github.com/arcspace/go-archost/arc/apps/amp/api"
 	respot "github.com/arcspace/go-librespot/librespot/api-respot"
 	"github.com/zmb3/spotify/v2"

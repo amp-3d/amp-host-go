@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	respot "github.com/arcspace/go-librespot/librespot/api-respot"
 	_ "github.com/arcspace/go-librespot/librespot/core" // bootstrap
 	"github.com/zmb3/spotify/v2"
@@ -19,8 +19,8 @@ const (
 	AppID = "arcspace.systems.app.amp.spotify"
 )
 
-func init() {
-	arc.RegisterApp(&arc.AppModule{
+func RegisterApp(reg arc.Registry) {
+	reg.RegisterApp(&arc.AppModule{
 		AppID:   AppID,
 		Version: "v1.2023.2",
 		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {
@@ -75,8 +75,7 @@ func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
 				tokenJson, err = json.Marshal(token)
 				if err == nil {
 					if err = app.PutAppValue(kTokenNameID, tokenJson); err == nil {
-						app.Info(2, "wrote %s", kTokenNameID)
-
+						app.Info(2, "wrote ", kTokenNameID)
 						err = app.trySession()
 					}
 				}

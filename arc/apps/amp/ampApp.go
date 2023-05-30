@@ -1,27 +1,27 @@
 package amp
 
 import (
-	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/arc/apps/amp/amp_spotify"
 	"github.com/arcspace/go-archost/arc/apps/amp/api"
 	"github.com/arcspace/go-archost/arc/apps/amp/bs"
 	"github.com/arcspace/go-archost/arc/apps/amp/filesys"
 )
 
-//
-//
-//
-// THIS GOES AWAY WHEN WE HAVE home.Dir and home.Link etc
-//
-//
-//
-
-func init() {
-
-	arc.RegisterApp(&arc.AppModule{
+func RegisterApp(reg arc.Registry) {
+	bs.RegisterApp(reg)
+	filesys.RegisterApp(reg)
+	amp_spotify.RegisterApp(reg)
+	
+	reg.RegisterApp(&arc.AppModule{
 		AppID:      api.AmpAppURI,
 		Version:    "v1.2023.2",
 		DataModels: api.DataModels,
+		Dependencies: []string{
+			bs.AppID,
+			filesys.AppID,
+			amp_spotify.AppID,
+		},
 		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {
 			app := &appCtx{
 				AppContext: ctx,
@@ -33,9 +33,6 @@ func init() {
 
 type appCtx struct {
 	arc.AppContext
-	// fsApp      arc.AppContext
-	// bsApp      arc.AppContext
-	// spotifyApp arc.AppContext
 }
 
 func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {

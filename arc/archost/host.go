@@ -1,4 +1,4 @@
-package host
+package archost
 
 import (
 	"fmt"
@@ -9,21 +9,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	arc_sdk "github.com/arcspace/go-arc-sdk/apis/arc"
-
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-arc-sdk/stdlib/bufs"
 	"github.com/arcspace/go-arc-sdk/stdlib/process"
 	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
 	"github.com/arcspace/go-arc-sdk/stdlib/utils"
-	"github.com/arcspace/go-archost/arc"
-	"github.com/arcspace/go-archost/arc/assets"
 	"github.com/arcspace/go-archost/arc/badger/symbol_table"
 	"github.com/dgraph-io/badger/v4"
 )
 
 type host struct {
 	process.Context
-	opts HostOpts
+	Opts
 
 	homePlanetID uint64
 	home         *planetSess // Home planet of this host
@@ -35,7 +32,7 @@ const (
 	hackHostPlanetID = 66
 )
 
-func startNewHost(opts HostOpts) (arc.Host, error) {
+func startNewHost(opts Opts) (arc.Host, error) {
 	var err error
 	if opts.StatePath, err = utils.ExpandAndCheckPath(opts.StatePath, true); err != nil {
 		return nil, err
@@ -48,7 +45,7 @@ func startNewHost(opts HostOpts) (arc.Host, error) {
 	}
 
 	host := &host{
-		opts:   opts,
+		Opts:   opts,
 		plSess: make(map[uint64]*planetSess),
 	}
 
@@ -64,7 +61,7 @@ func startNewHost(opts HostOpts) (arc.Host, error) {
 	// }
 
 	host.Context, err = process.Start(&process.Task{
-		Label:     host.opts.Label,
+		Label:     host.Opts.Desc,
 		IdleClose: time.Nanosecond,
 		OnClosed: func() {
 			host.Info(1, "arc.Host shutdown complete")
@@ -74,7 +71,7 @@ func startNewHost(opts HostOpts) (arc.Host, error) {
 		return nil, err
 	}
 
-	err = host.opts.AssetServer.StartService(host.Context)
+	err = host.AssetServer.StartService(host.Context)
 	if err != nil {
 		host.Close()
 		return nil, err
@@ -227,7 +224,7 @@ func (host *host) mountPlanet(
 
 	pl = &planetSess{
 		planetID: planetID,
-		dbPath:   path.Join(host.opts.StatePath, string(fsName)),
+		dbPath:   path.Join(host.Opts.StatePath, string(fsName)),
 		cells:    make(map[arc.CellID]*cellInst),
 		//newReqs:  make(chan *openReq, 1),
 	}
@@ -517,8 +514,8 @@ func (sess *hostSess) LoggedIn() arc.User {
 	return sess.user
 }
 
-func (sess *hostSess) AssetServer() assets.AssetServer {
-	return sess.host.opts.AssetServer
+func (sess *hostSess) AssetPublisher() arc.AssetPublisher {
+	return sess.host.Opts.AssetServer
 }
 
 func (sess *hostSess) consumeInbox() {
@@ -568,6 +565,10 @@ func (sess *hostSess) login(msg *arc.Msg) error {
 	if sess.user != nil {
 		return arc.ErrCode_InvalidLogin.Error("already logged in")
 	}
+
+	// TODO: make user/login an app that just stays open while pinned
+	//     - could contain typeRegistry!
+	//     - a "user home" app would start here and is bound to the userUID on the host's home arc.
 
 	usr := &user{
 		loginReqID: msg.ReqID,
@@ -752,6 +753,10 @@ type user struct {
 	valStoreSchemaID int32
 }
 
+func (usr *user) registry() arc.Registry {
+	return usr.sess.host.Opts.Registry
+}
+
 func (usr *user) Session() arc.HostSession {
 	return usr.sess
 }
@@ -797,7 +802,7 @@ func (usr *user) getAppContext(appID string, autoCreate bool) (*appContext, erro
 
 	app := usr.openApps[appID]
 	if app == nil && autoCreate {
-		appModule, err := arc.GetRegisteredApp(appID)
+		appModule, err := usr.registry().GetAppByID(appID)
 		if err != nil {
 			return nil, err
 		}
@@ -830,7 +835,7 @@ func (usr *user) getAppContext(appID string, autoCreate bool) (*appContext, erro
 }
 
 func (usr *user) appContextForSchema(schema *arc.AttrSchema, autoCreate bool) (*appContext, error) {
-	appModule, err := schema.SelectAppForSchema()
+	appModule, err := usr.registry().SelectAppForSchema(schema)
 	if err != nil {
 		return nil, err
 	}
@@ -904,8 +909,8 @@ func (ctx *appContext) StateScope() string {
 	return ctx.appID
 }
 
-func (ctx *appContext) PublishAsset(asset arc_sdk.MediaAsset, opts arc_sdk.PublishOpts) (URL string, err error) {
-	return ctx.user.sess.AssetServer().PublishAsset(asset, opts)
+func (ctx *appContext) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) (URL string, err error) {
+	return ctx.user.sess.AssetPublisher().PublishAsset(asset, opts)
 }
 
 func (ctx *appContext) GetAppValue(subKey string) ([]byte, error) {

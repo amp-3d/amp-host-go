@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/arc/apps/amp/api"
 )
 
@@ -12,8 +12,8 @@ const (
 	AppID = "arcspace.systems.app.amp.bookmark-service"
 )
 
-func init() {
-	arc.RegisterApp(&arc.AppModule{
+func RegisterApp(reg arc.Registry) { 
+	reg.RegisterApp(&arc.AppModule{
 		AppID:   AppID,
 		Version: "v1.2023.2",
 		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {

@@ -1,13 +1,13 @@
-package host
+package archost
 
 import (
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-arc-sdk/stdlib/process"
 	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
-	"github.com/arcspace/go-archost/arc"
 	"github.com/arcspace/go-archost/arc/badger/symbol_table"
 	"github.com/dgraph-io/badger/v4"
 )

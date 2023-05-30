@@ -1,9 +1,9 @@
 package api
 
-import "github.com/arcspace/go-archost/arc"
+import "github.com/arcspace/go-arc-sdk/apis/arc"
 
 const (
-	AmpAppURI = "arcspace.systems.amp.app"
+	AmpAppURI = "arcspace.systems.app.amp"
 
 	// KwArg names
 	KwArg_Provider = "amp.provider" // specifies an amp media or system provider - e.g. "amp:", "filesys:", "spotify:"

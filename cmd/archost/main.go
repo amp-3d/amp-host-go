@@ -5,13 +5,12 @@ import (
 	"path"
 	"time"
 
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-arc-sdk/stdlib/log"
 	"github.com/arcspace/go-arc-sdk/stdlib/process"
 	"github.com/arcspace/go-arc-sdk/stdlib/utils"
-	"github.com/arcspace/go-archost/arc"
 	"github.com/arcspace/go-archost/arc/archost"
 	"github.com/arcspace/go-archost/arc/grpc_service"
-	"github.com/arcspace/go-archost/arc/host"
 )
 
 func main() {
@@ -23,7 +22,7 @@ func main() {
 	defaultDataPath := path.Join(exePath, "archost.data")
 
 	hostPort := flag.Int("host-port", int(arc.Const_DefaultGrpcServicePort), "Sets the port used to bind HostGrpc service")
-	asserPort := flag.Int("asset-port", int(arc.Const_DefaultGrpcServicePort+1), "Sets the port used for serving pinned assets")
+	assetPort := flag.Int("asset-port", int(arc.Const_DefaultGrpcServicePort+1), "Sets the port used for serving pinned assets")
 	showTree := flag.Int("show-tree", 0, "Prints the process tree periodically, checking every given number of seconds")
 	dataPath := flag.String("data-path", defaultDataPath, "Specifies the path for all file access and storage")
 
@@ -38,9 +37,12 @@ func main() {
 
 	flag.Parse()
 
-	hostOpts := host.DefaultHostOpts(*asserPort)
-	hostOpts.StatePath = *dataPath
-	host := archost.StartNewHost(hostOpts)
+	hostOpts := archost.DefaultOpts(*assetPort)
+	hostOpts.StatePath = *dataPath	
+	host, err := archost.StartNewHost(hostOpts)
+	if err != nil {
+		log.Fatalf("failed to start new host: %v", err)
+	}
 
 	opts := grpc_service.DefaultGrpcServerOpts(*hostPort)
 	srv := opts.NewGrpcServer()

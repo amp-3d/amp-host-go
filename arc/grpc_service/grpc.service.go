@@ -12,8 +12,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-arc-sdk/stdlib/process"
-	"github.com/arcspace/go-archost/arc"
 )
 
 // grpcServer is the GRPC implementation of repo.proto

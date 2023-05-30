@@ -4,7 +4,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/arcspace/go-archost/arc"
+	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/arc/apps/amp/api"
 	"github.com/h2non/filetype"
 )
@@ -15,8 +15,10 @@ const (
 
 func init() {
 	filetype.AddType("jpeg", "image/jpeg")
+}
 
-	arc.RegisterApp(&arc.AppModule{
+func RegisterApp(reg arc.Registry) {
+	reg.RegisterApp(&arc.AppModule{
 		AppID:   AppID,
 		Version: "v1.2023.2",
 		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {

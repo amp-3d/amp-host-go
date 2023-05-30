@@ -14,7 +14,7 @@ go 1.18
 //replace github.com/arcspace/go-librespot => ../go-librespot
 
 require (
-	github.com/arcspace/go-arc-sdk v0.0.0-20230526150836-54e7acca8513
+	github.com/arcspace/go-arc-sdk v0.0.0-20230530023040-100ed509f2df
 	github.com/arcspace/go-librespot v0.0.0-20230527150509-0eb720f38a25
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/gogo/protobuf v1.3.2
