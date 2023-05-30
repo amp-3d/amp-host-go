@@ -86,6 +86,10 @@ func startNewHost(opts Opts) (arc.Host, error) {
 	return host, nil
 }
 
+func (host *host) Registry() arc.Registry {
+	return host.Opts.Registry
+}
+
 func (host *host) mountHomePlanet() error {
 	var err error
 
@@ -572,7 +576,7 @@ func (sess *hostSess) login(msg *arc.Msg) error {
 
 	usr := &user{
 		loginReqID: msg.ReqID,
-		openApps:   make(map[string]*appContext),
+		openApps:   make(map[arc.UID]*appContext),
 		sess:       sess,
 	}
 	if err := msg.LoadVal(&usr.LoginReq); err != nil {
@@ -749,7 +753,7 @@ type user struct {
 	sess             *hostSess
 	nextSchemaID     atomic.Int32
 	openAppsMu       sync.Mutex
-	openApps         map[string]*appContext
+	openApps         map[arc.UID]*appContext
 	valStoreSchemaID int32
 }
 
@@ -786,30 +790,30 @@ func (usr *user) HomePlanet() arc.Planet {
 	return usr.home
 }
 
-func (usr *user) onAppClosing(appID string) {
+func (usr *user) onAppClosing(appCtx *appContext) {
 	usr.openAppsMu.Lock()
-	delete(usr.openApps, appID)
+	delete(usr.openApps, appCtx.appID)
 	usr.openAppsMu.Unlock()
 }
 
-func (usr *user) GetAppContext(appID string, autoCreate bool) (arc.AppContext, error) {
+func (usr *user) GetAppContext(appID arc.UID, autoCreate bool) (arc.AppContext, error) {
 	return usr.getAppContext(appID, autoCreate)
 }
 
-func (usr *user) getAppContext(appID string, autoCreate bool) (*appContext, error) {
+func (usr *user) getAppContext(appID arc.UID, autoCreate bool) (*appContext, error) {
 	usr.openAppsMu.Lock()
 	defer usr.openAppsMu.Unlock()
 
 	app := usr.openApps[appID]
 	if app == nil && autoCreate {
-		appModule, err := usr.registry().GetAppByID(appID)
+		appModule, err := usr.registry().GetAppByUID(appID)
 		if err != nil {
 			return nil, err
 		}
 
 		app = &appContext{
 			user:  usr,
-			appID: appID,
+			appID: appModule.UID,
 			//cells: make(map[arc.CellID]*cellInst),
 		}
 		app.AppRuntime, err = appModule.NewAppInstance(app)
@@ -817,10 +821,10 @@ func (usr *user) getAppContext(appID string, autoCreate bool) (*appContext, erro
 			return nil, err
 		}
 		app.Context, err = usr.Session().StartChild(&process.Task{
-			Label:     appID,
+			Label:     appModule.URI,
 			IdleClose: 1 * time.Minute,
 			OnClosing: func() {
-				app.user.onAppClosing(app.appID)
+				app.user.onAppClosing(app)
 				app.AppRuntime.OnClosing()
 			},
 		})
@@ -828,59 +832,23 @@ func (usr *user) getAppContext(appID string, autoCreate bool) (*appContext, erro
 			return nil, err
 		}
 
-		usr.openApps[appModule.AppID] = app
+		usr.openApps[appModule.UID] = app
 	}
 
 	return app, nil
 }
 
 func (usr *user) appContextForSchema(schema *arc.AttrSchema, autoCreate bool) (*appContext, error) {
-	appModule, err := usr.registry().SelectAppForSchema(schema)
+	appModule, err := usr.registry().GetAppForSchema(schema)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, err := usr.getAppContext(appModule.AppID, autoCreate)
+	ctx, err := usr.getAppContext(appModule.UID, autoCreate)
 	if err != nil {
 		return nil, err
 	}
 	return ctx, nil
-}
-
-func (usr *user) GetSchemaForType(typ reflect.Type) (*arc.AttrSchema, error) {
-
-	// TODO: skip if already registered
-	{
-	}
-
-	schema, err := arc.MakeSchemaForType(".sys", typ)
-	if err != nil {
-		return nil, err
-	}
-
-	schema.SchemaID = usr.nextSchemaID.Add(-1) // negative IDs reserved for host-side schemas
-	defs := arc.Defs{
-		Schemas: []*arc.AttrSchema{schema},
-	}
-	err = usr.Session().ResolveAndRegister(&defs)
-	if err != nil {
-		return nil, err
-	}
-
-	return schema, nil
-}
-
-func (usr *user) getValStoreSchema() (schema *arc.AttrSchema, err error) {
-	if usr.valStoreSchemaID == 0 {
-		schema, err = usr.GetSchemaForType(reflect.TypeOf(valStore{}))
-		if err != nil {
-			return
-		}
-		usr.valStoreSchemaID = schema.SchemaID
-	} else {
-		schema, err = usr.Session().GetSchemaByID(usr.valStoreSchemaID)
-	}
-	return
 }
 
 // valStore is used to build an ad-hoc schema that we use to store app-specific values.
@@ -892,7 +860,7 @@ type appContext struct {
 	process.Context
 	*user
 	arc.AppRuntime
-	appID   string
+	appID   arc.UID
 	cells   map[arc.CellID]*cellInst // cells that recently have one or more active cells (subscriptions)
 	cellsMu sync.Mutex               // cells mutex
 }
@@ -905,8 +873,8 @@ func (ctx *appContext) User() arc.User {
 	return ctx.user
 }
 
-func (ctx *appContext) StateScope() string {
-	return ctx.appID
+func (ctx *appContext) StateScope() []byte {
+	return ctx.appID[:]
 }
 
 func (ctx *appContext) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) (URL string, err error) {
@@ -914,7 +882,7 @@ func (ctx *appContext) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) 
 }
 
 func (ctx *appContext) GetAppValue(subKey string) ([]byte, error) {
-	schema, err := ctx.user.getValStoreSchema()
+	schema, err := ctx.getValStoreSchema()
 	if err != nil {
 		return nil, err
 	}
@@ -929,7 +897,7 @@ func (ctx *appContext) GetAppValue(subKey string) ([]byte, error) {
 }
 
 func (ctx *appContext) PutAppValue(subKey string, value []byte) error {
-	schema, err := ctx.user.getValStoreSchema()
+	schema, err := ctx.getValStoreSchema()
 	if err != nil {
 		return err
 	}
@@ -937,6 +905,42 @@ func (ctx *appContext) PutAppValue(subKey string, value []byte) error {
 	v := valStore{value}
 	err = arc.WriteCell(ctx, subKey, schema, &v)
 	return err
+}
+
+func (ctx *appContext) GetSchemaForType(typ reflect.Type) (*arc.AttrSchema, error) {
+
+	// TODO: skip if already registered
+	{
+	}
+
+	schema, err := arc.MakeSchemaForType(typ)
+	if err != nil {
+		return nil, err
+	}
+
+	schema.SchemaID = ctx.nextSchemaID.Add(-1) // negative IDs reserved for host-side schemas
+	defs := arc.Defs{
+		Schemas: []*arc.AttrSchema{schema},
+	}
+	err = ctx.Session().ResolveAndRegister(&defs)
+	if err != nil {
+		return nil, err
+	}
+
+	return schema, nil
+}
+
+func (ctx *appContext) getValStoreSchema() (schema *arc.AttrSchema, err error) {
+	if ctx.valStoreSchemaID == 0 {
+		schema, err = ctx.GetSchemaForType(reflect.TypeOf(valStore{}))
+		if err != nil {
+			return
+		}
+		ctx.valStoreSchemaID = schema.SchemaID
+	} else {
+		schema, err = ctx.Session().GetSchemaByID(ctx.valStoreSchemaID)
+	}
+	return
 }
 
 /*

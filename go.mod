@@ -14,7 +14,7 @@ go 1.18
 //replace github.com/arcspace/go-librespot => ../go-librespot
 
 require (
-	github.com/arcspace/go-arc-sdk v0.0.0-20230530023040-100ed509f2df
+	github.com/arcspace/go-arc-sdk v0.0.0-20230530204456-23b1ae1dd6d5
 	github.com/arcspace/go-librespot v0.0.0-20230527150509-0eb720f38a25
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/gogo/protobuf v1.3.2
@@ -36,6 +36,7 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
+	github.com/google/uuid v1.3.0 // indirect
 	github.com/klauspost/compress v1.16.5 // indirect
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/rs/cors v1.9.0 // indirect
@@ -45,6 +46,6 @@ require (
 	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230526203410-71b5a4ffd15e // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230530153820-e85fd2cbaebc // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 )

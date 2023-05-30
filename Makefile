@@ -4,13 +4,12 @@ SHELL = /bin/bash -o nounset -o errexit -o pipefail
 BUILD_PATH  := $(patsubst %/,%,$(abspath $(dir $(lastword $(MAKEFILE_LIST)))))
 PARENT_PATH := $(patsubst %/,%,$(dir $(BUILD_PATH)))
 UNITY_PROJ := ${PARENT_PATH}/arcspace.unity-app
+UNITY_PATH := $(shell python3 ${UNITY_PROJ}/arc-utils.py UNITY_PATH "${UNITY_PROJ}")
 ARC_LIBS = ${UNITY_PROJ}/Assets/Plugins/Arcspace/Plugins
 ARC_UNITY_PATH = ${UNITY_PROJ}/Assets/Arcspace
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
 LIB_PROJ := ${BUILD_PATH}/cmd/libarchost
 
-#UNITY_PATH = "${HOME}/Applications/2021.3.16f1"
-UNITY_PATH := $(shell python3 ${UNITY_PROJ}/arc-utils.py UNITY_PATH "${UNITY_PROJ}")
 
 ANDROID_NDK := ${UNITY_PATH}/PlaybackEngines/AndroidPlayer/NDK
 ANDROID_CC := ${ANDROID_NDK}/toolchains/llvm/prebuilt/darwin-x86_64/bin
@@ -23,8 +22,8 @@ help:
 	@echo "  PARENT_PATH:     ${PARENT_PATH}"
 	@echo "  BUILD_PATH:      ${BUILD_PATH}"
 	@echo "  UNITY_PROJ:      ${UNITY_PROJ}"
-	@echo "  ARC_LIBS:        ${ARC_LIBS}"
 	@echo "  UNITY_PATH:      ${UNITY_PATH}"
+	@echo "  ARC_LIBS:        ${ARC_LIBS}"
 	@echo "  ANDROID_NDK:     ${ANDROID_NDK}"
 	@echo "  ANDROID_CC:      ${ANDROID_CC}"
 	@echo
@@ -62,7 +61,6 @@ libarchost-ios:
 	OUT_DIR="${ARC_LIBS}"           CC="${LIB_PROJ}/clangwrap.sh" \
 	PLATFORM=iOS                    GOARCH=arm64        "${LIB_PROJ}/build.sh"
 
-
 ## build libarchost for arm64-v8a
 libarchost-android-arm64-v8a:
 	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/aarch64-linux-android27-clang" \
@@ -85,15 +83,9 @@ libarchost:  libarchost-osx libarchost-ios libarchost-android-arm64-v8a libarcho
 
 ## build archost "headless" daemon
 archost:
-	cd cmd/archost && touch main.go && \
-	go build -trimpath .
+	cd cmd/archost && touch main.go \
+	&& go build -trimpath .
 
-	
-## install tools
-tools:
-	go install github.com/gogo/protobuf/protoc-gen-gogoslick
-	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
-	go get -d  github.com/gogo/protobuf/proto
 
 
 ## generate .cs and .go from proto files
@@ -106,23 +98,9 @@ protos:
 #   Links: https://grpc.io/docs/languages/csharp/quickstart/
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
-	    --csharp_out "${ARC_UNITY_PATH}/Arc" \
-	    --grpc_out   "${ARC_UNITY_PATH}/Arc" \
-	    --plugin=protoc-gen-grpc="${grpc_csharp_exe}" \
-	    --proto_path=. \
-		arc/arc.proto
-
-	protoc \
-	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
-	    --csharp_out "${ARC_UNITY_PATH}/Crates" \
-	    --proto_path=. \
-		crates/crates.proto
-
-	protoc \
-	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
 	    --csharp_out "${ARC_UNITY_PATH}/Arc/Apps/amp" \
 	    --proto_path=. \
-		arc/apps/amp/api/amp.proto
+		arc/apps/amp_family/amp/amp.proto
 				
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
@@ -133,8 +111,9 @@ protos:
 ## build fmod play toy
 play:
 #   https://stackoverflow.com/questions/75666660/how-can-i-specify-a-relative-dylib-path-in-cgo-on-macos
-	cd cmd/play && touch main.go && \
-	go build -trimpath . && \
-	install_name_tool -change @rpath/libfmod.dylib @executable_path/libfmod.dylib play
-	cd cmd/play && ./play
+	cd cmd/play && touch main.go \
+	&& go build -trimpath . \
+	&& install_name_tool -change @rpath/libfmod.dylib @executable_path/libfmod.dylib play
+	&& cd cmd/play \
+	&& ./play
 

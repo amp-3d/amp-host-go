@@ -1,4 +1,4 @@
-package bs
+package amp_bcat
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/arcspace/go-archost/arc/apps/amp/api"
+	"github.com/arcspace/go-archost/arc/apps/amp_family/amp"
 )
 
 func TestLogin(t *testing.T) {
@@ -36,7 +36,7 @@ func TestLogin(t *testing.T) {
 	}
 
 	{
-		var pb api.LoginCreateResponse
+		var pb amp.LoginCreateResponse
 		dec := json.NewDecoder(resp.Body)
 		err := dec.Decode(&pb)
 		if err != nil {

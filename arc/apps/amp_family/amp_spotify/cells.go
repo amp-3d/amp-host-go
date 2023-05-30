@@ -3,7 +3,7 @@ package amp_spotify
 import (
 	"github.com/arcspace/go-arc-sdk/apis/arc"
 	arc_sdk "github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/arc/apps/amp/api"
+	"github.com/arcspace/go-archost/arc/apps/amp_family/amp"
 	respot "github.com/arcspace/go-librespot/librespot/api-respot"
 	"github.com/zmb3/spotify/v2"
 )
@@ -15,6 +15,7 @@ type ampAttr struct {
 }
 
 type ampCell struct {
+	//process.Context
 	arc.CellID
 	app      *appCtx
 	loadedAt arc.TimeFS
@@ -133,7 +134,7 @@ func newRootCell(app *appCtx) *rootCell {
 }
 
 func (cell *rootCell) CellDataModel() string {
-	return api.CellDataModel_Dir
+	return amp.CellDataModel_Dir
 }
 
 func (cell *rootCell) loadChildren(req *arc.CellReq) error {
@@ -167,16 +168,16 @@ func newPlaylistCell(app *appCtx, playlist spotify.SimplePlaylist) *playlistCell
 	}
 	cell.init(cell, app)
 
-	cell.AddAttr(api.Attr_Title, playlist.Name)
-	cell.AddAttr(api.Attr_Subtitle, playlist.Description)
+	cell.AddAttr(amp.Attr_Title, playlist.Name)
+	cell.AddAttr(amp.Attr_Subtitle, playlist.Description)
 	if glyph := chooseBestGlyph(playlist.Images, kGlyphPixelSz); glyph != nil {
-		cell.AddAttr(api.Attr_Glyph, glyph)
+		cell.AddAttr(amp.Attr_Glyph, glyph)
 	}
 	return cell
 }
 
 func (cell *playlistCell) CellDataModel() string {
-	return api.CellDataModel_Playlist
+	return amp.CellDataModel_Playlist
 }
 
 func (cell *playlistCell) loadChildren(req *arc.CellReq) error {
@@ -218,7 +219,7 @@ func newTrackCell(app *appCtx, track *spotify.FullTrack) *trackCell {
 		track: track,
 	}
 	cell.init(AmpCell(cell), app)
-	cell.AddAttr(api.Attr_Title, track.Name)
+	cell.AddAttr(amp.Attr_Title, track.Name)
 	{
 		artistDesc := ""
 		if len(track.Artists) > 0 {
@@ -228,17 +229,17 @@ func newTrackCell(app *appCtx, track *spotify.FullTrack) *trackCell {
 			}
 		}
 		if len(artistDesc) > 0 {
-			cell.AddAttr(api.Attr_ArtistDesc, artistDesc)
-			cell.AddAttr(api.Attr_Subtitle, artistDesc)
+			cell.AddAttr(amp.Attr_ArtistDesc, artistDesc)
+			cell.AddAttr(amp.Attr_Subtitle, artistDesc)
 		}
 	}
 
 	if len(track.Album.Name) > 0 {
-		cell.AddAttr(api.Attr_AlbumDesc, track.Album.Name)
+		cell.AddAttr(amp.Attr_AlbumDesc, track.Album.Name)
 	}
 
 	if glyph := chooseBestGlyph(track.Album.Images, kGlyphPixelSz); glyph != nil {
-		cell.AddAttr(api.Attr_Glyph, glyph)
+		cell.AddAttr(amp.Attr_Glyph, glyph)
 	}
 
 	// cell.AddAttr(api.Attr_Playable, &arc.AssetRef{
@@ -250,7 +251,7 @@ func newTrackCell(app *appCtx, track *spotify.FullTrack) *trackCell {
 }
 
 func (cell *trackCell) CellDataModel() string {
-	return api.CellDataModel_Playable
+	return amp.CellDataModel_Playable
 }
 
 func (cell *trackCell) pinSelf(req *arc.CellReq) (arc.AppCell, error) {
@@ -265,7 +266,7 @@ func (cell *trackCell) pinSelf(req *arc.CellReq) (arc.AppCell, error) {
 		return nil, err
 	}
 	assetRef.MediaType = asset.MediaType()
-	cell.SetAttr(api.Attr_Playable, assetRef)
+	cell.SetAttr(amp.Attr_Playable, assetRef)
 
 	return cell.self, nil
 }

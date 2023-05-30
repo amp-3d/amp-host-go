@@ -1,4 +1,4 @@
-package filesys
+package amp_filesys
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/arc/apps/amp/api"
+	"github.com/arcspace/go-archost/arc/apps/amp_family/amp"
 	"github.com/arcspace/go-archost/arc/assets"
 )
 
@@ -79,9 +79,9 @@ func (item *fsInfo) setFrom(fi os.FileInfo) {
 	item.isHidden = strings.HasPrefix(item.basename, ".")
 	item.isDir = fi.IsDir()
 	if item.isDir {
-		item.dataModel = api.CellDataModel_Playlist
+		item.dataModel = amp.CellDataModel_Playlist
 	} else {
-		item.dataModel = api.CellDataModel_Playable
+		item.dataModel = amp.CellDataModel_Playable
 		item.size = fi.Size()
 	}
 }
@@ -218,7 +218,7 @@ func (item *fsInfo) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 
 var (
 	dirGlyph = &arc.AssetRef{
-		MediaType: api.MimeType_Dir,
+		MediaType: amp.MimeType_Dir,
 	}
 )
 
@@ -250,29 +250,29 @@ func (item *fsInfo) pushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 		}
 
 		if len(left) > 0 && len(right) > 0 {
-			req.PushAttr(item.CellID, schema, api.Attr_Title, right)
-			req.PushAttr(item.CellID, schema, api.Attr_Subtitle, left)
+			req.PushAttr(item.CellID, schema, amp.Attr_Title, right)
+			req.PushAttr(item.CellID, schema, amp.Attr_Subtitle, left)
 		} else {
-			req.PushAttr(item.CellID, schema, api.Attr_Title, base)
+			req.PushAttr(item.CellID, schema, amp.Attr_Title, base)
 		}
 	}
 
 	if item.isDir {
-		req.PushAttr(item.CellID, schema, api.Attr_Glyph, dirGlyph)
+		req.PushAttr(item.CellID, schema, amp.Attr_Glyph, dirGlyph)
 	} else {
 
 		asset := arc.AssetRef{
 			MediaType: mediaType,
 		}
-		req.PushAttr(item.CellID, schema, api.Attr_Glyph, &asset)
+		req.PushAttr(item.CellID, schema, amp.Attr_Glyph, &asset)
 		if item.pathname != "" {
 			asset.URI = item.pathname
 			asset.Scheme = arc.URIScheme_File
-			req.PushAttr(item.CellID, schema, api.Attr_Playable, &asset)
+			req.PushAttr(item.CellID, schema, amp.Attr_Playable, &asset)
 		}
 
-		req.PushAttr(item.CellID, schema, api.Attr_ByteSz, item.size)
-		req.PushAttr(item.CellID, schema, api.Attr_LastModified, arc.ConvertToTimeFS(item.modTime))
+		req.PushAttr(item.CellID, schema, amp.Attr_ByteSz, item.size)
+		req.PushAttr(item.CellID, schema, amp.Attr_LastModified, arc.ConvertToTimeFS(item.modTime))
 
 	}
 

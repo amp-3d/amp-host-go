@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
+	"github.com/arcspace/go-archost/arc/apps/amp_family/amp"
 	respot "github.com/arcspace/go-librespot/librespot/api-respot"
 	_ "github.com/arcspace/go-librespot/librespot/core" // bootstrap
 	"github.com/zmb3/spotify/v2"
@@ -16,12 +17,18 @@ import (
 )
 
 const (
-	AppID = "arcspace.systems.app.amp.spotify"
+	AppURI = amp.AppFamily + "spotify/v1"
 )
+
+func UID() arc.UID {
+	return arc.FormUID(0x75f4138f0e984d89, 0x968a9b7d7ffa10cd)
+}
 
 func RegisterApp(reg arc.Registry) {
 	reg.RegisterApp(&arc.AppModule{
-		AppID:   AppID,
+		URI:     AppURI,
+		UID:     UID(),
+		Desc:    "client for Spotify",
 		Version: "v1.2023.2",
 		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {
 			app := &appCtx{

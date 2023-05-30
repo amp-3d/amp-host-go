@@ -1,10 +1,8 @@
-package api
+package amp
 
 import "github.com/arcspace/go-arc-sdk/apis/arc"
 
 const (
-	AmpAppURI = "arcspace.systems.app.amp"
-
 	// KwArg names
 	KwArg_Provider = "amp.provider" // specifies an amp media or system provider - e.g. "amp:", "filesys:", "spotify:"
 	KwArg_CellURI  = "amp.cell.uri" // specifies a cell URI that the specified provider interprets and resolves
@@ -15,6 +13,7 @@ const (
 	Provider_Amp     = "amp:"
 	Provider_FileSys = "filesys:"
 	Provider_Spotify = "spotify:"
+	AppFamily   	 = "arcspace.systems/amp/"
 )
 
 // MimeType (aka MediaType)

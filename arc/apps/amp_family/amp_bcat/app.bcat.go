@@ -1,20 +1,26 @@
-package bs
+package amp_bcat
 
 import (
 	"net/http"
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/arc/apps/amp/api"
+	"github.com/arcspace/go-archost/arc/apps/amp_family/amp"
 )
 
 const (
-	AppID = "arcspace.systems.app.amp.bookmark-service"
+	AppURI = amp.AppFamily + "bookmark-catalog/v1"
 )
 
-func RegisterApp(reg arc.Registry) { 
+func UID() arc.UID {
+	return arc.FormUID(0xd2849a95ddb047b3, 0xa787d8a52d039c32)
+}
+
+func RegisterApp(reg arc.Registry) {
 	reg.RegisterApp(&arc.AppModule{
-		AppID:   AppID,
+		URI:     AppURI,
+		UID:     UID(),
+		Desc:    "bookmark catalog service",
 		Version: "v1.2023.2",
 		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {
 			app := &appCtx{
@@ -47,7 +53,7 @@ func (app *appCtx) loadTokens(user arc.User) (arc.AppCell, error) {
 
 	// Pins the named cell relative to the user's home planet and appID (guaranteeing app and user scope)
 	val, err := app.GetAppValue(".bookmark-server-client-login")
-	var login api.LoginInfo
+	var login amp.LoginInfo
 	if err == nil {
 		err = login.Unmarshal(val)
 	}

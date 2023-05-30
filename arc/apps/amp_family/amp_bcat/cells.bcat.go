@@ -1,4 +1,4 @@
-package bs
+package amp_bcat
 
 import (
 	"encoding/json"
@@ -10,11 +10,12 @@ import (
 	"strings"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/arc/apps/amp/api"
+	"github.com/arcspace/go-archost/arc/apps/amp_family/amp"
 )
 
 
 type stationCategories struct {
+	//process.Context
 	arc.CellID
 
 	app            *appCtx
@@ -31,7 +32,7 @@ func (categories *stationCategories) loadCategories(cellReq *arc.CellReq) error 
 	params := url.Values{}
 	params.Add("subtype", "S")
 
-	url := fmt.Sprintf("%s%s?%s", "https://api.soundspectrum.com/v1/", "categories/", params.Encode())
+	url := fmt.Sprintf("%s%s?%s", "https://amp.soundspectrum.com/v1/", "categories/", params.Encode())
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err // SERVER DOWN error
@@ -54,7 +55,7 @@ func (categories *stationCategories) loadCategories(cellReq *arc.CellReq) error 
 
 	// while the array contains values
 	for jsonBody.More() {
-		var entry api.CategoryInfo
+		var entry amp.CategoryInfo
 		err := jsonBody.Decode(&entry)
 		if err != nil {
 			log.Print(err)
@@ -86,7 +87,7 @@ func (categories *stationCategories) ID() arc.CellID {
 }
 
 func (categories *stationCategories) CellDataModel() string {
-	return api.CellDataModel_Playlist
+	return amp.CellDataModel_Playlist
 }
 
 func (categories *stationCategories) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
@@ -96,7 +97,7 @@ func (categories *stationCategories) PushCellState(req *arc.CellReq, opts arc.Pu
 		return nil
 	}
 
-	req.PushAttr(categories.CellID, schema, api.Attr_Title, "Internet Radio")
+	req.PushAttr(categories.CellID, schema, amp.Attr_Title, "Internet Radio")
 
 	if len(categories.catsByCellID) == 0 {
 		categories.loadCategories(req)
@@ -127,7 +128,7 @@ type category struct {
 	//playlist
 	arc.CellID
 
-	api.CategoryInfo
+	amp.CategoryInfo
 
 	app       *appCtx
 	itemsByID map[arc.CellID]*station
@@ -138,13 +139,13 @@ func (cat *category) ID() arc.CellID {
 }
 
 func (cat *category) CellDataModel() string {
-	return api.CellDataModel_Playlist
+	return amp.CellDataModel_Playlist
 }
 
 func (cat *category) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
 	var schema *arc.AttrSchema
 	if opts.PushAsChild() {
-		schema = req.GetChildSchema(api.CellDataModel_Playlist)
+		schema = req.GetChildSchema(amp.CellDataModel_Playlist)
 	} else {
 		schema = req.ContentSchema
 	}
@@ -156,14 +157,14 @@ func (cat *category) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) erro
 		req.PushInsertCell(cat.CellID, schema)
 	}
 
-	req.PushAttr(cat.CellID, schema, api.Attr_Title, cat.CategoryInfo.Title)
-	req.PushAttr(cat.CellID, schema, api.Attr_Subtitle, cat.CategoryInfo.Description)
+	req.PushAttr(cat.CellID, schema, amp.Attr_Title, cat.CategoryInfo.Title)
+	req.PushAttr(cat.CellID, schema, amp.Attr_Subtitle, cat.CategoryInfo.Description)
 
 	glyph := arc.AssetRef{
 		URI:    cat.CategoryInfo.Image,
 		Scheme: arc.URIScheme_File,
 	}
-	req.PushAttr(cat.CellID, schema, api.Attr_Glyph, &glyph)
+	req.PushAttr(cat.CellID, schema, amp.Attr_Glyph, &glyph)
 
 	if opts.PushAsParent() {
 		if len(cat.itemsByID) == 0 {
@@ -222,7 +223,7 @@ func (cat *category) loadItems(cellReq *arc.CellReq) error {
 	params.Add("subtype", "S")
 	params.Add("categories", strconv.Itoa(int(cat.Id)))
 
-	url := fmt.Sprintf("%s%s?%s", "https://api.soundspectrum.com/v1/", "bookmarks/", params.Encode())
+	url := fmt.Sprintf("%s%s?%s", "https://amp.soundspectrum.com/v1/", "bookmarks/", params.Encode())
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err // SERVER DOWN error
@@ -245,7 +246,7 @@ func (cat *category) loadItems(cellReq *arc.CellReq) error {
 
 	// while the array contains values
 	for jsonBody.More() {
-		var entry api.StationInfo
+		var entry amp.StationInfo
 		err := jsonBody.Decode(&entry)
 		if err != nil {
 			log.Print(err)
@@ -273,7 +274,7 @@ func (cat *category) loadItems(cellReq *arc.CellReq) error {
 
 type station struct {
 	arc.CellID
-	api.StationInfo
+	amp.StationInfo
 	app *appCtx
 }
 
@@ -282,13 +283,13 @@ func (sta *station) ID() arc.CellID {
 }
 
 func (sta *station) CellDataModel() string {
-	return api.CellDataModel_Playable
+	return amp.CellDataModel_Playable
 }
 
 func (sta *station) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
 	var schema *arc.AttrSchema
 	if opts.PushAsChild() {
-		schema = req.GetChildSchema(api.CellDataModel_Playable)
+		schema = req.GetChildSchema(amp.CellDataModel_Playable)
 	} else {
 		schema = req.ContentSchema
 	}
@@ -300,13 +301,13 @@ func (sta *station) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 		req.PushInsertCell(sta.CellID, schema)
 	}
 
-	req.PushAttr(sta.CellID, schema, api.Attr_Title, sta.StationInfo.Title)
-	req.PushAttr(sta.CellID, schema, api.Attr_Subtitle, sta.StationInfo.Summary)
+	req.PushAttr(sta.CellID, schema, amp.Attr_Title, sta.StationInfo.Title)
+	req.PushAttr(sta.CellID, schema, amp.Attr_Subtitle, sta.StationInfo.Summary)
 
 	glyph := arc.AssetRef{
 		URI: sta.StationInfo.Image,
 	}
-	req.PushAttr(sta.CellID, schema, api.Attr_Glyph, &glyph)
+	req.PushAttr(sta.CellID, schema, amp.Attr_Glyph, &glyph)
 
 	// [<URL>[:::<kbitrate>[:::<MIME type>]];]*
 	// Just choose the first URL for now
@@ -326,7 +327,7 @@ func (sta *station) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 			playable.MediaType = "audio/unknown"
 		}
 
-		req.PushAttr(sta.CellID, schema, api.Attr_Playable, &playable)
+		req.PushAttr(sta.CellID, schema, amp.Attr_Playable, &playable)
 	}
 
 	// // Refresh if first time or too old

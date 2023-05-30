@@ -1,25 +1,31 @@
-package filesys
+package amp_filesys
 
 import (
 	"os"
 	"path"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/arc/apps/amp/api"
+	"github.com/arcspace/go-archost/arc/apps/amp_family/amp"
 	"github.com/h2non/filetype"
-)
-
-const (
-	AppID = "arcspace.systems.app.amp.filesys"
 )
 
 func init() {
 	filetype.AddType("jpeg", "image/jpeg")
 }
 
+const (
+	AppURI = amp.AppFamily + "filesys/v1"
+)
+
+func UID() arc.UID {
+	return arc.FormUID(0x3dae178d099340dc, 0x8b111f3a4a6b0263)
+}
+
 func RegisterApp(reg arc.Registry) {
 	reg.RegisterApp(&arc.AppModule{
-		AppID:   AppID,
+		URI:     AppURI,
+		UID:     UID(),
+		Desc:    "local file system service",
 		Version: "v1.2023.2",
 		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {
 			app := &appCtx{
@@ -44,9 +50,9 @@ func (app *appCtx) OnClosing() {
 func (app *appCtx) PinCell(req *arc.CellReq) (arc.AppCell, error) {
 
 	if req.PinCell == 0 {
-		pathname, _ := req.GetKwArg(api.KwArg_CellURI)
+		pathname, _ := req.GetKwArg(amp.KwArg_CellURI)
 		if pathname == "" {
-			return nil, arc.ErrCode_CellNotFound.Errorf("filesys: missing %q pathname", api.KwArg_CellURI)
+			return nil, arc.ErrCode_CellNotFound.Errorf("filesys: missing %q pathname", amp.KwArg_CellURI)
 		}
 		item := fsInfo{
 			app: app,
