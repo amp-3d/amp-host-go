@@ -1,14 +1,13 @@
 package amp_spotify
 
 import (
-	"encoding/json"
-	"net/http"
 	"net/url"
 	"strings"
-	"time"
+	"sync"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/arc/apps/amp_family/amp"
+	"github.com/arcspace/go-archost/arc/apps/amp_family/amp_spotify/oauth"
 	respot "github.com/arcspace/go-librespot/librespot/api-respot"
 	_ "github.com/arcspace/go-librespot/librespot/core" // bootstrap
 	"github.com/zmb3/spotify/v2"
@@ -46,15 +45,30 @@ const (
 	kSpotifyClientSecret = "d8cd8d502b6f4ecda140b6fffa1a9f9f"
 )
 
+var oauthConfig = oauth2.Config{
+	ClientID:     kSpotifyClientID,
+	ClientSecret: kSpotifyClientSecret,
+	RedirectURL:  kRedirectURL,
+	Endpoint: oauth2.Endpoint{
+		AuthURL:  spotifyauth.AuthURL,
+		TokenURL: spotifyauth.TokenURL,
+	},
+	Scopes: []string{
+		spotifyauth.ScopeUserFollowRead,
+		spotifyauth.ScopeUserReadPrivate,
+		spotifyauth.ScopeStreaming,
+	},
+}
+
 type appCtx struct {
 	arc.AppContext
 	sessReady   chan struct{}        // closed once session is established
 	client      *spotify.Client      // nil if not signed in
 	me          *spotify.PrivateUser // nil if not signed in
 	respot      respot.Session       // nil if not signed in
-	token       oauth2.Token
-	auth        *spotifyauth.Authenticator
+	auth        *oauth.Config
 	home        AmpCell
+	sessMu      sync.Mutex
 	isConnected bool
 }
 
@@ -62,29 +76,21 @@ func (app *appCtx) OnClosing() {
 	app.endSession()
 }
 
-const kTokenNameID = ".oauth.Token.v5"
-
 func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
 	if msg.ValType == arc.ValType_HandleURI {
 		uri := string(msg.ValBuf)
 		if strings.Contains(uri, "://spotify/auth") {
-			var err error
-			faux := http.Request{}
-			faux.URL, err = url.Parse(uri)
+			url, err := url.Parse(uri)
 			if err != nil {
 				return true, err
 			}
 
 			// redeem the code for the token and store it as the latest token -- this is blocking but handled properly since we pass in the app's process.Context
-			token, err := app.auth.Token(app, "", &faux)
+			token, err := app.auth.Exchange(app, "", url)
 			if err == nil {
-				var tokenJson []byte
-				tokenJson, err = json.Marshal(token)
+				err = app.auth.OnTokenUpdated(token, true)
 				if err == nil {
-					if err = app.PutAppValue(kTokenNameID, tokenJson); err == nil {
-						app.Info(2, "wrote ", kTokenNameID)
-						err = app.trySession()
-					}
+					err = app.trySession()
 				}
 			}
 
@@ -117,67 +123,45 @@ func (app *appCtx) waitForSession() error {
 }
 
 func (app *appCtx) trySession() error {
+	app.sessMu.Lock() // needed?
+	defer app.sessMu.Unlock()
+
 	if app.isConnected {
 		return nil
 	}
-	
+
 	if app.sessReady == nil {
 		app.sessReady = make(chan struct{})
 	}
 
 	if app.auth == nil {
-
-		/*
-			auth := &spotifyauth.Authenticator{
-				config: &oauth2.Config{
-					ClientID:     kSpotifyClientID,
-					ClientSecret: kSpotifyClientSecret,
-					RedirectURL: kRedirectURL,
-					Endpoint: oauth2.Endpoint{
-						AuthURL:  spotifyauth.AuthURL,
-						TokenURL: spotifyauth.TokenURL,
-					},
-					Scopes: []string{
-						spotifyauth.ScopeUserReadPrivate,
-						spotifyauth.ScopeUserReadCurrentlyPlaying,
-						spotifyauth.ScopeUserReadPlaybackState,
-						spotifyauth.ScopeUserModifyPlaybackState,
-						spotifyauth.ScopeStreaming,
-					},
-				},
-			}
-
-			for _, opt := range opts {
-				opt(a)
-			}
-		*/
-
-		app.auth = spotifyauth.New(
-			spotifyauth.WithClientID(kSpotifyClientID),
-			spotifyauth.WithClientSecret(kSpotifyClientSecret),
-			spotifyauth.WithRedirectURL(kRedirectURL),
-			spotifyauth.WithScopes(
-				spotifyauth.ScopeUserReadPrivate,
-				spotifyauth.ScopeUserReadCurrentlyPlaying,
-				spotifyauth.ScopeUserReadPlaybackState,
-				spotifyauth.ScopeUserModifyPlaybackState,
-				spotifyauth.ScopeStreaming,
-			),
-		)
+		app.auth = oauth.NewAuth(app.AppContext, oauthConfig)
 	}
 
-	var err error
-
-	// If there's an error loading the token, push a oauth URL to the client
+	// If we don't have a token, ask the client launch a URL that will start oauth
+	// If we have a token, but it's expired, we'll get a new one.
 	{
-		err = app.loadStoredToken()
+		err := app.auth.ReadStoredToken()
 		if err != nil {
-			url := app.auth.AuthURL("")
+			url := app.auth.Config.AuthCodeURL("")
 			msg := arc.NewMsg()
 			msg.SetValBuf(arc.ValType_HandleURI, []byte(url))
 			app.User().PushMetaMsg(msg)
 			return nil
 		}
+
+		app.client = spotify.New(app.auth.NewClient(app))
+	}
+
+	// TODO: if we get an error, perform a full reauth
+	var err error
+	app.me, err = app.client.CurrentUser(app)
+	if err != nil {
+		app.client = nil
+		err = arc.ErrCode_ProviderErr.Error("failed to get current user")
+	}
+	if err != nil {
+		return err
 	}
 
 	// At this point we have a token -- TODO it may be expired
@@ -193,22 +177,10 @@ func (app *appCtx) trySession() error {
 			}
 
 			if err == nil {
-				ctx.Login.AuthToken = app.token.AccessToken
+				ctx.Login.AuthToken = app.auth.CurrentToken.AccessToken
 				err = app.respot.Login()
 			}
 		}
-	}
-
-	if err != nil {
-		return err
-	}
-
-	// use the token to get an authenticated client
-	app.client = spotify.New(app.auth.Client(app, &app.token))
-	app.me, err = app.client.CurrentUser(app)
-	if err != nil {
-		app.client = nil
-		err = arc.ErrCode_ProviderErr.Error("failed to get current user")
 	}
 
 	if err != nil {
@@ -222,7 +194,7 @@ func (app *appCtx) trySession() error {
 
 func (app *appCtx) endSession() {
 	app.sessReady = nil
-	
+
 	if app.isConnected {
 		app.home = nil
 		app.me = nil
@@ -248,21 +220,7 @@ func (app *appCtx) endSession() {
 	app.client = nil
 }
 
-func (app *appCtx) loadStoredToken() error {
-	app.token = oauth2.Token{}
-	tokenJson, err := app.GetAppValue(kTokenNameID)
-	if err == nil {
-		err = json.Unmarshal(tokenJson, &app.token)
-		if err == nil {
-			if app.token.Expiry.Before(time.Now()) {
-				err = arc.ErrCode_SessionExpired.Error("Spotify token expired")
-			}
-		}
-	}
-	return err
-}
-
-func (app *appCtx) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+func (app *appCtx) PinCell(req *arc.CellReq) (arc.Cell, error) {
 
 	// TODO: regen home once token arrives
 	if app.home == nil {
