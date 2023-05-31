@@ -47,7 +47,7 @@ func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
 func (app *appCtx) OnClosing() {
 }
 
-func (app *appCtx) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+func (app *appCtx) PinCell(req *arc.CellReq) (arc.Cell, error) {
 
 	if req.PinCell == 0 {
 		pathname, _ := req.GetKwArg(amp.KwArg_CellURI)

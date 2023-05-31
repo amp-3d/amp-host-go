@@ -54,8 +54,8 @@ func (item *fsInfo) Compare(oth *fsInfo) int {
 	return 0
 }
 
-func (item *fsInfo) newAppCell() arc.AppCell {
-	var appCell arc.AppCell
+func (item *fsInfo) newAppCell() arc.Cell {
+	var appCell arc.Cell
 
 	if item.isDir {
 		pinDir := &fsDir{
@@ -180,7 +180,7 @@ func (dir *fsDir) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
 }
 
 // TODO: use generics
-func (dir *fsDir) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+func (dir *fsDir) PinCell(req *arc.CellReq) (arc.Cell, error) {
 	if req.PinCell == dir.CellID {
 		return dir, nil // FUTURE: a pinned dir returns more detailed attrs (e.g. reads mpeg tags)
 	}
@@ -194,7 +194,7 @@ func (dir *fsDir) PinCell(req *arc.CellReq) (arc.AppCell, error) {
 	return itemRef.newAppCell(), nil
 }
 
-func (file *fsFile) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+func (file *fsFile) PinCell(req *arc.CellReq) (arc.Cell, error) {
 	// if err := file.setPathnameUsingParent(req); err != nil {
 	// 	return err
 	// }

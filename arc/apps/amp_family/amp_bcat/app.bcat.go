@@ -44,7 +44,7 @@ func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
 func (app *appCtx) OnClosing() {
 }
 
-func (app *appCtx) loadTokens(user arc.User) (arc.AppCell, error) {
+func (app *appCtx) loadTokens(user arc.User) (arc.Cell, error) {
 
 	// TODO: the right way to do this is like in the Unity client: register all ValTypes and then dynamically build AttrSpecs
 	// Since we're not doing that, for onw just build an AttrSpec from primitive types.
@@ -70,7 +70,7 @@ func (app *appCtx) resetLogin() {
 
 }
 
-func (app *appCtx) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+func (app *appCtx) PinCell(req *arc.CellReq) (arc.Cell, error) {
 
 	if req.PinCell == 0 {
 		if app.categories == nil {

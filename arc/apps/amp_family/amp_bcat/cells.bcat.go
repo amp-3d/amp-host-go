@@ -111,7 +111,7 @@ func (categories *stationCategories) PushCellState(req *arc.CellReq, opts arc.Pu
 }
 
 // TODO: use generics
-func (categories *stationCategories) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+func (categories *stationCategories) PinCell(req *arc.CellReq) (arc.Cell, error) {
 	if req.PinCell == categories.CellID {
 		return categories, nil
 	}
@@ -193,7 +193,7 @@ func (cat *category) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) erro
 	return nil
 }
 
-func (cat *category) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+func (cat *category) PinCell(req *arc.CellReq) (arc.Cell, error) {
 
 	if len(cat.itemsByID) == 0 {
 		err := cat.loadItems(req)
@@ -348,7 +348,7 @@ func (sta *station) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 	return nil
 }
 
-func (sta *station) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+func (sta *station) PinCell(req *arc.CellReq) (arc.Cell, error) {
 	// if err := file.setPathnameUsingParent(req); err != nil {
 	// 	return err
 	// }

@@ -23,7 +23,7 @@ type ampCell struct {
 	self     AmpCell
 
 	childCells []AmpCell
-	//childByID     map[arc.CellID]arc.AppCell
+	//childByID     map[arc.CellID]arc.Cell
 }
 
 func (cell *ampCell) init(self AmpCell, app *appCtx) {
@@ -78,7 +78,7 @@ func (cell *ampCell) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) erro
 	return nil
 }
 
-func (cell *ampCell) PinCell(req *arc.CellReq) (arc.AppCell, error) {
+func (cell *ampCell) PinCell(req *arc.CellReq) (arc.Cell, error) {
 	if req.PinCell == cell.CellID {
 		return cell.self.pinSelf(req)
 	}
@@ -92,7 +92,7 @@ func (cell *ampCell) PinCell(req *arc.CellReq) (arc.AppCell, error) {
 	return nil, arc.ErrCellNotFound
 }
 
-func (cell *ampCell) pinSelf(req *arc.CellReq) (arc.AppCell, error) {
+func (cell *ampCell) pinSelf(req *arc.CellReq) (arc.Cell, error) {
 	return cell.self, nil
 }
 
@@ -117,9 +117,9 @@ func (cell *ampCell) AddAttr(attrID string, val interface{}) {
 }
 
 type AmpCell interface {
-	arc.AppCell
+	arc.Cell
 
-	pinSelf(req *arc.CellReq) (arc.AppCell, error)
+	pinSelf(req *arc.CellReq) (arc.Cell, error)
 	loadChildren(req *arc.CellReq) error
 }
 
@@ -254,7 +254,7 @@ func (cell *trackCell) CellDataModel() string {
 	return amp.CellDataModel_Playable
 }
 
-func (cell *trackCell) pinSelf(req *arc.CellReq) (arc.AppCell, error) {
+func (cell *trackCell) pinSelf(req *arc.CellReq) (arc.Cell, error) {
 	asset, err := cell.app.respot.PinTrack(string(cell.track.URI), respot.PinOpts{})
 	if err != nil {
 		return nil, err
