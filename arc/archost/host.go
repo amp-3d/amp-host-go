@@ -279,7 +279,7 @@ func (host *host) HostPlanet() arc.Planet {
 	return host.home
 }
 
-func (host *host) StartNewSession(from arc.HostService, via arc.ServerStream) (arc.HostSession, error) {
+func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.HostSession, error) {
 	sess := &hostSess{
 		host:         host,
 		TypeRegistry: arc.NewTypeRegistry(host.home.symTable),
@@ -306,8 +306,8 @@ func (host *host) StartNewSession(from arc.HostService, via arc.ServerStream) (a
 	// We start them as children of the HostService, not the HostSession since we want to keep the stream running until hostSess completes closing.
 	//
 	// Possible paths:
-	//   - If stream returns ServerStreamClosed (or errors out), initiate hostSess.Close()
-	//   - If hostSess.Close() is called externally, when close is complete, <-sessDone (below) will close the steam.
+	//   - If the arc.Transport errors out, initiate hostSess.Close()
+	//   - If sess.Close() is called elsewhere, and when once complete, <-sessDone will signal and close the arc.Transport.
 	from.StartChild(&process.Task{
 		Label:     fmt.Sprint(via.Desc(), " <- ", hostSessDesc),
 		IdleClose: time.Nanosecond,
@@ -328,9 +328,8 @@ func (host *host) StartNewSession(from arc.HostService, via arc.ServerStream) (a
 							err = via.SendMsg(msg)
 						}
 						msg.Reclaim()
-						msg = nil
-						if err != nil /*&& err != ServerStreamClosed */ {
-							ctx.Warnf("ServerStream Send() err: %v", err)
+						if err != nil /*&& err != TransportClosed */ {
+							ctx.Warnf("Transport.SendMsg() err: %v", err)
 						}
 					}
 				case <-sessDone:
@@ -352,7 +351,7 @@ func (host *host) StartNewSession(from arc.HostService, via arc.ServerStream) (a
 				msg, err := via.RecvMsg()
 				if err != nil {
 					if err == arc.ErrStreamClosed {
-						ctx.Info(2, "ServerStream closed")
+						ctx.Info(2, "Transport closed")
 					} else {
 						ctx.Warnf("RecvMsg() error: %v", err)
 					}
@@ -403,7 +402,7 @@ type openReq struct {
 	arc.CellReq
 
 	reqID  uint64
-	pinned arc.AppCell
+	pinned arc.Cell
 	sess   *hostSess
 	cell   *cellInst
 	cancel chan struct{}
@@ -567,7 +566,7 @@ func (sess *hostSess) consumeInbox() {
 
 func (sess *hostSess) login(msg *arc.Msg) error {
 	if sess.user != nil {
-		return arc.ErrCode_InvalidLogin.Error("already logged in")
+		return arc.ErrCode_LoginFailed.Error("already logged in")
 	}
 
 	// TODO: make user/login an app that just stays open while pinned
@@ -692,7 +691,7 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 		return err
 	}
 
-	var ctx arc.CellContext
+	var ctx arc.CellPinner
 	if pinReq.ParentReqID != 0 {
 		parentReq, _ := sess.getReq(pinReq.ParentReqID, getReq)
 		if parentReq == nil {
@@ -774,8 +773,6 @@ func (usr *user) PushMetaMsg(msg *arc.Msg) error {
 	if msg.ReqID == 0 {
 		msg.ReqID = usr.loginReqID
 	}
-
-	usr.sess.Infof(2, "PushMetaMsg to client: %v", msg.ValType)
 
 	req, err := usr.sess.getReq(msg.ReqID, getReq)
 	if req != nil && err == nil {

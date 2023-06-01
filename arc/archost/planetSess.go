@@ -268,7 +268,7 @@ func (pl *planetSess) getUser(req arc.LoginReq, autoCreate bool) (seat arc.UserS
 	uid = append(uid, req.UserUID...)
 	userID := pl.symTable.GetSymbolID(uid, autoCreate)
 	if userID == 0 {
-		return arc.UserSeat{}, arc.ErrCode_InvalidLogin.Error("unknown user")
+		return arc.UserSeat{}, arc.ErrCode_LoginFailed.Error("unknown user")
 	}
 
 	dbTx := pl.db.NewTransaction(true)

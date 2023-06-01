@@ -160,7 +160,7 @@ func (srv *grpcServer) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 
 // StreamServerInterceptor is a debugging helper
 func (srv *grpcServer) StreamServerInterceptor() grpc.StreamServerInterceptor {
-	return func(server interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(server interface{}, stream grpc.Transport, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		srv.Infof(2, "[rpc server] %v", info.FullMethod)
 		err := handler(server, stream)
 		if err != nil {
