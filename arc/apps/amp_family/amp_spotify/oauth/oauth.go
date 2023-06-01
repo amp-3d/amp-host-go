@@ -15,10 +15,10 @@ import (
 const kTokenNameID = ".oauth2.Token"
 
 type Config struct {
-	Config       oauth2.Config
-	renew        oauth2.TokenSource // renews a token automatically when expired
-	ctx          arc.AppContext
-	CurrentToken oauth2.Token
+	Config oauth2.Config
+	renew  oauth2.TokenSource // renews a token automatically when expired
+	ctx    arc.AppContext
+	token  *oauth2.Token
 }
 
 // ShowDialog forces the user to approve the app, even if they have already done so.
@@ -26,23 +26,55 @@ type Config struct {
 var ShowDialog = oauth2.SetAuthURLParam("show_dialog", "true")
 
 func NewAuth(ctx arc.AppContext, config oauth2.Config) *Config {
-	cfg := &Config{
+	auth := &Config{
 		ctx:    ctx,
 		Config: config,
 	}
-	return cfg
+	return auth
 }
 
-// Client creates a *http.Client that will use the specified access token for its API requests.
+// Returns true if no auth token is present.
+// If autoRequest is true and no token is present, the client is msged to to launch the entry auth URL that starts oauth flow.
+func (auth *Config) AwaitingAuth(autoRequest bool) bool {
+
+	// If we already have a token or get one from storage, we're good
+	if auth.token != nil {
+		return false
+	}
+	err := auth.readStoredToken()
+	if err == nil {
+		return false
+	}
+
+	// Atr this point, we know we need to initiate oauth flow
+	if autoRequest {
+		auth.pushAuthCodeRequest()
+	}
+	return true
+}
+
+func (auth *Config) CurrentToken() *oauth2.Token {
+	return auth.token
+}
+
+// Pushes a msg to the client to launch a URL that starts oauth flow.
+func (auth *Config) pushAuthCodeRequest() error {
+	url := auth.Config.AuthCodeURL("")
+	msg := arc.NewMsg()
+	msg.SetValBuf(arc.ValType_HandleURI, []byte(url))
+	return auth.ctx.User().PushMetaMsg(msg)
+}
+
+// NewHttpClient creates a *http.Client that will use the specified access token for its API requests.
 // Combine this with spotify.HTTPClientOpt.
-func (cfg *Config) NewClient(ctx arc.AppContext) *http.Client {
-	cfg.renew = cfg.Config.TokenSource(ctx, &cfg.CurrentToken)
-	tokenSrc := oauth2.ReuseTokenSource(nil, cfg)
-	return oauth2.NewClient(ctx, tokenSrc)
+func (auth *Config) NewHttpClient() *http.Client {
+	auth.renew = auth.Config.TokenSource(auth.ctx, auth.token)
+	tokenSrc := oauth2.ReuseTokenSource(nil, auth)
+	return oauth2.NewClient(auth.ctx, tokenSrc)
 }
 
 // Exchange converts an authorization code into a token.
-func (cfg *Config) Exchange(ctx context.Context, state string, uri *url.URL, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
+func (auth *Config) Exchange(ctx context.Context, state string, uri *url.URL, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
 	values := uri.Query()
 	if err := values.Get("error"); err != "" {
 		return nil, errors.New("spotify: auth failed - " + err)
@@ -55,15 +87,15 @@ func (cfg *Config) Exchange(ctx context.Context, state string, uri *url.URL, opt
 	if actualState != state {
 		return nil, errors.New("spotify: redirect state parameter doesn't match")
 	}
-	return cfg.Config.Exchange(ctx, code, opts...)
+	return auth.Config.Exchange(ctx, code, opts...)
 }
 
-func (cfg *Config) ReadStoredToken() error {
-	tok := oauth2.Token{}
+func (auth *Config) readStoredToken() error {
+	tok := &oauth2.Token{}
 
-	tokenJson, err := cfg.ctx.GetAppValue(kTokenNameID)
+	tokenJson, err := auth.ctx.GetAppValue(kTokenNameID)
 	if err == nil {
-		err = json.Unmarshal(tokenJson, &tok)
+		err = json.Unmarshal(tokenJson, tok)
 	}
 
 	if err != nil || (tok.AccessToken == "" && tok.RefreshToken == "") {
@@ -74,42 +106,42 @@ func (cfg *Config) ReadStoredToken() error {
 	// fmt.Println("TokenType:    ", tok.TokenType)
 	// fmt.Println("RefreshToken: ", tok.RefreshToken)
 	// fmt.Println("Expiry:       ", tok.Expiry)
-	cfg.CurrentToken = tok
+	auth.token = tok
 	return nil
 }
 
-func (cfg *Config) OnTokenUpdated(tok *oauth2.Token, saveToken bool) error {
-	cfg.CurrentToken = *tok
+func (auth *Config) OnTokenUpdated(tok *oauth2.Token, saveToken bool) error {
+	auth.token = tok
 
 	var err error
 	if saveToken {
 		tokenJson, err := json.Marshal(tok)
 		if err == nil {
-			err = cfg.ctx.PutAppValue(kTokenNameID, tokenJson)
+			err = auth.ctx.PutAppValue(kTokenNameID, tokenJson)
 			if err == nil {
-				cfg.ctx.Info(2, "wrote new oauth token")
+				auth.ctx.Info(2, "wrote new oauth token")
 			} else {
-				cfg.ctx.Error("error storing token:", err)
+				auth.ctx.Error("error storing token:", err)
 			}
 		}
 	}
 	return err
 }
 
-func (cfg *Config) Token() (*oauth2.Token, error) {
-	tok, err := cfg.renew.Token()
+func (auth *Config) Token() (*oauth2.Token, error) {
+	tok, err := auth.renew.Token()
 	if err != nil {
 		return nil, err
 	}
 
 	// Don't bother storing a token that has the same refresh token and expires soon
 	saveToken := true
-	if tok.RefreshToken == cfg.CurrentToken.RefreshToken {
+	if tok.RefreshToken == auth.token.RefreshToken {
 		if !tok.Expiry.IsZero() && tok.Expiry.Add(-3*time.Hour).Before(time.Now()) {
 			saveToken = false
 		}
 	}
 
-	cfg.OnTokenUpdated(tok, saveToken)
+	auth.OnTokenUpdated(tok, saveToken)
 	return tok, nil
 }

@@ -32,6 +32,7 @@ func RegisterApp(reg arc.Registry) {
 		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {
 			app := &appCtx{
 				AppContext: ctx,
+				sessReady:  make(chan struct{}),
 			}
 			return app, nil
 		},
@@ -62,14 +63,13 @@ var oauthConfig = oauth2.Config{
 
 type appCtx struct {
 	arc.AppContext
-	sessReady   chan struct{}        // closed once session is established
-	client      *spotify.Client      // nil if not signed in
-	me          *spotify.PrivateUser // nil if not signed in
-	respot      respot.Session       // nil if not signed in
-	auth        *oauth.Config
-	home        AmpCell
-	sessMu      sync.Mutex
-	isConnected bool
+	sessReady chan struct{}        // closed when session is established
+	client    *spotify.Client      // nil if not signed in
+	me        *spotify.PrivateUser // nil if not signed in
+	respot    respot.Session       // nil if not signed in
+	auth      *oauth.Config
+	home      AmpCell
+	sessMu    sync.Mutex
 }
 
 func (app *appCtx) OnClosing() {
@@ -90,7 +90,7 @@ func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
 			if err == nil {
 				err = app.auth.OnTokenUpdated(token, true)
 				if err == nil {
-					err = app.trySession()
+					err = app.tryConnect()
 				}
 			}
 
@@ -100,15 +100,13 @@ func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
 	return false, nil
 }
 
-// Blocks until the spotify session is ready (or app is told to closE)
+// Optionally blocks until the spotify session is ready (or AppContext is closing)
 func (app *appCtx) waitForSession() error {
-
 	select {
 	case <-app.sessReady:
 		return nil
 	default:
-		err := app.trySession()
-		if err != nil {
+		if err := app.tryConnect(); err != nil {
 			return err
 		}
 	}
@@ -119,38 +117,26 @@ func (app *appCtx) waitForSession() error {
 	case <-app.Closing():
 		return arc.ErrShuttingDown
 	}
-
 }
 
-func (app *appCtx) trySession() error {
+func (app *appCtx) tryConnect() error {
 	app.sessMu.Lock() // needed?
 	defer app.sessMu.Unlock()
 
-	if app.isConnected {
-		return nil
-	}
-
-	if app.sessReady == nil {
-		app.sessReady = make(chan struct{})
-	}
+	app.resetSignal()
 
 	if app.auth == nil {
 		app.auth = oauth.NewAuth(app.AppContext, oauthConfig)
 	}
 
 	// If we don't have a token, ask the client launch a URL that will start oauth
-	// If we have a token, but it's expired, we'll get a new one.
-	{
-		err := app.auth.ReadStoredToken()
-		if err != nil {
-			url := app.auth.Config.AuthCodeURL("")
-			msg := arc.NewMsg()
-			msg.SetValBuf(arc.ValType_HandleURI, []byte(url))
-			app.User().PushMetaMsg(msg)
-			return nil
-		}
+	// If we have a token, but it's expired it will auto renew within the http.Client that is created
+	if app.auth.AwaitingAuth(true) {
+		return nil
+	}
 
-		app.client = spotify.New(app.auth.NewClient(app))
+	if app.client == nil {
+		app.client = spotify.New(app.auth.NewHttpClient())
 	}
 
 	// TODO: if we get an error, perform a full reauth
@@ -165,7 +151,7 @@ func (app *appCtx) trySession() error {
 	}
 
 	// At this point we have a token -- TODO it may be expired
-	{
+	if token := app.auth.CurrentToken(); token != nil {
 		if app.respot == nil {
 			info := app.User().LoginInfo()
 			ctx := respot.DefaultSessionContext(info.DeviceLabel)
@@ -177,7 +163,7 @@ func (app *appCtx) trySession() error {
 			}
 
 			if err == nil {
-				ctx.Login.AuthToken = app.auth.CurrentToken.AccessToken
+				ctx.Login.AuthToken = token.AccessToken
 				err = app.respot.Login()
 			}
 		}
@@ -192,10 +178,19 @@ func (app *appCtx) trySession() error {
 	return nil
 }
 
-func (app *appCtx) endSession() {
-	app.sessReady = nil
+// Resets the "session is ready" signal if needed
+func (app *appCtx) resetSignal() {
+	select {
+	case <-app.sessReady:
+	default:
+		app.sessReady = make(chan struct{})
+	}
+}
 
-	if app.isConnected {
+func (app *appCtx) endSession() {
+	app.resetSignal()
+
+	if app.client != nil {
 		app.home = nil
 		app.me = nil
 		app.client = nil
@@ -204,25 +199,14 @@ func (app *appCtx) endSession() {
 			app.respot.Close()
 			app.respot = nil
 		}
-		app.isConnected = false
 	}
-	// // TODO: Hacky but works for now
-	// oldSignal := app.sessReady
-	// app.sessReady = make(chan struct{})
-	// if oldSignal != nil {
-	// 	select {
-	// 	case <-oldSignal:
-	// 	default:
-	// 		close(oldSignal)
-	// 	}
-	// }
 
 	app.client = nil
 }
 
 func (app *appCtx) PinCell(req *arc.CellReq) (arc.Cell, error) {
 
-	// TODO: regen home once token arrives
+	// TODO: regen home once token arrives?
 	if app.home == nil {
 		app.home = newRootCell(app)
 		return app.home, nil
