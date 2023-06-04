@@ -13,7 +13,6 @@ import (
 	"github.com/arcspace/go-archost/arc/apps/amp_family/amp"
 )
 
-
 type stationCategories struct {
 	//process.Context
 	arc.CellID
@@ -304,8 +303,10 @@ func (sta *station) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 	req.PushAttr(sta.CellID, schema, amp.Attr_Title, sta.StationInfo.Title)
 	req.PushAttr(sta.CellID, schema, amp.Attr_Subtitle, sta.StationInfo.Summary)
 
+	// FIXME: the server prefixes /icons/ to the image string and we use that in the client to route to the _resources_ dir in the app crate, whew!
 	glyph := arc.AssetRef{
-		URI: sta.StationInfo.Image,
+		URI:    sta.StationInfo.Image,
+		Scheme: arc.URIScheme_File,
 	}
 	req.PushAttr(sta.CellID, schema, amp.Attr_Glyph, &glyph)
 

@@ -55,9 +55,17 @@ var oauthConfig = oauth2.Config{
 		TokenURL: spotifyauth.TokenURL,
 	},
 	Scopes: []string{
-		spotifyauth.ScopeUserFollowRead,
-		spotifyauth.ScopeUserReadPrivate,
 		spotifyauth.ScopeStreaming,
+		spotifyauth.ScopeUserTopRead,
+		spotifyauth.ScopeUserReadPrivate,
+		spotifyauth.ScopeUserLibraryRead,
+		spotifyauth.ScopeUserLibraryModify,
+		spotifyauth.ScopeUserFollowRead,
+		spotifyauth.ScopeUserFollowModify,
+		spotifyauth.ScopeUserReadRecentlyPlayed,
+		spotifyauth.ScopePlaylistReadPrivate,
+		spotifyauth.ScopePlaylistModifyPublic,
+		spotifyauth.ScopePlaylistReadCollaborative,
 	},
 }
 
@@ -174,7 +182,12 @@ func (app *appCtx) tryConnect() error {
 	}
 
 	// signal that that the session is ready!
-	close(app.sessReady)
+	select {
+	case <-app.sessReady:
+	default:
+		close(app.sessReady)
+	}
+
 	return nil
 }
 
@@ -183,7 +196,9 @@ func (app *appCtx) resetSignal() {
 	select {
 	case <-app.sessReady:
 	default:
-		app.sessReady = make(chan struct{})
+		if app.sessReady == nil {
+			app.sessReady = make(chan struct{})
+		}
 	}
 }
 
@@ -195,20 +210,19 @@ func (app *appCtx) endSession() {
 		app.me = nil
 		app.client = nil
 		app.auth = nil
-		if app.respot != nil {
-			app.respot.Close()
-			app.respot = nil
-		}
 	}
-
-	app.client = nil
+	if app.respot != nil {
+		app.respot.Close()
+		app.respot = nil
+	}
 }
 
 func (app *appCtx) PinCell(req *arc.CellReq) (arc.Cell, error) {
 
 	// TODO: regen home once token arrives?
 	if app.home == nil {
-		app.home = newRootCell(app)
+		cell := newRootCell(app)
+		app.home = cell
 		return app.home, nil
 	}
 
