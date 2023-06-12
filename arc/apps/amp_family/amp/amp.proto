@@ -3,23 +3,33 @@ package amp;
 
 option csharp_namespace = "Arcspace";
 
+//import "arc/arc.proto";
 
-enum PlayableFlags {
+enum ValTypeAmp {
+    ValTypeAmp_ffs = 0;
+    
+    // TODO: we need to make ValType extensible, either by:
+    //    using appID+attrURI registration scheme where registry performs marshalling based on a buf's ValTypeID
+    //    using capnp TypeID (61 bit UID)
+    ValTypeAmp_MediaInfo        = 9001; // .ValBuf is a MediaInfo
+    
+}
+
+
+enum MediaFlags {
     Unknown             = 0;
-    HasAudio            = 0x1000;
-    HasVideo            = 0x2000;
+    HasAudio            = 0x0100;
+    HasVideo            = 0x0200;
+    HasSpeech           = 0x0400;
+    NeedsNetwork        = 0x0800;
     
     IsLive              = 0x0001;
     IsSeekable          = 0x0002;
     IsUnending          = 0x0004;
-    IsPlaylist          = 0x0008;
     
-    InternetRadio       = 0x0010;
-    PodcastEpisode      = 0x0020;
-    AudioBook           = 0x0040;
+    // When set, the user is more likely to skipping short intervals than switch media items.
+    SkipIsLikely        = 0x0010; 
     
-    RequiresWAN         = 0x0100;
-    RequiresLAN         = 0x0200;
 }
     
 
@@ -75,6 +85,20 @@ message StationInfo {
     string summary = 10;
     
 }
+
+message MediaInfo {
+    MediaFlags Flags       = 1;
+    string     Title       = 2;  // common title
+    string     TitleEx     = 3;  // extended title
+    string     AuthorDesc  = 5;  // artist(s) / author(s) description
+    string     Collection  = 6;  // album or series name
+    string     CoverArt    = 9;  // URL or local path to cover art image 
+    int32      Number      = 10; // track or episode number (0 if n/a)
+    int64      DurationFS  = 11; // duration in seconds << 16 (see TimeFS); 0 if n/a
+    float      Popularity  = 12; // 0.0 to 1.0
+    int64      ReleaseDate = 14; // Unix UTC in seconds
+}
+
 
 
 

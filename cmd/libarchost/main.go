@@ -19,7 +19,7 @@ var (
 )
 
 //export Call_SessionBegin
-func Call_SessionBegin(userID, userDataPath, sharedCachePath string) int64 {
+func Call_SessionBegin(userDataPath, sharedCachePath string) int64 {
 	if gLibSession != nil {
 		return 0
 	}

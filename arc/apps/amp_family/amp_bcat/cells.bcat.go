@@ -96,7 +96,7 @@ func (categories *stationCategories) PushCellState(req *arc.CellReq, opts arc.Pu
 		return nil
 	}
 
-	req.PushAttr(categories.CellID, schema, amp.Attr_Title, "Internet Radio")
+	req.PushAttr(categories.CellID, schema, amp.Attr_Title, arc.AttrStr("Internet Radio"))
 
 	if len(categories.catsByCellID) == 0 {
 		categories.loadCategories(req)
@@ -156,8 +156,8 @@ func (cat *category) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) erro
 		req.PushInsertCell(cat.CellID, schema)
 	}
 
-	req.PushAttr(cat.CellID, schema, amp.Attr_Title, cat.CategoryInfo.Title)
-	req.PushAttr(cat.CellID, schema, amp.Attr_Subtitle, cat.CategoryInfo.Description)
+	req.PushAttr(cat.CellID, schema, amp.Attr_Title, arc.AttrStr(cat.CategoryInfo.Title))
+	req.PushAttr(cat.CellID, schema, amp.Attr_Subtitle, arc.AttrStr(cat.CategoryInfo.Description))
 
 	glyph := arc.AssetRef{
 		URI:    cat.CategoryInfo.Image,
@@ -300,8 +300,8 @@ func (sta *station) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 		req.PushInsertCell(sta.CellID, schema)
 	}
 
-	req.PushAttr(sta.CellID, schema, amp.Attr_Title, sta.StationInfo.Title)
-	req.PushAttr(sta.CellID, schema, amp.Attr_Subtitle, sta.StationInfo.Summary)
+	req.PushAttr(sta.CellID, schema, amp.Attr_Title, arc.AttrStr(sta.StationInfo.Title))
+	req.PushAttr(sta.CellID, schema, amp.Attr_Subtitle, arc.AttrStr(sta.StationInfo.Summary))
 
 	// FIXME: the server prefixes /icons/ to the image string and we use that in the client to route to the _resources_ dir in the app crate, whew!
 	glyph := arc.AssetRef{

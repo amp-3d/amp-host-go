@@ -463,7 +463,7 @@ func (req *openReq) PushMsg(msg *arc.Msg) error {
 	return err
 }
 
-func (req *openReq) closeReq(pushClose bool, msgVal interface{}) {
+func (req *openReq) closeReq(pushClose bool, val arc.Value) {
 	if req == nil {
 		return
 	}
@@ -480,8 +480,8 @@ func (req *openReq) closeReq(pushClose bool, msgVal interface{}) {
 		if pushClose {
 			msg := arc.NewMsg()
 			msg.Op = arc.MsgOp_CloseReq
-			if msgVal != nil {
-				msg.SetVal(msgVal)
+			if val != nil {
+				val.MarshalToMsg(msg)
 			}
 			req.PushMsg(msg)
 		}
@@ -491,16 +491,16 @@ func (req *openReq) closeReq(pushClose bool, msgVal interface{}) {
 	}
 }
 
-func (sess *hostSess) closeReq(reqID uint64, pushClose bool, msgVal interface{}) {
+func (sess *hostSess) closeReq(reqID uint64, val arc.Value, pushClose bool) {
 	req, _ := sess.getReq(reqID, removeReq)
 	if req != nil {
-		req.closeReq(pushClose, msgVal)
+		req.closeReq(pushClose, val)
 	} else if pushClose {
 		msg := arc.NewMsg()
 		msg.ReqID = reqID
 		msg.Op = arc.MsgOp_CloseReq
-		if msgVal != nil {
-			msg.SetVal(msgVal)
+		if val != nil {
+			val.MarshalToMsg(msg)
 		}
 		sess.pushMsg(msg)
 	}
@@ -552,7 +552,7 @@ func (sess *hostSess) consumeInbox() {
 				}
 
 				if closeReq {
-					sess.closeReq(msg.ReqID, true, err)
+					sess.closeReq(msg.ReqID, arc.ErrorToValue(err), true)
 				}
 			}
 			msg.Reclaim()

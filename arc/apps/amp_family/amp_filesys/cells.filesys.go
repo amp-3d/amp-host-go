@@ -205,7 +205,9 @@ func (file *fsFile) PinCell(req *arc.CellReq) (arc.Cell, error) {
 		if err != nil {
 			return nil, err
 		}
-		file.app.PublishAsset(asset, arc.PublishOpts{})
+		file.app.PublishAsset(asset, arc.PublishOpts{
+			HostAddr: file.app.User().LoginInfo().HostAddr,
+		})
 		return file, nil
 	}
 
@@ -250,10 +252,10 @@ func (item *fsInfo) pushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 		}
 
 		if len(left) > 0 && len(right) > 0 {
-			req.PushAttr(item.CellID, schema, amp.Attr_Title, right)
-			req.PushAttr(item.CellID, schema, amp.Attr_Subtitle, left)
+			req.PushAttr(item.CellID, schema, amp.Attr_Title, arc.AttrStr(right))
+			req.PushAttr(item.CellID, schema, amp.Attr_Subtitle, arc.AttrStr(left))
 		} else {
-			req.PushAttr(item.CellID, schema, amp.Attr_Title, base)
+			req.PushAttr(item.CellID, schema, amp.Attr_Title, arc.AttrStr(base))
 		}
 	}
 
@@ -271,10 +273,11 @@ func (item *fsInfo) pushCellState(req *arc.CellReq, opts arc.PushCellOpts) error
 			req.PushAttr(item.CellID, schema, amp.Attr_Playable, &asset)
 		}
 
-		req.PushAttr(item.CellID, schema, amp.Attr_ByteSz, item.size)
 		req.PushAttr(item.CellID, schema, amp.Attr_LastModified, arc.ConvertToTimeFS(item.modTime))
 
 	}
 
 	return nil
 }
+
+

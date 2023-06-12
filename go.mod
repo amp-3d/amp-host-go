@@ -8,6 +8,8 @@ go 1.18
 // go list & get cheatsheet:
 //    https://stackoverflow.com/a/61312937/3958082
 //
+// Go Modules Reference:
+//    https://www.practical-go-lessons.com/chap-17-go-modules
 
 //replace github.com/arcspace/go-arc-sdk => ../go-arc-sdk
 
@@ -15,7 +17,7 @@ go 1.18
 
 require (
 	github.com/arcspace/go-arc-sdk v0.0.0-20230601211326-e3536632032d
-	github.com/arcspace/go-librespot v0.0.0-20230527150509-0eb720f38a25
+	github.com/arcspace/go-librespot v0.0.0-20230606184812-c46c08f32b80
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/h2non/filetype v1.1.3

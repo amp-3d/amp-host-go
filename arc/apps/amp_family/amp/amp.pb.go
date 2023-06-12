@@ -4,6 +4,7 @@
 package amp
 
 import (
+	encoding_binary "encoding/binary"
 	fmt "fmt"
 	proto "github.com/gogo/protobuf/proto"
 	io "io"
@@ -25,55 +26,71 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
-type PlayableFlags int32
+type ValTypeAmp int32
 
 const (
-	Unknown        PlayableFlags = 0
-	HasAudio       PlayableFlags = 4096
-	HasVideo       PlayableFlags = 8192
-	IsLive         PlayableFlags = 1
-	IsSeekable     PlayableFlags = 2
-	IsUnending     PlayableFlags = 4
-	IsPlaylist     PlayableFlags = 8
-	InternetRadio  PlayableFlags = 16
-	PodcastEpisode PlayableFlags = 32
-	AudioBook      PlayableFlags = 64
-	RequiresWAN    PlayableFlags = 256
-	RequiresLAN    PlayableFlags = 512
+	ValTypeAmp_ffs ValTypeAmp = 0
+	// TODO: we need to make ValType extensible, either by:
+	//    using appID+attrURI registration scheme where registry performs marshalling based on a buf's ValTypeID
+	//    using capnp TypeID (61 bit UID)
+	ValTypeAmp_MediaInfo ValTypeAmp = 9001
 )
 
-var PlayableFlags_name = map[int32]string{
+var ValTypeAmp_name = map[int32]string{
+	0:    "ValTypeAmp_ffs",
+	9001: "ValTypeAmp_MediaInfo",
+}
+
+var ValTypeAmp_value = map[string]int32{
+	"ValTypeAmp_ffs":       0,
+	"ValTypeAmp_MediaInfo": 9001,
+}
+
+func (ValTypeAmp) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_e4af60a362d267ef, []int{0}
+}
+
+type MediaFlags int32
+
+const (
+	Unknown      MediaFlags = 0
+	HasAudio     MediaFlags = 256
+	HasVideo     MediaFlags = 512
+	HasSpeech    MediaFlags = 1024
+	NeedsNetwork MediaFlags = 2048
+	IsLive       MediaFlags = 1
+	IsSeekable   MediaFlags = 2
+	IsUnending   MediaFlags = 4
+	// When set, the user is more likely to skipping short intervals than switch media items.
+	SkipIsLikely MediaFlags = 16
+)
+
+var MediaFlags_name = map[int32]string{
 	0:    "Unknown",
-	4096: "HasAudio",
-	8192: "HasVideo",
+	256:  "HasAudio",
+	512:  "HasVideo",
+	1024: "HasSpeech",
+	2048: "NeedsNetwork",
 	1:    "IsLive",
 	2:    "IsSeekable",
 	4:    "IsUnending",
-	8:    "IsPlaylist",
-	16:   "InternetRadio",
-	32:   "PodcastEpisode",
-	64:   "AudioBook",
-	256:  "RequiresWAN",
-	512:  "RequiresLAN",
+	16:   "SkipIsLikely",
 }
 
-var PlayableFlags_value = map[string]int32{
-	"Unknown":        0,
-	"HasAudio":       4096,
-	"HasVideo":       8192,
-	"IsLive":         1,
-	"IsSeekable":     2,
-	"IsUnending":     4,
-	"IsPlaylist":     8,
-	"InternetRadio":  16,
-	"PodcastEpisode": 32,
-	"AudioBook":      64,
-	"RequiresWAN":    256,
-	"RequiresLAN":    512,
+var MediaFlags_value = map[string]int32{
+	"Unknown":      0,
+	"HasAudio":     256,
+	"HasVideo":     512,
+	"HasSpeech":    1024,
+	"NeedsNetwork": 2048,
+	"IsLive":       1,
+	"IsSeekable":   2,
+	"IsUnending":   4,
+	"SkipIsLikely": 16,
 }
 
-func (PlayableFlags) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_e4af60a362d267ef, []int{0}
+func (MediaFlags) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_e4af60a362d267ef, []int{1}
 }
 
 type LoginInfo struct {
@@ -432,6 +449,121 @@ func (m *StationInfo) GetSummary() string {
 	return ""
 }
 
+type MediaInfo struct {
+	Flags       MediaFlags `protobuf:"varint,1,opt,name=Flags,proto3,enum=amp.MediaFlags" json:"Flags,omitempty"`
+	Title       string     `protobuf:"bytes,2,opt,name=Title,proto3" json:"Title,omitempty"`
+	TitleEx     string     `protobuf:"bytes,3,opt,name=TitleEx,proto3" json:"TitleEx,omitempty"`
+	AuthorDesc  string     `protobuf:"bytes,5,opt,name=AuthorDesc,proto3" json:"AuthorDesc,omitempty"`
+	Collection  string     `protobuf:"bytes,6,opt,name=Collection,proto3" json:"Collection,omitempty"`
+	CoverArt    string     `protobuf:"bytes,9,opt,name=CoverArt,proto3" json:"CoverArt,omitempty"`
+	Number      int32      `protobuf:"varint,10,opt,name=Number,proto3" json:"Number,omitempty"`
+	DurationFS  int64      `protobuf:"varint,11,opt,name=DurationFS,proto3" json:"DurationFS,omitempty"`
+	Popularity  float32    `protobuf:"fixed32,12,opt,name=Popularity,proto3" json:"Popularity,omitempty"`
+	ReleaseDate int64      `protobuf:"varint,14,opt,name=ReleaseDate,proto3" json:"ReleaseDate,omitempty"`
+}
+
+func (m *MediaInfo) Reset()      { *m = MediaInfo{} }
+func (*MediaInfo) ProtoMessage() {}
+func (*MediaInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_e4af60a362d267ef, []int{4}
+}
+func (m *MediaInfo) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MediaInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MediaInfo.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MediaInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MediaInfo.Merge(m, src)
+}
+func (m *MediaInfo) XXX_Size() int {
+	return m.Size()
+}
+func (m *MediaInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_MediaInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MediaInfo proto.InternalMessageInfo
+
+func (m *MediaInfo) GetFlags() MediaFlags {
+	if m != nil {
+		return m.Flags
+	}
+	return Unknown
+}
+
+func (m *MediaInfo) GetTitle() string {
+	if m != nil {
+		return m.Title
+	}
+	return ""
+}
+
+func (m *MediaInfo) GetTitleEx() string {
+	if m != nil {
+		return m.TitleEx
+	}
+	return ""
+}
+
+func (m *MediaInfo) GetAuthorDesc() string {
+	if m != nil {
+		return m.AuthorDesc
+	}
+	return ""
+}
+
+func (m *MediaInfo) GetCollection() string {
+	if m != nil {
+		return m.Collection
+	}
+	return ""
+}
+
+func (m *MediaInfo) GetCoverArt() string {
+	if m != nil {
+		return m.CoverArt
+	}
+	return ""
+}
+
+func (m *MediaInfo) GetNumber() int32 {
+	if m != nil {
+		return m.Number
+	}
+	return 0
+}
+
+func (m *MediaInfo) GetDurationFS() int64 {
+	if m != nil {
+		return m.DurationFS
+	}
+	return 0
+}
+
+func (m *MediaInfo) GetPopularity() float32 {
+	if m != nil {
+		return m.Popularity
+	}
+	return 0
+}
+
+func (m *MediaInfo) GetReleaseDate() int64 {
+	if m != nil {
+		return m.ReleaseDate
+	}
+	return 0
+}
+
 type MediaProviderInfo struct {
 	CommonName           string `protobuf:"bytes,1,opt,name=CommonName,proto3" json:"CommonName,omitempty"`
 	RequiresSubscription bool   `protobuf:"varint,2,opt,name=RequiresSubscription,proto3" json:"RequiresSubscription,omitempty"`
@@ -441,7 +573,7 @@ type MediaProviderInfo struct {
 func (m *MediaProviderInfo) Reset()      { *m = MediaProviderInfo{} }
 func (*MediaProviderInfo) ProtoMessage() {}
 func (*MediaProviderInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_e4af60a362d267ef, []int{4}
+	return fileDescriptor_e4af60a362d267ef, []int{5}
 }
 func (m *MediaProviderInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -492,65 +624,83 @@ func (m *MediaProviderInfo) GetRequiresInternet() bool {
 }
 
 func init() {
-	proto.RegisterEnum("amp.PlayableFlags", PlayableFlags_name, PlayableFlags_value)
+	proto.RegisterEnum("amp.ValTypeAmp", ValTypeAmp_name, ValTypeAmp_value)
+	proto.RegisterEnum("amp.MediaFlags", MediaFlags_name, MediaFlags_value)
 	proto.RegisterType((*LoginInfo)(nil), "amp.LoginInfo")
 	proto.RegisterType((*LoginCreateResponse)(nil), "amp.LoginCreateResponse")
 	proto.RegisterType((*CategoryInfo)(nil), "amp.CategoryInfo")
 	proto.RegisterType((*StationInfo)(nil), "amp.StationInfo")
+	proto.RegisterType((*MediaInfo)(nil), "amp.MediaInfo")
 	proto.RegisterType((*MediaProviderInfo)(nil), "amp.MediaProviderInfo")
 }
 
 func init() { proto.RegisterFile("arc/apps/amp_family/amp/amp.proto", fileDescriptor_e4af60a362d267ef) }
 
 var fileDescriptor_e4af60a362d267ef = []byte{
-	// 677 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x54, 0xcd, 0x4e, 0x1b, 0x49,
-	0x18, 0xf4, 0xd8, 0xc6, 0xd8, 0x9f, 0x31, 0x1a, 0x7a, 0x11, 0x1a, 0xed, 0x61, 0xd6, 0xf8, 0x84,
-	0x58, 0xed, 0x22, 0xed, 0x3e, 0xc0, 0xf2, 0xb3, 0xac, 0xd6, 0x12, 0x20, 0x6b, 0x58, 0xd8, 0x23,
-	0x6a, 0xcf, 0x7c, 0x98, 0x96, 0x67, 0xba, 0x27, 0xdd, 0x3d, 0x24, 0x56, 0x2e, 0x7e, 0x84, 0x28,
-	0xb9, 0xe6, 0x01, 0xa2, 0x3c, 0x49, 0x8e, 0x3e, 0x72, 0x0c, 0xe6, 0x92, 0x23, 0xd7, 0xdc, 0xa2,
-	0xee, 0x99, 0x01, 0x93, 0xe4, 0x05, 0x72, 0xb0, 0xf4, 0x55, 0x7d, 0xed, 0xaa, 0xea, 0x52, 0x6b,
-	0x60, 0x93, 0xca, 0x70, 0x87, 0xa6, 0xa9, 0xda, 0xa1, 0x49, 0x7a, 0x71, 0x49, 0x13, 0x16, 0x4f,
-	0xcc, 0x68, 0x7e, 0xbf, 0xa7, 0x52, 0x68, 0x41, 0x6a, 0x34, 0x49, 0x7b, 0x2f, 0xa1, 0x75, 0x24,
-	0x46, 0x8c, 0xf7, 0xf9, 0xa5, 0x20, 0x1b, 0xd0, 0x38, 0x53, 0x28, 0xfb, 0x7f, 0x7b, 0x4e, 0xd7,
-	0xd9, 0x6a, 0x05, 0x05, 0x22, 0x04, 0xea, 0x03, 0xaa, 0x94, 0x57, 0xb5, 0xac, 0x9d, 0x89, 0x0f,
-	0xf0, 0x9f, 0x18, 0x23, 0x3f, 0xa7, 0x71, 0x86, 0x5e, 0xcd, 0x6e, 0x16, 0x18, 0xd2, 0x83, 0x15,
-	0x8b, 0x0e, 0x5f, 0xa4, 0x4c, 0xa2, 0xf2, 0xea, 0x5d, 0x67, 0xab, 0x16, 0x3c, 0xe1, 0x7a, 0x6f,
-	0x1d, 0xf8, 0xc9, 0xba, 0x1f, 0x48, 0xa4, 0x1a, 0x03, 0x54, 0xa9, 0xe0, 0x0a, 0xc9, 0xaf, 0xb0,
-	0xa6, 0x59, 0x82, 0x4a, 0x9b, 0xec, 0x58, 0x08, 0xe4, 0x91, 0xdc, 0x87, 0x45, 0x21, 0x42, 0xd6,
-	0x61, 0x49, 0x1b, 0xd1, 0x22, 0x5d, 0x0e, 0xc8, 0x2f, 0xd0, 0x0e, 0xaf, 0xa8, 0xbe, 0x50, 0x9a,
-	0xea, 0x4c, 0x95, 0xf9, 0x0c, 0x75, 0x6a, 0x19, 0xb2, 0x09, 0x2b, 0xf6, 0xc0, 0x35, 0x4a, 0xc5,
-	0x04, 0x2f, 0xf2, 0xd9, 0x3f, 0x9d, 0xe7, 0x54, 0xef, 0x75, 0x15, 0x56, 0x0e, 0xa8, 0xc6, 0x91,
-	0x90, 0x13, 0xdb, 0xcf, 0x2a, 0x54, 0x59, 0x64, 0x83, 0x74, 0x82, 0x2a, 0x8b, 0xc8, 0xcf, 0xd0,
-	0x0c, 0x8b, 0x7d, 0xe1, 0xfe, 0x80, 0x6d, 0x2c, 0xa6, 0xe3, 0xb2, 0x9a, 0x1c, 0x90, 0x2e, 0xb4,
-	0x23, 0x54, 0xa1, 0x64, 0xa9, 0x2e, 0x4d, 0x5b, 0xc1, 0x22, 0x65, 0xba, 0xd6, 0x93, 0x14, 0xbd,
-	0xa5, 0xbc, 0x6b, 0x33, 0x13, 0x0f, 0x96, 0x55, 0x36, 0xb4, 0x74, 0xc3, 0xd2, 0x25, 0x34, 0x2e,
-	0x2c, 0xa1, 0x23, 0xf4, 0x96, 0x73, 0x17, 0x0b, 0x9e, 0xf6, 0x17, 0xda, 0x6e, 0x23, 0xaf, 0xf9,
-	0x55, 0x7f, 0x79, 0xe7, 0x11, 0xf9, 0x0d, 0xc8, 0xe3, 0xe1, 0x44, 0x44, 0xec, 0x92, 0x61, 0xe4,
-	0xb5, 0xec, 0xe9, 0x47, 0x99, 0xe3, 0x62, 0xd1, 0xfb, 0xec, 0x40, 0xdb, 0x54, 0xc8, 0x04, 0xff,
-	0xa1, 0x3a, 0xd9, 0x80, 0x06, 0xcd, 0xf4, 0x95, 0x90, 0x45, 0x11, 0x05, 0x22, 0x2e, 0xd4, 0x32,
-	0x19, 0x17, 0xf7, 0x35, 0x63, 0xae, 0x9c, 0x24, 0x54, 0x4e, 0x3c, 0x28, 0x95, 0x2d, 0xec, 0xbd,
-	0x71, 0x60, 0xed, 0x18, 0x23, 0x46, 0x07, 0x52, 0x5c, 0xb3, 0x08, 0xa5, 0x6d, 0xc0, 0x07, 0x38,
-	0x10, 0x49, 0x22, 0xf8, 0x09, 0x4d, 0xb0, 0x78, 0xa6, 0x0b, 0x0c, 0xf9, 0x03, 0xd6, 0x03, 0x7c,
-	0x96, 0x99, 0xc7, 0x7a, 0x9a, 0x0d, 0x1f, 0x2f, 0x6a, 0xda, 0x69, 0x06, 0xdf, 0xdd, 0x91, 0x6d,
-	0x70, 0x4b, 0xbe, 0xcf, 0x35, 0x4a, 0x8e, 0xda, 0x96, 0xd6, 0x0c, 0xbe, 0xe1, 0xb7, 0x67, 0x0e,
-	0x74, 0x06, 0x31, 0x9d, 0xd0, 0x61, 0x8c, 0xff, 0xc4, 0x74, 0xa4, 0x48, 0x1b, 0x96, 0xcf, 0xf8,
-	0x98, 0x8b, 0xe7, 0xdc, 0xad, 0x90, 0x0e, 0x34, 0xff, 0xa5, 0x6a, 0x2f, 0x8b, 0x98, 0x70, 0xa7,
-	0xdd, 0x02, 0x9e, 0xb3, 0x08, 0x85, 0x3b, 0xdd, 0x25, 0x00, 0x8d, 0xbe, 0x3a, 0x62, 0xd7, 0xe8,
-	0x3a, 0x64, 0x15, 0xa0, 0xaf, 0x4e, 0x11, 0xc7, 0x46, 0xc9, 0xad, 0xe6, 0xf8, 0x8c, 0x23, 0x8f,
-	0x18, 0x1f, 0xb9, 0xf5, 0x1c, 0x1b, 0xa7, 0x98, 0x29, 0xed, 0x36, 0xc9, 0x1a, 0x74, 0xca, 0x10,
-	0x01, 0x35, 0xf2, 0x2e, 0x21, 0xb0, 0x3a, 0x10, 0x51, 0x48, 0x95, 0x3e, 0x4c, 0x99, 0x12, 0x11,
-	0xba, 0xc6, 0xb1, 0x65, 0xdd, 0xf7, 0x85, 0x18, 0xbb, 0xbb, 0xc4, 0x85, 0x76, 0x79, 0x85, 0xff,
-	0xf7, 0x4e, 0xdc, 0x69, 0x75, 0x91, 0x39, 0x32, 0x4c, 0x7d, 0xff, 0xaf, 0xd9, 0xad, 0x5f, 0xb9,
-	0xb9, 0xf5, 0x2b, 0xf7, 0xb7, 0xbe, 0x33, 0x9d, 0xfb, 0xce, 0xbb, 0xb9, 0xef, 0x7c, 0x98, 0xfb,
-	0xce, 0x6c, 0xee, 0x3b, 0x1f, 0xe7, 0xbe, 0xf3, 0x69, 0xee, 0x57, 0xee, 0xe7, 0xbe, 0xf3, 0xea,
-	0xce, 0xaf, 0xcc, 0xee, 0xfc, 0xca, 0xcd, 0x9d, 0x5f, 0x79, 0x5f, 0x6d, 0xee, 0xc9, 0x50, 0xa5,
-	0x34, 0xc4, 0x61, 0xc3, 0x7e, 0xe2, 0xfe, 0xfc, 0x12, 0x00, 0x00, 0xff, 0xff, 0x7f, 0x6f, 0xe9,
-	0x95, 0x07, 0x05, 0x00, 0x00,
+	// 826 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x55, 0xc1, 0x6e, 0x23, 0x45,
+	0x10, 0xf5, 0x4c, 0x12, 0xc7, 0x2e, 0x7b, 0x4d, 0xa7, 0x89, 0x56, 0x03, 0x87, 0x21, 0x6b, 0x09,
+	0x29, 0x0a, 0x62, 0x57, 0x5a, 0x8e, 0x1c, 0x90, 0x49, 0x36, 0x5a, 0x4b, 0xbb, 0x51, 0x34, 0x4e,
+	0x72, 0x8d, 0xda, 0x33, 0x65, 0xa7, 0xe5, 0x99, 0xe9, 0xa1, 0xbb, 0x27, 0xbb, 0x16, 0x17, 0x7f,
+	0x02, 0x82, 0x0b, 0x07, 0x3e, 0x00, 0xf8, 0x02, 0x3e, 0x81, 0x63, 0x8e, 0x7b, 0x24, 0xce, 0x85,
+	0xe3, 0x5e, 0xb9, 0xa1, 0xee, 0x69, 0xc7, 0x13, 0xe0, 0x07, 0x38, 0x58, 0xea, 0xf7, 0xaa, 0x5d,
+	0xf5, 0xea, 0x55, 0x97, 0x06, 0x9e, 0x30, 0x19, 0x3f, 0x63, 0x45, 0xa1, 0x9e, 0xb1, 0xac, 0xb8,
+	0x9c, 0xb0, 0x8c, 0xa7, 0x73, 0x73, 0x34, 0xbf, 0xa7, 0x85, 0x14, 0x5a, 0xd0, 0x0d, 0x96, 0x15,
+	0xfd, 0x6f, 0xa1, 0xfd, 0x4a, 0x4c, 0x79, 0x3e, 0xcc, 0x27, 0x82, 0x3e, 0x86, 0xe6, 0xb9, 0x42,
+	0x39, 0x3c, 0x0a, 0xbc, 0x3d, 0x6f, 0xbf, 0x1d, 0x39, 0x44, 0x29, 0x6c, 0x9e, 0x32, 0xa5, 0x02,
+	0xdf, 0xb2, 0xf6, 0x4c, 0x43, 0x80, 0x33, 0x31, 0xc3, 0xfc, 0x82, 0xa5, 0x25, 0x06, 0x1b, 0x36,
+	0x52, 0x63, 0x68, 0x1f, 0xba, 0x16, 0xbd, 0x78, 0x5b, 0x70, 0x89, 0x2a, 0xd8, 0xdc, 0xf3, 0xf6,
+	0x37, 0xa2, 0x07, 0x5c, 0xff, 0x27, 0x0f, 0x3e, 0xb4, 0xd5, 0x0f, 0x25, 0x32, 0x8d, 0x11, 0xaa,
+	0x42, 0xe4, 0x0a, 0xe9, 0x67, 0xb0, 0xa3, 0x79, 0x86, 0x4a, 0x1b, 0xed, 0xe8, 0x12, 0x54, 0x92,
+	0xc8, 0x7d, 0xc0, 0x25, 0xa1, 0xbb, 0xb0, 0xa5, 0x4d, 0x52, 0xa7, 0xae, 0x02, 0xf4, 0x13, 0xe8,
+	0xc4, 0x57, 0x4c, 0x5f, 0x2a, 0xcd, 0x74, 0xa9, 0x56, 0xfa, 0x0c, 0x35, 0xb2, 0x0c, 0x7d, 0x02,
+	0x5d, 0x7b, 0xe1, 0x1a, 0xa5, 0xe2, 0x22, 0x77, 0xfa, 0xec, 0x9f, 0x2e, 0x2a, 0xaa, 0xff, 0xbd,
+	0x0f, 0xdd, 0x43, 0xa6, 0x71, 0x2a, 0xe4, 0xdc, 0xfa, 0xd3, 0x03, 0x9f, 0x27, 0x56, 0xc8, 0xa3,
+	0xc8, 0xe7, 0x09, 0xfd, 0x18, 0x5a, 0xb1, 0x8b, 0xbb, 0xea, 0xf7, 0xd8, 0xca, 0xe2, 0x3a, 0x5d,
+	0x59, 0x53, 0x01, 0xba, 0x07, 0x9d, 0x04, 0x55, 0x2c, 0x79, 0xa1, 0x57, 0x45, 0xdb, 0x51, 0x9d,
+	0x32, 0x5e, 0xeb, 0x79, 0x81, 0xc1, 0x56, 0xe5, 0xb5, 0x39, 0xd3, 0x00, 0xb6, 0x55, 0x39, 0xb6,
+	0x74, 0xd3, 0xd2, 0x2b, 0x68, 0xaa, 0xf0, 0x8c, 0x4d, 0x31, 0xd8, 0xae, 0xaa, 0x58, 0xf0, 0xd0,
+	0xbf, 0xd8, 0x7a, 0x9b, 0x04, 0xad, 0x7f, 0xf8, 0x57, 0x79, 0x9e, 0xd0, 0xcf, 0x81, 0xae, 0x2f,
+	0x67, 0x22, 0xe1, 0x13, 0x8e, 0x49, 0xd0, 0xb6, 0xb7, 0xd7, 0x69, 0x5e, 0xbb, 0x40, 0xff, 0x2f,
+	0x0f, 0x3a, 0xc6, 0x42, 0x2e, 0xf2, 0xff, 0x95, 0x27, 0x8f, 0xa1, 0xc9, 0x4a, 0x7d, 0x25, 0xa4,
+	0x33, 0xc2, 0x21, 0x4a, 0x60, 0xa3, 0x94, 0xa9, 0xeb, 0xd7, 0x1c, 0xab, 0xcc, 0x59, 0xc6, 0xe4,
+	0x3c, 0x80, 0x55, 0x66, 0x0b, 0xfb, 0xbf, 0xf9, 0xd0, 0x7e, 0x8d, 0x09, 0x67, 0xb6, 0xf3, 0x4f,
+	0x61, 0xeb, 0x38, 0x65, 0xd3, 0xea, 0x65, 0xf6, 0x9e, 0x7f, 0xf0, 0xd4, 0xac, 0x96, 0x0d, 0x5b,
+	0x3a, 0xaa, 0xa2, 0x46, 0xce, 0x99, 0x6d, 0xda, 0xbd, 0x4f, 0x0b, 0x4c, 0x11, 0x7b, 0x78, 0xf1,
+	0xd6, 0x99, 0xb1, 0x82, 0x66, 0xb1, 0x06, 0x56, 0xda, 0x11, 0xaa, 0xd8, 0xb5, 0x5c, 0x63, 0x4c,
+	0xfc, 0x50, 0xa4, 0x29, 0xc6, 0xd6, 0xad, 0xaa, 0xf7, 0x1a, 0x63, 0x06, 0x70, 0x28, 0xae, 0x51,
+	0x0e, 0xa4, 0x76, 0x5d, 0xdd, 0x63, 0x63, 0xc2, 0x49, 0x99, 0x8d, 0x51, 0xda, 0xce, 0xb6, 0x22,
+	0x87, 0x4c, 0xce, 0xa3, 0x52, 0xda, 0xa1, 0x1e, 0x8f, 0x82, 0x8e, 0x5d, 0x85, 0x1a, 0x63, 0xe2,
+	0xa7, 0xa2, 0x28, 0x53, 0x26, 0xb9, 0x9e, 0x07, 0xdd, 0x3d, 0x6f, 0xdf, 0x8f, 0x6a, 0x8c, 0x19,
+	0x61, 0x84, 0x29, 0x32, 0x85, 0x47, 0x4c, 0x63, 0xd0, 0xab, 0x76, 0xa9, 0x46, 0xf5, 0x7f, 0xf0,
+	0x60, 0xc7, 0x7a, 0x73, 0x2a, 0xc5, 0x35, 0x4f, 0x50, 0x5a, 0x0b, 0x6d, 0x2f, 0x59, 0x26, 0xf2,
+	0x13, 0x96, 0xa1, 0xdb, 0xf0, 0x1a, 0x43, 0x9f, 0xc3, 0x6e, 0x84, 0xdf, 0x94, 0x66, 0xcf, 0x47,
+	0xe5, 0x78, 0xfd, 0x46, 0x8c, 0x95, 0xad, 0xe8, 0x3f, 0x63, 0xf4, 0x00, 0xc8, 0x8a, 0x1f, 0xe6,
+	0x1a, 0x65, 0x8e, 0xda, 0x5a, 0xdc, 0x8a, 0xfe, 0xc5, 0x1f, 0x7c, 0x09, 0x70, 0xc1, 0xd2, 0xb3,
+	0x79, 0x81, 0x83, 0xac, 0xa0, 0x14, 0x7a, 0x6b, 0x74, 0x39, 0x99, 0x28, 0xd2, 0xa0, 0x1f, 0xc1,
+	0x6e, 0x8d, 0xbb, 0x1f, 0x3e, 0xf9, 0xe5, 0xf8, 0xe0, 0x47, 0x0f, 0x60, 0x3d, 0x6e, 0xda, 0x81,
+	0xed, 0xf3, 0x7c, 0x96, 0x8b, 0x37, 0x39, 0x69, 0xd0, 0x47, 0xd0, 0x7a, 0xc9, 0xd4, 0xa0, 0x4c,
+	0xb8, 0x20, 0x0b, 0xdf, 0xc1, 0x0b, 0x9e, 0xa0, 0x20, 0x8b, 0x4d, 0xda, 0x83, 0xf6, 0x4b, 0xa6,
+	0x46, 0x05, 0x62, 0x7c, 0x45, 0x16, 0x2d, 0xba, 0x03, 0xdd, 0x13, 0xc4, 0x44, 0x9d, 0xa0, 0x7e,
+	0x23, 0xe4, 0x8c, 0x2c, 0x08, 0x05, 0x68, 0x0e, 0xd5, 0x2b, 0x7e, 0x8d, 0xc4, 0xa3, 0x3d, 0x80,
+	0xa1, 0x1a, 0x21, 0xce, 0xd8, 0x38, 0x45, 0xe2, 0x57, 0xf8, 0x3c, 0xc7, 0x3c, 0xe1, 0xf9, 0x94,
+	0x6c, 0x52, 0x02, 0xdd, 0xd1, 0x8c, 0x17, 0xe6, 0xfe, 0x0c, 0xd3, 0x39, 0x21, 0x5f, 0x7f, 0x75,
+	0x73, 0x1b, 0x36, 0xde, 0xdd, 0x86, 0x8d, 0xf7, 0xb7, 0xa1, 0xb7, 0x58, 0x86, 0xde, 0xcf, 0xcb,
+	0xd0, 0xfb, 0x7d, 0x19, 0x7a, 0x37, 0xcb, 0xd0, 0xfb, 0x63, 0x19, 0x7a, 0x7f, 0x2e, 0xc3, 0xc6,
+	0xfb, 0x65, 0xe8, 0x7d, 0x77, 0x17, 0x36, 0x6e, 0xee, 0xc2, 0xc6, 0xbb, 0xbb, 0xb0, 0xf1, 0xab,
+	0xdf, 0x1a, 0xc8, 0x58, 0x15, 0x2c, 0xc6, 0x71, 0xd3, 0x7e, 0x22, 0xbe, 0xf8, 0x3b, 0x00, 0x00,
+	0xff, 0xff, 0x92, 0x34, 0x05, 0x8e, 0x47, 0x06, 0x00, 0x00,
 }
 
-func (x PlayableFlags) String() string {
-	s, ok := PlayableFlags_name[int32(x)]
+func (x ValTypeAmp) String() string {
+	s, ok := ValTypeAmp_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x MediaFlags) String() string {
+	s, ok := MediaFlags_name[int32(x)]
 	if ok {
 		return s
 	}
@@ -721,6 +871,57 @@ func (this *StationInfo) Equal(that interface{}) bool {
 	}
 	return true
 }
+func (this *MediaInfo) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MediaInfo)
+	if !ok {
+		that2, ok := that.(MediaInfo)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Flags != that1.Flags {
+		return false
+	}
+	if this.Title != that1.Title {
+		return false
+	}
+	if this.TitleEx != that1.TitleEx {
+		return false
+	}
+	if this.AuthorDesc != that1.AuthorDesc {
+		return false
+	}
+	if this.Collection != that1.Collection {
+		return false
+	}
+	if this.CoverArt != that1.CoverArt {
+		return false
+	}
+	if this.Number != that1.Number {
+		return false
+	}
+	if this.DurationFS != that1.DurationFS {
+		return false
+	}
+	if this.Popularity != that1.Popularity {
+		return false
+	}
+	if this.ReleaseDate != that1.ReleaseDate {
+		return false
+	}
+	return true
+}
 func (this *MediaProviderInfo) Equal(that interface{}) bool {
 	if that == nil {
 		return this == nil
@@ -811,6 +1012,25 @@ func (this *StationInfo) GoString() string {
 	s = append(s, "Author: "+fmt.Sprintf("%#v", this.Author)+",\n")
 	s = append(s, "Url: "+fmt.Sprintf("%#v", this.Url)+",\n")
 	s = append(s, "Summary: "+fmt.Sprintf("%#v", this.Summary)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MediaInfo) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 14)
+	s = append(s, "&amp.MediaInfo{")
+	s = append(s, "Flags: "+fmt.Sprintf("%#v", this.Flags)+",\n")
+	s = append(s, "Title: "+fmt.Sprintf("%#v", this.Title)+",\n")
+	s = append(s, "TitleEx: "+fmt.Sprintf("%#v", this.TitleEx)+",\n")
+	s = append(s, "AuthorDesc: "+fmt.Sprintf("%#v", this.AuthorDesc)+",\n")
+	s = append(s, "Collection: "+fmt.Sprintf("%#v", this.Collection)+",\n")
+	s = append(s, "CoverArt: "+fmt.Sprintf("%#v", this.CoverArt)+",\n")
+	s = append(s, "Number: "+fmt.Sprintf("%#v", this.Number)+",\n")
+	s = append(s, "DurationFS: "+fmt.Sprintf("%#v", this.DurationFS)+",\n")
+	s = append(s, "Popularity: "+fmt.Sprintf("%#v", this.Popularity)+",\n")
+	s = append(s, "ReleaseDate: "+fmt.Sprintf("%#v", this.ReleaseDate)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -1107,6 +1327,90 @@ func (m *StationInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *MediaInfo) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MediaInfo) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MediaInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.ReleaseDate != 0 {
+		i = encodeVarintAmp(dAtA, i, uint64(m.ReleaseDate))
+		i--
+		dAtA[i] = 0x70
+	}
+	if m.Popularity != 0 {
+		i -= 4
+		encoding_binary.LittleEndian.PutUint32(dAtA[i:], uint32(math.Float32bits(float32(m.Popularity))))
+		i--
+		dAtA[i] = 0x65
+	}
+	if m.DurationFS != 0 {
+		i = encodeVarintAmp(dAtA, i, uint64(m.DurationFS))
+		i--
+		dAtA[i] = 0x58
+	}
+	if m.Number != 0 {
+		i = encodeVarintAmp(dAtA, i, uint64(m.Number))
+		i--
+		dAtA[i] = 0x50
+	}
+	if len(m.CoverArt) > 0 {
+		i -= len(m.CoverArt)
+		copy(dAtA[i:], m.CoverArt)
+		i = encodeVarintAmp(dAtA, i, uint64(len(m.CoverArt)))
+		i--
+		dAtA[i] = 0x4a
+	}
+	if len(m.Collection) > 0 {
+		i -= len(m.Collection)
+		copy(dAtA[i:], m.Collection)
+		i = encodeVarintAmp(dAtA, i, uint64(len(m.Collection)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.AuthorDesc) > 0 {
+		i -= len(m.AuthorDesc)
+		copy(dAtA[i:], m.AuthorDesc)
+		i = encodeVarintAmp(dAtA, i, uint64(len(m.AuthorDesc)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.TitleEx) > 0 {
+		i -= len(m.TitleEx)
+		copy(dAtA[i:], m.TitleEx)
+		i = encodeVarintAmp(dAtA, i, uint64(len(m.TitleEx)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Title) > 0 {
+		i -= len(m.Title)
+		copy(dAtA[i:], m.Title)
+		i = encodeVarintAmp(dAtA, i, uint64(len(m.Title)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Flags != 0 {
+		i = encodeVarintAmp(dAtA, i, uint64(m.Flags))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *MediaProviderInfo) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -1308,6 +1612,50 @@ func (m *StationInfo) Size() (n int) {
 	return n
 }
 
+func (m *MediaInfo) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Flags != 0 {
+		n += 1 + sovAmp(uint64(m.Flags))
+	}
+	l = len(m.Title)
+	if l > 0 {
+		n += 1 + l + sovAmp(uint64(l))
+	}
+	l = len(m.TitleEx)
+	if l > 0 {
+		n += 1 + l + sovAmp(uint64(l))
+	}
+	l = len(m.AuthorDesc)
+	if l > 0 {
+		n += 1 + l + sovAmp(uint64(l))
+	}
+	l = len(m.Collection)
+	if l > 0 {
+		n += 1 + l + sovAmp(uint64(l))
+	}
+	l = len(m.CoverArt)
+	if l > 0 {
+		n += 1 + l + sovAmp(uint64(l))
+	}
+	if m.Number != 0 {
+		n += 1 + sovAmp(uint64(m.Number))
+	}
+	if m.DurationFS != 0 {
+		n += 1 + sovAmp(uint64(m.DurationFS))
+	}
+	if m.Popularity != 0 {
+		n += 5
+	}
+	if m.ReleaseDate != 0 {
+		n += 1 + sovAmp(uint64(m.ReleaseDate))
+	}
+	return n
+}
+
 func (m *MediaProviderInfo) Size() (n int) {
 	if m == nil {
 		return 0
@@ -1392,6 +1740,25 @@ func (this *StationInfo) String() string {
 		`Author:` + fmt.Sprintf("%v", this.Author) + `,`,
 		`Url:` + fmt.Sprintf("%v", this.Url) + `,`,
 		`Summary:` + fmt.Sprintf("%v", this.Summary) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MediaInfo) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MediaInfo{`,
+		`Flags:` + fmt.Sprintf("%v", this.Flags) + `,`,
+		`Title:` + fmt.Sprintf("%v", this.Title) + `,`,
+		`TitleEx:` + fmt.Sprintf("%v", this.TitleEx) + `,`,
+		`AuthorDesc:` + fmt.Sprintf("%v", this.AuthorDesc) + `,`,
+		`Collection:` + fmt.Sprintf("%v", this.Collection) + `,`,
+		`CoverArt:` + fmt.Sprintf("%v", this.CoverArt) + `,`,
+		`Number:` + fmt.Sprintf("%v", this.Number) + `,`,
+		`DurationFS:` + fmt.Sprintf("%v", this.DurationFS) + `,`,
+		`Popularity:` + fmt.Sprintf("%v", this.Popularity) + `,`,
+		`ReleaseDate:` + fmt.Sprintf("%v", this.ReleaseDate) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -2407,6 +2774,303 @@ func (m *StationInfo) Unmarshal(dAtA []byte) error {
 			}
 			m.Summary = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipAmp(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthAmp
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MediaInfo) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowAmp
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MediaInfo: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MediaInfo: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Flags", wireType)
+			}
+			m.Flags = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAmp
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Flags |= MediaFlags(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Title", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAmp
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthAmp
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthAmp
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Title = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TitleEx", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAmp
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthAmp
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthAmp
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TitleEx = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AuthorDesc", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAmp
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthAmp
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthAmp
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.AuthorDesc = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Collection", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAmp
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthAmp
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthAmp
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Collection = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CoverArt", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAmp
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthAmp
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthAmp
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.CoverArt = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Number", wireType)
+			}
+			m.Number = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAmp
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Number |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DurationFS", wireType)
+			}
+			m.DurationFS = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAmp
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.DurationFS |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 12:
+			if wireType != 5 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Popularity", wireType)
+			}
+			var v uint32
+			if (iNdEx + 4) > l {
+				return io.ErrUnexpectedEOF
+			}
+			v = uint32(encoding_binary.LittleEndian.Uint32(dAtA[iNdEx:]))
+			iNdEx += 4
+			m.Popularity = float32(math.Float32frombits(v))
+		case 14:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ReleaseDate", wireType)
+			}
+			m.ReleaseDate = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAmp
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ReleaseDate |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipAmp(dAtA[iNdEx:])

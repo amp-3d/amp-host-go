@@ -158,7 +158,11 @@ func (srv *httpServer) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) 
 	}
 	srv.assetMu.Unlock()
 
-	URL = fmt.Sprintf("http://localhost%s%s%s", srv.opts.ListenAddr, kAssetLinkPrefix, assetID)
+	if opts.HostAddr == "" {
+		opts.HostAddr = "localhost"
+	}
+
+	URL = fmt.Sprintf("http://%s%s%s%s", opts.HostAddr, srv.opts.ListenAddr, kAssetLinkPrefix, assetID)
 	return
 }
 
