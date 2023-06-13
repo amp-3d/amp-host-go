@@ -77,6 +77,8 @@ func newHttpServer(opts HttpServerOpts) AssetServer {
 			Label:     fmt.Sprintf("AssetReader.(*%v)", reflect.ValueOf(assetReader).Elem().Type().Name()),
 			OnRun: func(ctx process.Context) {
 				http.ServeContent(w, r, asset.Label(), time.Time{}, assetReader)
+			},
+			OnClosing: func() {
 				assetReader.Close()
 			},
 		})
