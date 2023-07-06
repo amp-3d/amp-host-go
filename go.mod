@@ -17,6 +17,7 @@ replace github.com/arcspace/go-librespot => ../go-librespot
 
 require (
 	capnproto.org/go/capnp/v3 v3.0.0-alpha-29
+	github.com/alecthomas/participle/v2 v2.0.0
 	github.com/arcspace/go-arc-sdk v0.0.0-20230617152009-007f190f76b2
 	github.com/arcspace/go-librespot v0.0.0-20230613175017-c712547862d3
 	github.com/dgraph-io/badger/v4 v4.1.0
@@ -30,7 +31,6 @@ require (
 )
 
 require (
-	github.com/alecthomas/participle/v2 v2.0.0 // indirect
 	github.com/brynbellomy/klog v0.0.0-20200414031930-87fbf2e555ae // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect

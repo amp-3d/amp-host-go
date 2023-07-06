@@ -14,6 +14,7 @@ import (
 	"github.com/arcspace/go-arc-sdk/stdlib/task"
 	"github.com/arcspace/go-arc-sdk/stdlib/utils"
 	"github.com/arcspace/go-archost/arc/apps/std_family/planet"
+	"github.com/arcspace/go-archost/arc/archost/registry"
 )
 
 type host struct {
@@ -414,7 +415,7 @@ func (sess *hostSess) InitSessionRegistry(symTable symbol.Table) {
 	if sess.SessionRegistry != nil {
 		panic("InitSessionRegistry() already called")
 	}
-	sess.SessionRegistry = arc.NewSessionRegistry(symTable)
+	sess.SessionRegistry = registry.NewSessionRegistry(symTable)
 	if err := sess.registry().ExportTo(sess.SessionRegistry); err != nil {
 		panic(err)
 	}
