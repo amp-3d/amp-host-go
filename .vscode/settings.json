@@ -3,6 +3,7 @@
         "archost",
         "Arcspace",
         "filesys",
+        "pinnable",
         "seekable",
         "upsert"
     ]

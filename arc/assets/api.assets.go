@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/process"
+	"github.com/arcspace/go-arc-sdk/stdlib/task"
 )
 
 // Consumed by client wishing to post an data asset
 type AssetServer interface {
-	process.Context
+	task.Context
 	arc.AssetPublisher
-	StartService(host process.Context) error
+	StartService(host task.Context) error
 	GracefulStop()
 }
 

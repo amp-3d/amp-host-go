@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/process"
+	"github.com/arcspace/go-arc-sdk/stdlib/task"
 	"github.com/h2non/filetype"
 )
 
@@ -43,7 +43,7 @@ func (a *fileAsset) MediaType() string {
 	return a.mediaType
 }
 
-func (a *fileAsset) OnStart(ctx process.Context) error {
+func (a *fileAsset) OnStart(ctx task.Context) error {
 	return nil
 }
 

@@ -13,12 +13,12 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/process"
+	"github.com/arcspace/go-arc-sdk/stdlib/task"
 )
 
 // grpcServer is the GRPC implementation of repo.proto
 type grpcServer struct {
-	process.Context
+	task.Context
 	server *grpc.Server
 	host   arc.Host
 	opts   GrpcServerOpts
@@ -49,10 +49,10 @@ func (srv *grpcServer) StartService(on arc.Host) error {
 	)
 	arc.RegisterHostGrpcServer(srv.server, srv)
 
-	srv.Context, err = srv.host.StartChild(&process.Task{
+	srv.Context, err = srv.host.StartChild(&task.Task{
 		Label:     fmt.Sprintf("%s.HostService %v", srv.ServiceURI(), lis.Addr().String()),
 		IdleClose: time.Nanosecond,
-		OnRun: func(ctx process.Context) {
+		OnRun: func(ctx task.Context) {
 			srv.Infof(0, "Serving on \x1b[1;32m%v %v\x1b[0m", srv.opts.ListenNetwork, srv.opts.ListenAddr)
 			srv.server.Serve(lis)
 			srv.Info(2, "Serve COMPLETE")

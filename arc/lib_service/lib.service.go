@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/process"
+	"github.com/arcspace/go-arc-sdk/stdlib/task"
 )
 
 // libService offers Msg transport over direct dll calls.
 type libService struct {
-	process.Context
+	task.Context
 	host arc.Host
 	opts LibServiceOpts
 	//sess   *LibSession
@@ -33,7 +33,7 @@ func (srv *libService) StartService(on arc.Host) error {
 	srv.host = on
 
 	var err error
-	srv.Context, err = srv.host.StartChild(&process.Task{
+	srv.Context, err = srv.host.StartChild(&task.Task{
 		Label:     fmt.Sprint(srv.ServiceURI(), ".HostService"),
 		IdleClose: time.Nanosecond,
 	})
@@ -303,7 +303,7 @@ func (srv *libServer) NewLibSession() (LibSession, error) {
 
 
 type libSess struct {
-	process.Context
+	task.Context
 	hostSess arc.HostSession
 }
 

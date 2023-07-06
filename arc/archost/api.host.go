@@ -21,7 +21,7 @@ packages
 		implementations of arc.App
 
 
-	archost process.Context model:
+	archost task.Context model:
 		001 Host
 		    002 HostHomePlanet
 		        004 HostSession
@@ -38,7 +38,6 @@ packages
 	~ Dec 25th, 2021
 
 */
-
 
 type Opts struct {
 	assets.AssetServer
