@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	AppURI = amp.AppFamily + "spotify/v1"
+	AppID = "v1.spotify" + amp.AppFamilyDomain
 )
 
 func UID() arc.UID {
@@ -25,16 +25,14 @@ func UID() arc.UID {
 
 func RegisterApp(reg arc.Registry) {
 	reg.RegisterApp(&arc.AppModule{
-		URI:     AppURI,
+		AppID:   AppID,
 		UID:     UID(),
 		Desc:    "client for Spotify",
 		Version: "v1.2023.2",
-		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {
-			app := &appCtx{
-				AppContext: ctx,
+		NewAppInstance: func() arc.AppInstance {
+			return &appCtx{
 				sessReady:  make(chan struct{}),
 			}
-			return app, nil
 		},
 	})
 }
@@ -70,42 +68,48 @@ var oauthConfig = oauth2.Config{
 }
 
 type appCtx struct {
-	arc.AppContext
+	amp.AppBase
 	sessReady chan struct{}        // closed when session is established
 	client    *spotify.Client      // nil if not signed in
 	me        *spotify.PrivateUser // nil if not signed in
 	respot    respot.Session       // nil if not signed in
 	auth      *oauth.Config
-	home      AmpCell
 	sessMu    sync.Mutex
+	// home      AmpCell
+	// rootCells []*amp.CellBase[*appCtx]
 }
 
 func (app *appCtx) OnClosing() {
 	app.endSession()
 }
 
-func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
-	if msg.ValType == arc.ValType_HandleURI {
-		uri := string(msg.ValBuf)
-		if strings.Contains(uri, "://spotify/auth") {
-			url, err := url.Parse(uri)
-			if err != nil {
-				return true, err
-			}
-
-			// redeem the code for the token and store it as the latest token -- this is blocking but handled properly since we pass in the app's process.Context
-			token, err := app.auth.Exchange(app, "", url)
+func (app *appCtx) HandleMetaAttr(attr arc.AttrElem) bool {
+	switch v := attr.Val.(type) {
+	case *arc.HandleURI:
+		if strings.Contains(v.URI, "://spotify/auth") {
+			
+			url, err := url.Parse(v.URI)
 			if err == nil {
-				err = app.auth.OnTokenUpdated(token, true)
+				// Redeem the auth code and store the latest token.
+				// Blocks but ok since we pass in the app's Context
+				var token *oauth2.Token
+				token, err = app.auth.Exchange(app, "", url)
 				if err == nil {
-					err = app.tryConnect()
+					err = app.auth.OnTokenUpdated(token, true)
+					if err == nil {
+						err = app.tryConnect()
+					}
 				}
 			}
-
-			return true, err
+			
+			if err != nil {
+				app.Warnf("HandleMetaAttr: %v", err)
+			}
+			
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
 // Optionally blocks until the spotify session is ready (or AppContext is closing)
@@ -161,7 +165,7 @@ func (app *appCtx) tryConnect() error {
 	// At this point we have a token -- TODO it may be expired
 	if token := app.auth.CurrentToken(); token != nil {
 		if app.respot == nil {
-			info := app.User().LoginInfo()
+			info := app.Session().LoginInfo()
 			ctx := respot.DefaultSessionContext(info.DeviceLabel)
 			ctx.Context = app
 			app.respot, err = respot.StartNewSession(ctx)
@@ -206,7 +210,6 @@ func (app *appCtx) endSession() {
 	app.resetSignal()
 
 	if app.client != nil {
-		app.home = nil
 		app.me = nil
 		app.client = nil
 		app.auth = nil
@@ -217,14 +220,23 @@ func (app *appCtx) endSession() {
 	}
 }
 
-func (app *appCtx) PinCell(req *arc.CellReq) (arc.Cell, error) {
+func (app *appCtx) ResolveCell(req arc.CellReq) (arc.PinnedCell, error) {
 
-	// TODO: regen home once token arrives?
-	if app.home == nil {
-		cell := newRootCell(app)
-		app.home = cell
-		return app.home, nil
+	// For now, always just pin a new home (root) cell
+	cell := app.newRootCell()
+	pinned, err := cell.SpawnAsPinnedCell(app, req.String())
+
+	return pinned, err
+}
+
+func (app *appCtx) newRootCell() *spotifyCell {
+	cell := &spotifyCell{}
+
+	cell.info = arc.CellInfo{
+		Title: "Spotify Home",
+		// Glyph: &arc.AssetRef{
+		// },
 	}
-
-	return nil, nil
+	cell.pinner = pin_appHome // TODO: add (read-only) children to CellBase?
+	return cell
 }

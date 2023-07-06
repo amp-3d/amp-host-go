@@ -14,6 +14,10 @@ LIB_PROJ := ${BUILD_PATH}/cmd/libarchost
 ANDROID_NDK := ${UNITY_PATH}/PlaybackEngines/AndroidPlayer/NDK
 ANDROID_CC := ${ANDROID_NDK}/toolchains/llvm/prebuilt/darwin-x86_64/bin
 
+ARC_SDK_PKG := "github.com/arcspace/go-arc-sdk"  
+ARC_SDK_PATH := $(shell go list -f '{{.Dir}}' $(ARC_SDK_PKG)) # errors until adk has version assigned
+ARC_SDK_PATH := "${PARENT_PATH}/go-arc-sdk"
+CAPNP_INCLUDE := "${ARC_SDK_PATH}/apis/capnp/include"
 
 ## display this help message
 help:
@@ -26,6 +30,8 @@ help:
 	@echo "  ARC_LIBS:        ${ARC_LIBS}"
 	@echo "  ANDROID_NDK:     ${ANDROID_NDK}"
 	@echo "  ANDROID_CC:      ${ANDROID_CC}"
+	@echo "  ARC_SDK_PATH:    ${ARC_SDK_PATH}"
+	@echo "  CAPNP_INCLUDE:   ${CAPNP_INCLUDE}"
 	@echo
 	@awk '/^##.*$$/,/[a-zA-Z_-]+:/' $(MAKEFILE_LIST) | awk '!(NR%2){print $$0p}{p=$$0}' | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-32s\033[0m %s\n", $$1, $$2}' | sort
 
@@ -34,7 +40,7 @@ help:
 
 GOFILES = $(shell find . -type f -name '*.go')
 	
-.PHONY: build protos tools
+.PHONY: build generate tools
 
 ## build archost and libarchost
 build:  archost libarchost
@@ -70,15 +76,15 @@ libarchost-android-arm64-v8a:
 libarchost-android-armeabi-v7a:
 	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/armv7a-linux-androideabi27-clang" \
 	PLATFORM=Android/armeabi-v7a    GOARCH=arm          "${LIB_PROJ}/build.sh"
-		
-## build libarchost for armeabi-v7a 
-libarchost-android-x86_64:
+
+## build libarchost for armeabi-x86_64
+libarchost-android-x86_64_:
 	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/x86_64-linux-android27-clang" \
 	PLATFORM=Android/x86_64         GOARCH=amd64        "${LIB_PROJ}/build.sh"
 
 
 ## build archost.dylib/so/.a for all platforms
-libarchost:  libarchost-osx libarchost-ios libarchost-android-arm64-v8a libarchost-android-armeabi-v7a libarchost-android-x86_64
+libarchost:  libarchost-osx libarchost-ios libarchost-android-arm64-v8a libarchost-android-armeabi-v7a libarchost-android-x86_64_
 
 
 ## build archost "headless" daemon
@@ -88,8 +94,9 @@ archost:
 
 
 
-## generate .cs and .go from proto files
-protos:
+
+## generate .cs and .go files from .proto & .capnp
+generate:
 #   GrpcTools (2.49.1)
 #   Install protoc & grpc_csharp_plugin:
 #      - Download latest Grpc.Tools from https://nuget.org/packages/Grpc.Tools
@@ -97,15 +104,22 @@ protos:
 #   Or, just protoc: https://github.com/protocolbuffers/protobuf/releases
 #   Links: https://grpc.io/docs/languages/csharp/quickstart/
 	protoc \
+	    -I"${PARENT_PATH}/go-arc-sdk/apis" \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
 	    --csharp_out "${ARC_UNITY_PATH}/Arc/Apps/amp" \
 	    --proto_path=. \
 		arc/apps/amp_family/amp/amp.proto
-				
+	
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
 	    --proto_path=. \
 		ski/api.ski.proto
+	
+	capnp compile -I${CAPNP_INCLUDE} -ogo     arc/apps/amp_family/amp/amp.capnp
+	cd arc/apps/amp_family/amp \
+		&& capnp compile -I${CAPNP_INCLUDE} -ocsharp amp.capnp \
+		&& mv amp.capnp.cs ${ARC_UNITY_PATH}/Arc/Apps/amp/Amp.capnp.cs
+		
 
 
 ## build fmod play toy

@@ -3,7 +3,6 @@ package amp_filesys
 import (
 	"os"
 	"path"
-	"sort"
 	"strings"
 	"time"
 
@@ -12,30 +11,23 @@ import (
 	"github.com/arcspace/go-archost/arc/assets"
 )
 
-type fsInfo struct {
-	arc.CellID
+type fsItem struct {
+	amp.CellBase[*appCtx]
 
-	app         *appCtx // TODO: move this
-	dataModel   string  // TODO: make this a read-only util struct to facilitate cell schema access??
-	basename    string  // base file name
-	pathname    string  // only set for pinned items (could be alternative OS handle)
-	lastRefresh time.Time
-	isHidden    bool
-	mode        os.FileMode
-	size        int64
-	isDir       bool
-	modTime     time.Time
+	basename  string // base file name
+	pathname  string // non-nil when pinned (could be alternative OS handle)
+	mediaType string
+	isHidden  bool
+	mode      os.FileMode
+	size      int64
+	isDir     bool
+	modTime   time.Time
+
+	info       arc.CellInfo
+	mediaFlags amp.MediaFlags
 }
 
-func (item *fsInfo) ID() arc.CellID {
-	return item.CellID
-}
-
-func (item *fsInfo) CellDataModel() string {
-	return item.dataModel
-}
-
-func (item *fsInfo) Compare(oth *fsInfo) int {
+func (item *fsItem) Compare(oth *fsItem) int {
 	// if item.isDir != oth.isDir {
 	// 	return int(item.isDir) - int(oth.isDir)
 	// }
@@ -54,230 +46,175 @@ func (item *fsInfo) Compare(oth *fsInfo) int {
 	return 0
 }
 
-func (item *fsInfo) newAppCell() arc.Cell {
-	var appCell arc.Cell
-
-	if item.isDir {
-		pinDir := &fsDir{
-			fsInfo: *item,
-		}
-		appCell = pinDir
-	} else {
-		pinFile := &fsFile{
-			fsInfo: *item,
-		}
-		appCell = pinFile
-	}
-
-	return appCell
-}
-
-func (item *fsInfo) setFrom(fi os.FileInfo) {
+func (item *fsItem) setFrom(fi os.FileInfo) {
 	item.basename = fi.Name()
 	item.mode = fi.Mode()
 	item.modTime = fi.ModTime()
 	item.isHidden = strings.HasPrefix(item.basename, ".")
 	item.isDir = fi.IsDir()
-	if item.isDir {
-		item.dataModel = amp.CellDataModel_Playlist
-	} else {
-		item.dataModel = amp.CellDataModel_Playable
+	if !item.isDir {
 		item.size = fi.Size()
-	}
-}
-
-type fsFile struct {
-	fsInfo // base file info
-}
-
-type fsDir struct {
-	fsInfo                 // base file info
-	items     []arc.CellID // ordered
-	itemsByID map[arc.CellID]*fsInfo
-}
-
-// reads the fsDir's catalog and issues new items as needed.
-func (dir *fsDir) readDir(req *arc.CellReq) error {
-
-	{
-		//dir.subs = make(map[arc.CellID]os.DirEntry)
-		f, err := os.Open(dir.pathname)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-
-		lookup := make(map[string]*fsInfo, len(dir.itemsByID))
-		for _, sub := range dir.itemsByID {
-			lookup[sub.basename] = sub
-		}
-
-		fsInfos, err := f.Readdir(-1)
-		f.Close()
-		if err != nil {
-			return nil
-		}
-
-		N := len(fsInfos)
-		dir.itemsByID = make(map[arc.CellID]*fsInfo, N)
-		dir.items = dir.items[:0]
-
-		var tmp *fsInfo
-		for _, fi := range fsInfos {
-			sub := tmp
-			if sub == nil {
-				sub = &fsInfo{
-					app: dir.app,
-				}
-			}
-			sub.setFrom(fi)
-			if sub.isHidden {
-				continue
-			}
-
-			// preserve items that have not changed
-			old := lookup[sub.basename]
-			if old == nil || old.Compare(sub) != 0 {
-				sub.CellID = dir.app.IssueCellID()
-				tmp = nil
-			} else {
-				sub = old
-			}
-
-			dir.itemsByID[sub.CellID] = sub
-			dir.items = append(dir.items, sub.CellID)
-		}
-
-		items := dir.items
-		sort.Slice(items, func(i, j int) bool {
-			ii := dir.itemsByID[items[i]]
-			jj := dir.itemsByID[items[j]]
-			return ii.Compare(jj) < 0
-		})
-
-	}
-	return nil
-}
-
-func (dir *fsDir) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
-
-	// Refresh if first time or too old
-	now := time.Now()
-	if dir.lastRefresh.Before(now.Add(-time.Minute)) {
-		dir.lastRefresh = now
-		dir.readDir(req)
-	}
-
-	// Push the dir as the content item (vs child)
-	dir.pushCellState(req, arc.PushAsParent)
-
-	// Push each dir sub item as a child cell
-	for _, itemID := range dir.items {
-		dir.itemsByID[itemID].pushCellState(req, arc.PushAsChild)
-	}
-
-	return nil
-}
-
-// TODO: use generics
-func (dir *fsDir) PinCell(req *arc.CellReq) (arc.Cell, error) {
-	if req.PinCell == dir.CellID {
-		return dir, nil // FUTURE: a pinned dir returns more detailed attrs (e.g. reads mpeg tags)
-	}
-
-	itemRef := dir.itemsByID[req.PinCell]
-	if itemRef == nil {
-		return nil, arc.ErrCellNotFound
-	}
-
-	itemRef.pathname = path.Join(dir.pathname, itemRef.basename)
-	return itemRef.newAppCell(), nil
-}
-
-func (file *fsFile) PinCell(req *arc.CellReq) (arc.Cell, error) {
-	// if err := file.setPathnameUsingParent(req); err != nil {
-	// 	return err
-	// }
-
-	// In the future pinning a file can do fancy things but for now, just use the same item
-	if req.PinCell == file.CellID {
-		asset, err := assets.AssetForFilePathname(file.pathname, "")
-		if err != nil {
-			return nil, err
-		}
-		file.app.PublishAsset(asset, arc.PublishOpts{
-			HostAddr: file.app.User().LoginInfo().HostAddr,
-		})
-		return file, nil
-	}
-
-	return nil, arc.ErrCellNotFound
-}
-
-func (item *fsInfo) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
-	return item.pushCellState(req, opts)
-}
-
-var (
-	dirGlyph = &arc.AssetRef{
-		MediaType: amp.MimeType_Dir,
-	}
-)
-
-func (item *fsInfo) pushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
-	var schema *arc.AttrSchema
-	if opts.PushAsChild() {
-		schema = req.GetChildSchema(item.CellDataModel())
-	} else {
-		schema = req.ContentSchema
-	}
-	if schema == nil {
-		return nil
-	}
-
-	if opts.PushAsChild() {
-		req.PushInsertCell(item.CellID, schema)
 	}
 
 	mediaType, extLen := assets.GetMediaTypeForExt(item.basename)
 
+	//////////////////  CellInfo
 	{
+		info := arc.CellInfo{
+			Modified: int64(arc.ConvertToTimeFS(item.modTime)),
+		}
+
 		base := item.basename[:len(item.basename)-extLen]
-		left := ""
-		right := ""
 		splitAt := strings.LastIndex(base, " - ")
 		if splitAt > 0 {
-			left = base[:splitAt]
-			right = base[splitAt+3:]
+			info.Title = base[splitAt+3:]
+			info.Subtitle = base[:splitAt]
+		} else {
+			info.Title = base
 		}
 
-		if len(left) > 0 && len(right) > 0 {
-			req.PushAttr(item.CellID, schema, amp.Attr_Title, arc.AttrStr(right))
-			req.PushAttr(item.CellID, schema, amp.Attr_Subtitle, arc.AttrStr(left))
+		if item.isDir {
+			info.Glyph = amp.DirGlyph
 		} else {
-			req.PushAttr(item.CellID, schema, amp.Attr_Title, arc.AttrStr(base))
+			info.Glyph = &arc.AssetRef{
+				MediaType: mediaType,
+			}
+			info.Link = &arc.AssetRef{
+				MediaType: mediaType,
+				URI:       item.pathname,
+				Scheme:    arc.URIScheme_File,
+			}
 		}
+		item.info = info
 	}
 
-	if item.isDir {
-		req.PushAttr(item.CellID, schema, amp.Attr_Glyph, dirGlyph)
-	} else {
+	//////////////////  MediaInfo
+	item.mediaFlags = 0
+	if !item.isDir {
 
-		asset := arc.AssetRef{
-			MediaType: mediaType,
+		// TODO: make smarter
+		switch {
+		case strings.HasPrefix(mediaType, "audio/"):
+			item.mediaFlags |= amp.HasAudio
+		case strings.HasPrefix(mediaType, "video/"):
+			item.mediaFlags |= amp.HasVideo
 		}
-		req.PushAttr(item.CellID, schema, amp.Attr_Glyph, &asset)
-		if item.pathname != "" {
-			asset.URI = item.pathname
-			asset.Scheme = arc.URIScheme_File
-			req.PushAttr(item.CellID, schema, amp.Attr_Playable, &asset)
+		item.mediaFlags |= amp.IsSeekable
+	}
+}
+
+type fsFile struct {
+	fsItem
+	pinnedURL string
+}
+
+func (item *fsFile) ExportAttrs(app *appCtx, dst *arc.AttrBatch) error {
+	dst.Add(app.CellInfoAttr, &item.info)
+
+	if item.mediaFlags != 0 {
+		media := &amp.MediaInfo{
+			Flags:      item.mediaFlags,
+			Title:      item.info.Title,
+			Collection: item.info.Subtitle,
 		}
+		dst.Add(app.MediaInfoAttr, media)
+	}
 
-		req.PushAttr(item.CellID, schema, amp.Attr_LastModified, arc.ConvertToTimeFS(item.modTime))
-
+	if item.pinnedURL != "" {
+		dst.Add(app.PlayableAssetAttr, &arc.AssetRef{
+			URI: item.pinnedURL,
+		})
 	}
 
 	return nil
 }
 
+func (item *fsFile) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+	asset, err := assets.AssetForFilePathname(item.pathname, "")
+	if err != nil {
+		return err
+	}
+	app := dst.App
+	item.pinnedURL, err = app.PublishAsset(asset, arc.PublishOpts{
+		HostAddr: app.Session().LoginInfo().HostAddr,
+	})
+	return err
+}
 
+type fsDir struct {
+	fsItem
+}
+
+// reads the fsDir's catalog and issues new items as needed.
+func (dir *fsDir) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+	panic("TODO")
+	/*
+		items       []arc.CellID // ordered
+		itemsByID   map[arc.CellID]*fsItem
+
+		{
+			//dir.subs = make(map[arc.CellID]os.DirEntry)
+			f, err := os.Open(dir.pathname)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+
+			lookup := make(map[string]*fsItem, len(dir.itemsByID))
+			for _, sub := range dir.itemsByID {
+				lookup[sub.basename] = sub
+			}
+
+			dirItems, err := f.Readdir(-1)
+			f.Close()
+			if err != nil {
+				return nil
+			}
+
+			N := len(dirItems)
+			dir.itemsByID = make(map[arc.CellID]*fsItem, N)
+			dir.items = dir.items[:0]
+
+			var tmp *fsItem
+			for _, fi := range dirItems {
+				sub := tmp
+				if sub == nil {
+					sub = &fsItem{}
+				}
+				sub.setFrom(fi)
+				if sub.isHidden {
+					continue
+				}
+
+				// preserve items that have not changed
+				old := lookup[sub.basename]
+				if old == nil || old.Compare(sub) != 0 {
+					sub.CellID = dir.app.IssueCellID()
+					tmp = nil
+				} else {
+					sub = old
+				}
+
+				dir.itemsByID[sub.CellID] = sub
+				dir.items = append(dir.items, sub.CellID)
+			}
+
+			items := dir.items
+			sort.Slice(items, func(i, j int) bool {
+				ii := dir.itemsByID[items[i]]
+				jj := dir.itemsByID[items[j]]
+				return ii.Compare(jj) < 0
+			})
+
+		}*/
+	return nil
+}
+
+func (dir *fsDir) WillPinCell(app *appCtx, parent amp.Cell[*appCtx], req arc.CellReq) (string, error) {
+	// if parent == nil {
+	// 	cell, err := app.newCellFromPath("", req)
+	// } else {
+	parentDir := parent.(*fsDir)
+	dir.pathname = path.Join(parentDir.pathname, dir.basename)
+	return dir.pathname, nil
+}

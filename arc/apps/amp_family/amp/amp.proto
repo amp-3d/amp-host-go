@@ -7,10 +7,6 @@ option csharp_namespace = "Arcspace";
 
 enum ValTypeAmp {
     ValTypeAmp_ffs = 0;
-    
-    // TODO: we need to make ValType extensible, either by:
-    //    using appID+attrURI registration scheme where registry performs marshalling based on a buf's ValTypeID
-    //    using capnp TypeID (61 bit UID)
     ValTypeAmp_MediaInfo        = 9001; // .ValBuf is a MediaInfo
     
 }
@@ -86,18 +82,27 @@ message StationInfo {
     
 }
 
+
+
 message MediaInfo {
-    MediaFlags Flags       = 1;
-    string     Title       = 2;  // common title
-    string     TitleEx     = 3;  // extended title
-    string     AuthorDesc  = 5;  // artist(s) / author(s) description
-    string     Collection  = 6;  // album or series name
-    string     CoverArt    = 9;  // URL or local path to cover art image 
-    int32      Number      = 10; // track or episode number (0 if n/a)
-    int64      DurationFS  = 11; // duration in seconds << 16 (see TimeFS); 0 if n/a
-    float      Popularity  = 12; // 0.0 to 1.0
-    int64      ReleaseDate = 14; // Unix UTC in seconds
+    MediaFlags Flags        = 1;
+    string     Title        = 2;  // common title
+    string     AuthorDesc   = 5;  // artist(s) / author(s) description
+    string     Collection   = 6;  // album or series name
+    string     CoverArt     = 9;  // URL or local path to cover art image 
+    int32      ItemNumber   = 10; // track or episode number (0 if n/a)
+    int64      Duration16   = 11; // duration in seconds << 16 (see TimeFS); 0 if n/a
+    float      Popularity   = 12; // 0.0 to 1.0
+    int64      ReleaseTime  = 14; // Unix UTC in seconds
 }
+
+// PlaylistInfo?
+// MediaListInfo?
+message MediaPlaylist {
+    int32      TotalItems     = 5;
+    double     TotalDuration  = 6;
+}
+
 
 
 

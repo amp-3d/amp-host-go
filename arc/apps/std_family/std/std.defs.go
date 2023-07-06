@@ -1,5 +1,5 @@
 package std
 
 const (
-	AppFamily = "arcspace.systems/std/"
+	AppFamilyDomain = ".std.arcspace.systems"
 )

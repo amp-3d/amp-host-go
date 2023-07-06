@@ -12,7 +12,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const kTokenNameID = ".oauth2.Token"
+const kTokenAttrSpec = "tokenAttr:primary"
 
 type Config struct {
 	Config oauth2.Config
@@ -59,10 +59,10 @@ func (auth *Config) CurrentToken() *oauth2.Token {
 
 // Pushes a msg to the client to launch a URL that starts oauth flow.
 func (auth *Config) pushAuthCodeRequest() error {
-	url := auth.Config.AuthCodeURL("")
-	msg := arc.NewMsg()
-	msg.SetValBuf(arc.ValType_HandleURI, []byte(url))
-	return auth.ctx.User().PushMetaMsg(msg)
+	val := &arc.HandleURI{
+		URI: auth.Config.AuthCodeURL(""),
+	}
+	return auth.ctx.Session().PushMetaAttr(val)
 }
 
 // NewHttpClient creates a *http.Client that will use the specified access token for its API requests.
@@ -91,14 +91,12 @@ func (auth *Config) Exchange(ctx context.Context, state string, uri *url.URL, op
 }
 
 func (auth *Config) readStoredToken() error {
-	tok := &oauth2.Token{}
-
-	tokenJson, err := auth.ctx.GetAppValue(kTokenNameID)
-	if err == nil {
-		err = json.Unmarshal(tokenJson, tok)
+	attr := tokenAttr{
+		Token: &oauth2.Token{},
 	}
 
-	if err != nil || (tok.AccessToken == "" && tok.RefreshToken == "") {
+	err := auth.ctx.GetAppCellAttr(kTokenAttrSpec, &attr)
+	if err != nil || (attr.AccessToken == "" && attr.RefreshToken == "") {
 		return arc.ErrNoAuthToken
 	}
 
@@ -106,23 +104,27 @@ func (auth *Config) readStoredToken() error {
 	// fmt.Println("TokenType:    ", tok.TokenType)
 	// fmt.Println("RefreshToken: ", tok.RefreshToken)
 	// fmt.Println("Expiry:       ", tok.Expiry)
-	auth.token = tok
+	auth.token = attr.Token
 	return nil
 }
 
 func (auth *Config) OnTokenUpdated(tok *oauth2.Token, saveToken bool) error {
 	auth.token = tok
 
+	if tok == nil {
+		return arc.ErrCode_InternalErr.Error("oauth token is nil")
+	}
+
 	var err error
 	if saveToken {
-		tokenJson, err := json.Marshal(tok)
+		attr := tokenAttr{
+			Token: tok,
+		}
+		err := auth.ctx.PutAppCellAttr(kTokenAttrSpec, &attr)
 		if err == nil {
-			err = auth.ctx.PutAppValue(kTokenNameID, tokenJson)
-			if err == nil {
-				auth.ctx.Info(2, "wrote new oauth token")
-			} else {
-				auth.ctx.Error("error storing token:", err)
-			}
+			auth.ctx.Info(2, "wrote new oauth token")
+		} else {
+			auth.ctx.Error("error storing token:", err)
 		}
 	}
 	return err
@@ -145,3 +147,29 @@ func (auth *Config) Token() (*oauth2.Token, error) {
 	auth.OnTokenUpdated(tok, saveToken)
 	return tok, nil
 }
+
+type tokenAttr struct {
+	*oauth2.Token
+}
+
+func (t *tokenAttr) MarshalToBuf(dst *[]byte) error {
+	tokenJson, err := json.Marshal(t.Token)
+	if err != nil {
+		return err
+	}
+	*dst = append(*dst, tokenJson...)
+	return nil
+}
+
+func (t *tokenAttr) Unmarshal(src []byte) error {
+	return json.Unmarshal(src, t.Token)
+}
+
+func (t *tokenAttr) AttrSpec() string {
+	return ".oauth2.Token.json"
+}
+
+func (t tokenAttr) New() arc.ElemVal {
+	return &tokenAttr{}
+}
+
