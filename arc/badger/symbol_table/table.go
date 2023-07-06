@@ -132,7 +132,7 @@ func (st *symbolTable) getsetValueIDPair(val []byte, symID symbol.ID, mapID bool
 
 			// set (value => ID) entry
 			idBuf[0] = st.opts.DbKeyPrefix
-			idKey := symID.WriteTo(idBuf[:1])
+			idKey := symID.AppendTo(idBuf[1:])
 			err := txn.Set(valKey, idKey[1:])
 
 			if err == nil {
@@ -172,7 +172,7 @@ func (st *symbolTable) GetSymbol(symID symbol.ID, io []byte) []byte {
 
 	var idBuf [8]byte
 	idBuf[0] = st.opts.DbKeyPrefix
-	tokenKey := symID.WriteTo(idBuf[:1])
+	tokenKey := symID.AppendTo(idBuf[1:])
 	item, err := txn.Get(tokenKey)
 	if err == nil {
 		err = item.Value(func(val []byte) error {
