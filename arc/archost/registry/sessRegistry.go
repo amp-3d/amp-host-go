@@ -16,17 +16,10 @@ type sessRegistry struct {
 	nativeToClientID map[uint32]uint32 // maps a native symbol ID to a client symbol ID
 	clientToNativeID map[uint32]uint32 // maps a client symbol ID to a native symbol ID
 
-	elemDefs map[uint32]elemDef // by ElemTypeID by client ID
-	attrDefs map[uint32]arc.AttrDef // by AttrID by client ID
-	cellDefs map[uint32]arc.CellDef // by CellTypeID by client ID
-
-	// tokCache   map[string]uint32
-	// tokMu    sync.RWMutex
-	// tokCache map[string]uint32
-	// typesMu  sync.RWMutex
-	// types    map[uint32]attrType // maps na attr ID to value (proto)type
-	//attrToElem map[uint32]uint32 TODO -- types could contains duplicate entries!
-	//elemToType map[uint32]
+	elemDefs        map[uint32]elemDef     // by ElemTypeID by client ID
+	attrDefs        map[uint32]arc.AttrDef // by AttrID by client ID
+	cellDefs        map[uint32]arc.CellDef // by CellTypeID by client ID
+	unresolvedTypes []arc.ElemVal          // elem prototypes that have not been registered
 }
 
 func NewSessionRegistry(table symbol.Table) arc.SessionRegistry {
@@ -38,55 +31,55 @@ func NewSessionRegistry(table symbol.Table) arc.SessionRegistry {
 		elemDefs: make(map[uint32]elemDef),
 		attrDefs: make(map[uint32]arc.AttrDef),
 		cellDefs: make(map[uint32]arc.CellDef),
-		// tokCache: make(map[string]uint32),
-		// types:    make(map[uint32]attrType),
 	}
 	arc.RegisterConstSymbols(reg)
 	return reg
 }
 
-func (reg *sessRegistry) NewAttrElem(attrDefID uint32, convertFromNative bool) (arc.ElemVal, error) {
+func (reg *sessRegistry) ClientSymbols() symbol.Table {
+	return reg.table
+}
+
+func (reg *sessRegistry) NewAttrElem(attrID uint32, convertFromNative bool) (arc.ElemVal, error) {
 	if convertFromNative {
-		nativeID := attrDefID
-		attrDefID = reg.nativeToClientID[nativeID]
-		if attrDefID == 0 {
-			return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: attrDefID %v not found", nativeID)
+		nativeID := attrID
+		attrID = reg.nativeToClientID[nativeID]
+		if attrID == 0 {
+			return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: attr DefID %v not found", nativeID)
 		}
 	}
-	attrDef, exists := reg.attrDefs[attrDefID]
+	// Often, an attrID will be a unnamed scalar attr (which means we can get the elemDef directly.
+	// This is also essential during bootstrapping when the client sends a RegisterDefs is not registered yet.
+	elemDef, exists := reg.elemDefs[attrID]
 	if !exists {
-		return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: attrDefID %v not found", attrDefID)
-	}
-	elemDef, exists := reg.elemDefs[attrDef.Client.ElemType]
-	if !exists {
-		return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: elemTypeID %v not found", attrDef.Client.ElemType)
+		attrDef, exists := reg.attrDefs[attrID]
+		if !exists {
+			return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: attr DefID %v not found", attrID)
+		}
+		elemDef, exists = reg.elemDefs[attrDef.Client.ElemType]
+		if !exists {
+			return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: elemTypeID %v not found", attrDef.Client.ElemType)
+		}
 	}
 	return elemDef.prototype.New(), nil
 }
 
-func (reg *sessRegistry) RegisterElemType(prototype arc.ElemVal) error {
-	expr, err := parse.AttrSpecParser.ParseString("", prototype.AttrSpec())
-	if err != nil {
-		return err
-	}
+func (reg *sessRegistry) RegisterElemType(proto arc.ElemVal) error {
 
-	if expr.AttrName != "" || expr.SeriesType != "" {
-		return arc.ErrCode_BadSchema.Errorf("RegisterElemType: an ElemVal prototype must not have an attr name or series type")
+	// If the client symbol for this type is not present, defer registration of this prototype
+	elemType := proto.TypeName()
+	nativeElemID := reg.resolveNative(elemType)
+	clientElemID := reg.nativeToClientID[nativeElemID]
+	if clientElemID == 0 {
+		reg.unresolvedTypes = append(reg.unresolvedTypes, proto)
+		return nil
 	}
-
-	clientElemID := reg.resolveNative(expr.ElemType)
 
 	def, exists := reg.elemDefs[clientElemID]
-	if exists {
-		if def.prototype.AttrSpec() == expr.ElemType {
-			return nil
-		}
-		return arc.ErrCode_BadSchema.Errorf("RegisterElemType: ElemVal prototype %q already registered differently ", expr.ElemType)
+	if !exists {
+		def.prototype = proto
+		reg.elemDefs[clientElemID] = def
 	}
-
-	def.prototype = prototype
-	reg.elemDefs[clientElemID] = def
-
 	return nil
 }
 
@@ -98,7 +91,7 @@ func (reg *sessRegistry) RegisterDefs(defs *arc.RegisterDefs) error {
 	for _, sym := range defs.Symbols {
 		nativeID := uint32(reg.table.GetSymbolID(sym.Name, true))
 		if clientID := reg.nativeToClientID[nativeID]; clientID != 0 && clientID != sym.ID {
-			return arc.ErrCode_BadSchema.Errorf("client symbol %q already registered as %v ",         sym.Name, clientID)
+			return arc.ErrCode_BadSchema.Errorf("client symbol %q already registered as %v ", sym.Name, clientID)
 		}
 		reg.nativeToClientID[nativeID] = sym.ID
 		reg.clientToNativeID[sym.ID] = nativeID
@@ -148,7 +141,21 @@ func (reg *sessRegistry) RegisterDefs(defs *arc.RegisterDefs) error {
 		reg.cellDefs[def.ClientDefID] = def
 	}
 
+	//
+	//
+	// With new defs added, attempt to resolve registered elem types
+	reg.resolveElemTypes()
+
 	return nil
+}
+
+func (reg *sessRegistry) resolveElemTypes() {
+	unresolved := reg.unresolvedTypes
+	reg.unresolvedTypes = nil
+
+	for _, proto := range unresolved {
+		reg.RegisterElemType(proto)
+	}
 }
 
 func (reg *sessRegistry) resolveNative(name string) uint32 {
@@ -737,7 +744,7 @@ func (req *CellReq) PushCheckpoint(err error) {
 
 // type CellInfoType struct {}
 
-// func (typ CellInfoType) AttrSpec() string {
+// func (typ CellInfoType) TypeName() string {
 //     return ".CellInfo"
 // }
 
@@ -757,6 +764,6 @@ func (req *CellReq) PushCheckpoint(err error) {
 //     return &CellInfo{}
 // }
 
-// func (typ CellInfoType) AttrSpec() string {
+// func (typ CellInfoType) TypeName() string {
 //     return ".CellInfo"
 // }

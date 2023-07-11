@@ -38,7 +38,6 @@ func startNewHost(opts Opts) (arc.Host, error) {
 		Opts: opts,
 	}
 
-
 	host.Context, err = task.Start(&task.Task{
 		Label:     host.Opts.Desc,
 		IdleClose: time.Nanosecond,
@@ -174,7 +173,7 @@ type hostSess struct {
 	openReqsMu sync.Mutex             // protects openReqs
 
 	login      arc.Login
-	loginReqID uint64
+	loginReqID uint64 // ReqID of the login, allowing us to send session attrs back to the client.
 	openAppsMu sync.Mutex
 	openApps   map[arc.UID]*appContext
 }
@@ -223,14 +222,10 @@ type reqContext struct {
 	pinned arc.PinnedCell
 	cancel chan struct{}
 	closed atomic.Int32
-
-	// idle        uint32           // set when the pinnedRange reaches the target range
-	// targetRange arc.AttrRange // specifies the range(s) to be mapped
-	//backlog    []*arc.Msg // backlog of update msgs if this sub falls behind.  TODO: remplace with chunked "infinite" queue class
 }
 
 func (req *reqContext) App() arc.AppContext {
-	return req.appCtx.AppInstance
+	return req.appCtx
 }
 
 func (req *reqContext) MaintainSync() bool {
@@ -332,49 +327,62 @@ func (sess *hostSess) handleLogin() error {
 
 	timer := time.NewTimer(time.Duration(3 * time.Second))
 
-	// Wait for login msg
-	var msg *arc.Msg
-	{
+	nextMsg := func() (*arc.Msg, error) {
 		select {
-		case msg = <-sess.msgsIn:
-			if err := msg.UnmarshalValue(&sess.login); err != nil {
-				return arc.ErrCode_LoginFailed.Error("failed to unmarshal Login")
-			}
-			sess.loginReqID = msg.ReqID
+		case msg := <-sess.msgsIn:
+			return msg, nil
 		case <-timer.C:
-			return arc.ErrTimeout
+			return nil, arc.ErrTimeout
 		case <-sess.Closing():
-			return arc.ErrShuttingDown
+			return nil, arc.ErrShuttingDown
 		}
 	}
 
-	// Importantly, this boots the planet app to mount and start the home planet, which calls InitSessionRegistry()
-	_, err := sess.GetAppContext(planet.AppUID, true)
+	// Wait for login msg
+	msg, err := nextMsg()
 	if err != nil {
 		return err
 	}
 
-	// Send challenge (TODO)
+	sess.loginReqID = msg.ReqID
+	if err := msg.UnmarshalValue(&sess.login); err != nil {
+		return arc.ErrCode_LoginFailed.Error("failed to unmarshal Login")
+	}
+
+	// Importantly, this boots the planet app to mount and start the home planet, which calls InitSessionRegistry()
+	_, err = sess.GetAppInstance(planet.AppUID, true)
+	if err != nil {
+		return err
+	}
+
 	{
-		reply := &arc.LoginChallenge{}
-		msg.MarshalValue(reply)
+		reply := &arc.LoginChallenge{
+			// puzzles here!
+		}
+		msg.MarshalAttrElem(arc.ConstSymbol_LoginChallenge.Ord(), reply)
 		sess.pushMsg(msg)
 		msg = nil
 	}
 
-	var loginResp arc.LoginResponse
-	select {
-	case msg = <-sess.msgsIn:
-		if err := msg.UnmarshalValue(&loginResp); err != nil {
-			return arc.ErrCode_LoginFailed.Error("failed to unmarshal LoginResponse")
-		}
-	case <-timer.C:
-		return arc.ErrTimeout
-	case <-sess.Closing():
-		return arc.ErrShuttingDown
+	msg, err = nextMsg()
+	if err != nil {
+		return err
 	}
 
-	// Await challenge response (TODO)
+	var loginResp arc.LoginResponse
+	if err := msg.UnmarshalValue(&loginResp); err != nil {
+		return arc.ErrCode_LoginFailed.Error("failed to unmarshal LoginResponse")
+	}
+
+	// Check challenge response (TODO)
+	{
+	}
+
+	msg.Op = arc.MsgOp_Close
+	msg.AttrID = 0
+	msg.ValBuf = msg.ValBuf[:0]
+	sess.pushMsg(msg)
+
 	return nil
 }
 
@@ -442,7 +450,7 @@ func (sess *hostSess) handleMetaAttr(msg *arc.Msg) error {
 	defer sess.openAppsMu.Unlock()
 
 	for _, appCtx := range sess.openApps {
-		appCtx.HandleMetaAttr(elem)
+		appCtx.appInst.HandleMetaAttr(elem)
 	}
 	return nil
 }
@@ -531,11 +539,11 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 
 	// If no app context is available, choose an app based on the app invocation (appearing as the hostname in the URL)
 	if res == nil && req.pinURL != nil {
-		req.appCtx, err = sess.getAppForInvocation(req.pinURL.Host, true)
+		req.appCtx, err = sess.appCtxForInvocation(req.pinURL.Host, true)
 		if err != nil {
 			return err
 		}
-		res = req.appCtx
+		res = req.appCtx.appInst
 	}
 
 	if res == nil {
@@ -560,9 +568,9 @@ func (sess *hostSess) LoginInfo() arc.Login {
 }
 
 func (sess *hostSess) PushMetaAttr(val arc.ElemVal) error {
-	attrDef, err := sess.SessionRegistry.ResolveAttrSpec(val.AttrSpec())
+	attrDef, err := sess.SessionRegistry.ResolveAttrSpec(val.TypeName())
 	if err != nil {
-		sess.Warnf("FormAttr() error: %v", err)
+		sess.Warnf("ResolveAttrSpec() error: %v", err)
 		return err
 	}
 
@@ -593,15 +601,15 @@ func (sess *hostSess) onAppClosing(appCtx *appContext) {
 	sess.openAppsMu.Unlock()
 }
 
-func (sess *hostSess) GetAppContext(appID arc.UID, autoCreate bool) (arc.AppContext, error) {
-	if ctx, err := sess.getAppForUID(appID, autoCreate); err == nil {
-		return ctx.AppInstance, nil
+func (sess *hostSess) GetAppInstance(appID arc.UID, autoCreate bool) (arc.AppInstance, error) {
+	if ctx, err := sess.appContextForUID(appID, autoCreate); err == nil {
+		return ctx.appInst, nil
 	} else {
 		return nil, err
 	}
 }
 
-func (sess *hostSess) getAppForUID(appID arc.UID, autoCreate bool) (*appContext, error) {
+func (sess *hostSess) appContextForUID(appID arc.UID, autoCreate bool) (*appContext, error) {
 	sess.openAppsMu.Lock()
 	defer sess.openAppsMu.Unlock()
 
@@ -613,58 +621,26 @@ func (sess *hostSess) getAppForUID(appID arc.UID, autoCreate bool) (*appContext,
 		}
 
 		app = &appContext{
+			appInst:         appModule.NewAppInstance(),
 			sess:            sess,
 			SessionRegistry: sess.SessionRegistry,
 			module:          appModule,
-			newReqs:         make(chan appReq, 6),
+			newReqs:         make(chan appReq, 1),
 		}
-		app.AppInstance = appModule.NewAppInstance()
-		if err = app.AppInstance.OnNew(app.AppInstance); err != nil {
-			return nil, err
-		}
-		app.Context, err = sess.StartChild(&task.Task{
+
+		_, err = sess.StartChild(&task.Task{
 			Label:     appModule.AppID,
 			IdleClose: 1 * time.Minute, // 10 mins?
+			OnStart: func(ctx task.Context) error {
+				app.Context = ctx
+				return app.appInst.OnNew(app)
+			},
 			OnRun: func(ctx task.Context) {
 				for running := true; running; {
 					select {
 					case appReq := <-app.newReqs:
-						{
-							// TODO: resolve to a generic Cell and *then* pin it
-							req := appReq.reqContext
-							pinned, err := appReq.resolver.ResolveCell(&req.cellReq)
-							if err != nil {
-								// TODO
-								panic(err)
-							}
-							// FUTURE: switch to ref counting rather than task.Context close detection?
-							// Once the cell is resolved, serve state in child context of the PinnedCell
-							req.Context, err = pinned.Context().StartChild(&task.Task{
-								TaskRef:   arc.PinContext(req),
-								Label:     req.String(),
-								IdleClose: time.Microsecond,
-								OnRun: func(ctx task.Context) {
-									err := pinned.PushState(req)
-									if err != nil {
-										ctx.Errorf("PushState() error: %v", err)
-									}
-									// PinContext shouldn't close until the req is closing
-									if req.MaintainSync() {
-										<-ctx.Closing()
-									}
-								},
-								OnClosing: func() {
-									appReq.reqContext.closeReq(true, nil)
-								},
-							})
-							// Check race condition where the req was closed before the pinned cell is resolved
-							if err == nil && appReq.reqContext.closed.Load() != 0 {
-
-							}
-							if err != nil {
-								// TODO
-								panic(err)
-							}
+						if reqErr := app.handleReq(appReq); reqErr != nil {
+							appReq.reqContext.closeReq(true, reqErr)
 						}
 					case <-ctx.Closing():
 						running = false
@@ -673,7 +649,7 @@ func (sess *hostSess) getAppForUID(appID arc.UID, autoCreate bool) (*appContext,
 			},
 			OnClosing: func() {
 				sess.onAppClosing(app)
-				app.OnClosing()
+				app.appInst.OnClosing()
 			},
 		})
 		if err != nil {
@@ -686,26 +662,17 @@ func (sess *hostSess) getAppForUID(appID arc.UID, autoCreate bool) (*appContext,
 	return app, nil
 }
 
-func (sess *hostSess) getAppForInvocation(invocation string, autoCreate bool) (*appContext, error) {
+func (sess *hostSess) appCtxForInvocation(invocation string, autoCreate bool) (*appContext, error) {
 	appModule, err := sess.registry().GetAppForInvocation(invocation)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, err := sess.getAppForUID(appModule.UID, autoCreate)
+	ctx, err := sess.appContextForUID(appModule.UID, autoCreate)
 	if err != nil {
 		return nil, err
 	}
 	return ctx, nil
-}
-
-func (sess *hostSess) GetAppForInvocation(invocation string, autoCreate bool) (arc.AppContext, error) {
-	if appCtx, err := sess.getAppForInvocation(invocation, autoCreate); err == nil {
-		return appCtx.AppInstance, nil
-	} else {
-		return nil, err
-	}
-
 }
 
 type appReq struct {
@@ -713,11 +680,12 @@ type appReq struct {
 	resolver arc.CellResolver
 }
 
+// appContext Implements arc.AppContext
 type appContext struct {
 	task.Context
-	arc.AppInstance
 	arc.SessionRegistry
 
+	appInst arc.AppInstance
 	sess    *hostSess
 	module  *arc.AppModule
 	newReqs chan appReq // incoming requests for the app
@@ -742,7 +710,7 @@ func (ctx *appContext) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) 
 func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.ElemVal) error {
 	reader := fauxClient{
 		SessionRegistry: ctx.sess.SessionRegistry,
-		invoker:         ctx.AppInstance,
+		invoker:         ctx,
 		val:             dst,
 	}
 
@@ -752,7 +720,7 @@ func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.ElemVal) error {
 	}
 	reader.match = attrDef.Client
 
-	planetApp, err := ctx.sess.GetAppContext(planet.AppUID, true)
+	planetApp, err := ctx.sess.GetAppInstance(planet.AppUID, true)
 	if err != nil {
 		return err
 	}
@@ -778,6 +746,42 @@ func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.ElemVal) error {
 
 func (ctx *appContext) PutAppCellAttr(attrSpec string, src arc.ElemVal) error {
 	return arc.ErrCellNotFound
+}
+
+func (app *appContext) handleReq(appReq appReq) error {
+
+	// TODO: resolve to a generic Cell and *then* pin it?
+	req := appReq.reqContext
+	pinned, err := appReq.resolver.ResolveCell(&req.cellReq)
+	if err != nil {
+		return err
+	}
+	// FUTURE: switch to ref counting rather than task.Context close detection?
+	// Once the cell is resolved, serve state in child context of the PinnedCell
+	req.Context, err = pinned.Context().StartChild(&task.Task{
+		TaskRef:   arc.PinContext(req),
+		Label:     req.String(),
+		IdleClose: time.Microsecond,
+		OnRun: func(pinCtx task.Context) {
+			err := pinned.PushState(req)
+			if err != nil {
+				pinCtx.Errorf("PushState() error: %v", err)
+			}
+			// PinContext shouldn't close until the req is closing
+			if req.MaintainSync() {
+				<-pinCtx.Closing()
+			}
+		},
+		OnClosing: func() {
+			appReq.reqContext.closeReq(true, nil)
+		},
+	})
+	// Check race condition where the req was closed before the pinned cell is resolved
+	if err == nil && appReq.reqContext.closed.Load() != 0 {
+
+	}
+
+	return err
 }
 
 // implements arc.PinContext in order to read a planet cell as a "one-shot" read

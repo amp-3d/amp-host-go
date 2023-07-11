@@ -32,7 +32,9 @@ func RegisterApp(reg arc.Registry) {
 		Desc:    "cell storage & sync",
 		Version: "v1.2023.2",
 		NewAppInstance: func() arc.AppInstance {
-			return &appCtx{}
+			return &appCtx{
+				plSess: make(map[string]*plSess),
+			}
 		},
 	})
 }
@@ -44,20 +46,24 @@ func RegisterApp(reg arc.Registry) {
 // }
 
 type appCtx struct {
-	arc.AppBase
+	arc.AppContext
 	home   *plSess            // current user's home planet
 	plSess map[string]*plSess // mounted planets
 	plMu   sync.Mutex         // plSess mutex
+
+	//arc.AppBase is a historical tombstone:
+	// AppBase is off-limits for this one app b/c this app bootstraps the system.
+	// the system, in order to boot, requires cell storage to load and store.
+	// Or in other words, the genesis bootstrap comes from the genesis planet
+
 }
 
 func (app *appCtx) OnNew(ctx arc.AppContext) error {
-	if err := app.AppBase.OnNew(ctx); err != nil {
-		return err
-	}
+	app.AppContext = ctx
 	return app.mountHomePlanet()
 }
 
-func (app *appCtx) HandleMetaAttr(attr arc.AttrElem) bool {
+func (app *appCtx) HandleMetaAttr(attr arc.AttrElem) (handled bool) {
 	return false
 }
 
