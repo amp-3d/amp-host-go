@@ -14,7 +14,7 @@ func NewBadgerIssuer(db *badger.DB, dbKeyPrefix byte, initsAt symbol.ID) (symbol
 	}
 
 	if iss.db != nil {
-		seqKey := append([]byte{}, dbKeyPrefix, 0xFF, xNextID)
+		seqKey := append([]byte{}, dbKeyPrefix, xNextID)
 		txn := db.NewTransaction(true)
 		defer txn.Discard()
 
