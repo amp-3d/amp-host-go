@@ -165,7 +165,7 @@ func (t *tokenAttr) Unmarshal(src []byte) error {
 	return json.Unmarshal(src, t.Token)
 }
 
-func (t *tokenAttr) AttrSpec() string {
+func (t *tokenAttr) TypeName() string {
 	return ".oauth2.Token.json"
 }
 

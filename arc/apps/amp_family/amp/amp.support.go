@@ -11,10 +11,10 @@ func (app *AppBase) OnNew(ctx arc.AppContext) (err error) {
 		return
 	}
 
-	if app.MediaInfoAttr, err = app.ResolveAppAttr((&MediaInfo{}).AttrSpec()); err != nil {
+	if app.MediaInfoAttr, err = app.ResolveAppAttr((&MediaInfo{}).TypeName()); err != nil {
 		return
 	}
-	if app.MediaPlaylistAttr, err = app.ResolveAppAttr((&MediaPlaylist{}).AttrSpec()); err != nil {
+	if app.MediaPlaylistAttr, err = app.ResolveAppAttr((&MediaPlaylist{}).TypeName()); err != nil {
 		return
 	}
 	if app.PlayableAssetAttr, err = app.ResolveAppAttr(PlayableAssetAttrSpec); err != nil {
@@ -186,7 +186,7 @@ func (v *LoginInfo) MarshalToBuf(dst *[]byte) error {
 	return arc.MarshalPbValueToBuf(v, dst)
 }
 
-func (v *LoginInfo) AttrSpec() string {
+func (v *LoginInfo) TypeName() string {
 	return "Login"
 }
 
@@ -198,7 +198,7 @@ func (v *MediaInfo) MarshalToBuf(dst *[]byte) error {
 	return arc.MarshalPbValueToBuf(v, dst)
 }
 
-func (v *MediaInfo) AttrSpec() string {
+func (v *MediaInfo) TypeName() string {
 	return "MediaInfo"
 }
 
@@ -210,7 +210,7 @@ func (v *MediaPlaylist) MarshalToBuf(dst *[]byte) error {
 	return arc.MarshalPbValueToBuf(v, dst)
 }
 
-func (v *MediaPlaylist) AttrSpec() string {
+func (v *MediaPlaylist) TypeName() string {
 	return "MediaPlaylist"
 }
 

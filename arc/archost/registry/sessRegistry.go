@@ -96,9 +96,9 @@ func (reg *sessRegistry) RegisterDefs(defs *arc.RegisterDefs) error {
 	//
 	// Symbols
 	for _, sym := range defs.Symbols {
-		nativeID := reg.resolveNative(string(sym.Name))
-		if existing := reg.nativeToClientID[nativeID]; existing != 0 && existing != sym.ID {
-			return arc.ErrCode_BadSchema.Errorf("symbol %q already registered under different ID ", sym.Name)
+		nativeID := uint32(reg.table.GetSymbolID(sym.Name, true))
+		if clientID := reg.nativeToClientID[nativeID]; clientID != 0 && clientID != sym.ID {
+			return arc.ErrCode_BadSchema.Errorf("client symbol %q already registered as %v ",         sym.Name, clientID)
 		}
 		reg.nativeToClientID[nativeID] = sym.ID
 		reg.clientToNativeID[sym.ID] = nativeID
