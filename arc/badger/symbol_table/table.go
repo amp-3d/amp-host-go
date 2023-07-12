@@ -71,6 +71,11 @@ func (st *symbolTable) SetSymbolID(val []byte, symID symbol.ID) symbol.ID {
 //	    if mapID == true, both value-to-ID and ID-to-value assignments are (over)written.
 func (st *symbolTable) getsetValueIDPair(val []byte, symID symbol.ID, mapID bool) symbol.ID {
 
+	// The empty string is always hard-wired to ID 0
+	if len(val) == 0 {
+		return 0
+	}
+
 	{
 		txn := st.opts.Db.NewTransaction(true)
 		defer txn.Discard()
