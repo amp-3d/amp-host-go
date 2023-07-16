@@ -11,15 +11,15 @@ go 1.18
 // Go Modules Reference:
 //    https://www.practical-go-lessons.com/chap-17-go-modules
 
-replace github.com/arcspace/go-arc-sdk => ../go-arc-sdk
+// replace github.com/arcspace/go-arc-sdk => ../go-arc-sdk
 
-replace github.com/arcspace/go-librespot => ../go-librespot
+// replace github.com/arcspace/go-librespot => ../go-librespot
 
 require (
 	capnproto.org/go/capnp/v3 v3.0.0-alpha-29
 	github.com/alecthomas/participle/v2 v2.0.0
-	github.com/arcspace/go-arc-sdk v0.0.0-20230617152009-007f190f76b2
-	github.com/arcspace/go-librespot v0.0.0-20230613175017-c712547862d3
+	github.com/arcspace/go-arc-sdk v0.0.0-20230716000543-1bbb23c7ed45
+	github.com/arcspace/go-librespot v0.0.0-20230715225509-ef2b77e5ed3c
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/h2non/filetype v1.1.3
@@ -27,7 +27,7 @@ require (
 	github.com/zmb3/spotify/v2 v2.3.1
 	golang.org/x/crypto v0.11.0
 	golang.org/x/oauth2 v0.10.0
-	google.golang.org/grpc v1.56.1
+	google.golang.org/grpc v1.56.2
 )
 
 require (
@@ -50,7 +50,7 @@ require (
 	golang.org/x/sys v0.10.0 // indirect
 	golang.org/x/text v0.11.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230629202037-9506855d4529 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230711160842-782d3b101e98 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	zenhack.net/go/util v0.0.0-20230607025951-8b02fee814ae // indirect
 )
