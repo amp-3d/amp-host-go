@@ -35,24 +35,20 @@ func (cell *CellBase[AppT]) ID() (cellID arc.CellID) {
 	return cell.CellID
 }
 
-func (cell *CellBase[AppT]) GetChildCell(target arc.CellID) Cell[AppT] {
-	return nil
-}
-
-func (cell *CellBase[AppT]) SpawnAsPinnedCell(app AppT, label string) (arc.PinnedCell, error) {
-	if cell.CellID == 0 {
-		cell.CellID = app.IssueCellID()
-	}
-
+func NewPinnedCell[AppT arc.AppInstance](app AppT, cell Cell[AppT]) (arc.PinnedCell, error) {
 	pinned := &PinnedCell[AppT]{
 		Cell: cell,
 		App:  app,
 	}
 
+	err := cell.PinInto(pinned)
+	if err != nil {
+		return nil, err
+	}
+
 	// Like most apps, pinned items are started as direct child contexts of the app context\
-	var err error
 	pinned.cellCtx, err = app.StartChild(&task.Task{
-		Label: label,
+		Label: cell.Label(),
 	})
 	if err != nil {
 		return nil, err
@@ -69,14 +65,11 @@ func (cell *CellBase[AppT]) PinInto(dst *PinnedCell[AppT]) error {
 	return arc.ErrNotPinnable
 }
 
-func (cell *CellBase[AppT]) WillPinCell(app AppT, parent Cell[AppT], req arc.CellReq) (label string, err error) {
-	return req.String(), nil
+func (cell *CellBase[AppT]) WillPinChild(child Cell[AppT]) error {
+	return nil
 }
 
-func (parent *PinnedCell[AppT]) NewChild(child *CellBase[AppT], onPin Cell[AppT]) {
-	if child.CellID == 0 {
-		child.CellID = parent.App.IssueCellID()
-	}
+func (parent *PinnedCell[AppT]) AddChild(child Cell[AppT]) {
 	parent.children = append(parent.children, child)
 }
 
@@ -110,7 +103,11 @@ func (parent *PinnedCell[AppT]) GetChildCell(target arc.CellID) (cell Cell[AppT]
 	return cell
 }
 
-func (parent *PinnedCell[AppT]) ResolveCell(req arc.CellReq) (arc.PinnedCell, error) {
+func (parent *PinnedCell[AppT]) MergeTx(tx arc.CellTx) error {
+	return arc.ErrUnimplemented
+}
+
+func (parent *PinnedCell[AppT]) PinCell(req arc.CellReq) (arc.PinnedCell, error) {
 	target := req.PinID()
 
 	parentID := parent.ID()
@@ -118,18 +115,19 @@ func (parent *PinnedCell[AppT]) ResolveCell(req arc.CellReq) (arc.PinnedCell, er
 		return parent, nil
 	}
 
-	cell := parent.GetChildCell(target)
-	if cell == nil {
+	parent.children = parent.children[:0]
+	parent.childByID = nil
+
+	child := parent.GetChildCell(target)
+	if child == nil {
 		return nil, arc.ErrCellNotFound
 	}
 
-	// TODO: this breaks if same child child is pinned two different times?
-	label, err := cell.WillPinCell(parent.App, parent, req)
-	if err != nil {
+	if err := parent.WillPinChild(child); err != nil { // child.WillPinCell(parent); err != nil {
 		return nil, err
 	}
 
-	return cell.SpawnAsPinnedCell(parent.App, label)
+	return NewPinnedCell[AppT](parent.App, child)
 }
 
 func (parent *PinnedCell[AppT]) Context() task.Context {
@@ -137,18 +135,6 @@ func (parent *PinnedCell[AppT]) Context() task.Context {
 }
 
 func (parent *PinnedCell[AppT]) PushState(ctx arc.PinContext) error {
-
-	if parent.pinnedAt == 0 {
-		parent.pinnedAt = arc.TimeNowFS()
-		parent.children = parent.children[:0]
-		parent.childByID = nil
-
-		err := parent.Cell.PinInto(parent)
-		if err != nil {
-			return err
-		}
-	}
-
 	batch := arc.AttrBatch{}
 	parentID := parent.ID()
 	batch.Clear(parentID)

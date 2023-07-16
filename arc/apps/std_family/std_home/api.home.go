@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	AppID = "v1.home" + std.AppFamilyDomain
+	AppID = "home" + std.AppFamilyDomain
 )
 
 func UID() arc.UID {

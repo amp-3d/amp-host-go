@@ -16,10 +16,9 @@ type sessRegistry struct {
 	nativeToClientID map[uint32]uint32 // maps a native symbol ID to a client symbol ID
 	clientToNativeID map[uint32]uint32 // maps a client symbol ID to a native symbol ID
 
-	elemDefs        map[uint32]elemDef     // by ElemTypeID by client ID
-	attrDefs        map[uint32]arc.AttrDef // by AttrID by client ID
-	cellDefs        map[uint32]arc.CellDef // by CellTypeID by client ID
-	unresolvedTypes []arc.ElemVal          // elem prototypes that have not been registered
+	elemDefs map[uint32]elemDef     // by ElemTypeID by native ID
+	attrDefs map[uint32]arc.AttrDef // by AttrID by native ID
+	cellDefs map[uint32]arc.CellDef // by CellTypeID by native ID
 }
 
 func NewSessionRegistry(table symbol.Table) arc.SessionRegistry {
@@ -40,12 +39,17 @@ func (reg *sessRegistry) ClientSymbols() symbol.Table {
 	return reg.table
 }
 
-func (reg *sessRegistry) NewAttrElem(attrID uint32, convertFromNative bool) (arc.ElemVal, error) {
-	if convertFromNative {
-		nativeID := attrID
-		attrID = reg.nativeToClientID[nativeID]
+func (reg *sessRegistry) NativeToClientID(nativeID uint32) (uint32, bool) {
+	clientID, ok := reg.nativeToClientID[nativeID]
+	return clientID, ok
+}
+
+func (reg *sessRegistry) NewAttrElem(attrID uint32, native bool) (arc.ElemVal, error) {
+	if !native {
+		clientID := attrID
+		attrID = reg.clientToNativeID[clientID]
 		if attrID == 0 {
-			return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: attr DefID %v not found", nativeID)
+			return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: unrecognized client symbol %v", clientID)
 		}
 	}
 	// Often, an attrID will be a unnamed scalar attr (which means we can get the elemDef directly.
@@ -56,7 +60,7 @@ func (reg *sessRegistry) NewAttrElem(attrID uint32, convertFromNative bool) (arc
 		if !exists {
 			return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: attr DefID %v not found", attrID)
 		}
-		elemDef, exists = reg.elemDefs[attrDef.Client.ElemType]
+		elemDef, exists = reg.elemDefs[attrDef.Native.ElemType]
 		if !exists {
 			return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: elemTypeID %v not found", attrDef.Client.ElemType)
 		}
@@ -69,16 +73,10 @@ func (reg *sessRegistry) RegisterElemType(proto arc.ElemVal) error {
 	// If the client symbol for this type is not present, defer registration of this prototype
 	elemType := proto.TypeName()
 	nativeElemID := reg.resolveNative(elemType)
-	clientElemID := reg.nativeToClientID[nativeElemID]
-	if clientElemID == 0 {
-		reg.unresolvedTypes = append(reg.unresolvedTypes, proto)
-		return nil
-	}
-
-	def, exists := reg.elemDefs[clientElemID]
+	def, exists := reg.elemDefs[nativeElemID]
 	if !exists {
 		def.prototype = proto
-		reg.elemDefs[clientElemID] = def
+		reg.elemDefs[nativeElemID] = def
 	}
 	return nil
 }
@@ -104,30 +102,27 @@ func (reg *sessRegistry) RegisterDefs(defs *arc.RegisterDefs) error {
 		def := arc.AttrDef{
 			Client: *attrSpec,
 			Native: arc.AttrSpec{
-				AttrName:   reg.clientToNativeID[attrSpec.AttrName],
-				ElemType:   reg.clientToNativeID[attrSpec.ElemType],
-				SeriesType: reg.clientToNativeID[attrSpec.SeriesType],
-				DefID:      reg.clientToNativeID[attrSpec.DefID],
+				DefID:           reg.clientToNativeID[attrSpec.DefID],
+				AttrName:        reg.clientToNativeID[attrSpec.AttrName],
+				ElemType:        reg.clientToNativeID[attrSpec.ElemType],
+				SeriesSpec:      reg.clientToNativeID[attrSpec.SeriesSpec],
+				SeriesIndexType: attrSpec.SeriesIndexType,
 			},
 		}
-		prev, exists := reg.attrDefs[def.Client.DefID]
-		if exists {
-			if prev == def {
-				return nil
-			}
-			return arc.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v already registered with different fields ", def.Client.DefID)
-		}
+
 		switch {
 		case def.Client.AttrName == 0 && def.Native.AttrName != 0:
 			return arc.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve AttrName", def.Client.DefID)
 		case def.Client.ElemType == 0 && def.Native.ElemType != 0:
 			return arc.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve ElemType", def.Client.DefID)
-		case def.Client.SeriesType == 0 && def.Native.SeriesType != 0:
-			return arc.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve SeriesType", def.Client.DefID)
+		case def.Client.SeriesSpec == 0 && def.Native.SeriesSpec != 0:
+			return arc.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve SeriesSpec", def.Client.DefID)
 		case def.Native.DefID == 0:
 			return arc.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve DefID", def.Client.DefID)
 		}
-		reg.attrDefs[def.Client.DefID] = def
+
+		// In the case an attr was already registered natively, we want to still overwrite since the client IDs will now be available.
+		reg.attrDefs[def.Native.DefID] = def
 	}
 
 	//
@@ -138,61 +133,64 @@ func (reg *sessRegistry) RegisterDefs(defs *arc.RegisterDefs) error {
 			ClientDefID: cellSpec.DefID,
 			NativeDefID: reg.clientToNativeID[cellSpec.DefID],
 		}
-		reg.cellDefs[def.ClientDefID] = def
+		reg.cellDefs[def.NativeDefID] = def
 	}
-
-	//
-	//
-	// With new defs added, attempt to resolve registered elem types
-	reg.resolveElemTypes()
 
 	return nil
-}
-
-func (reg *sessRegistry) resolveElemTypes() {
-	unresolved := reg.unresolvedTypes
-	reg.unresolvedTypes = nil
-
-	for _, proto := range unresolved {
-		reg.RegisterElemType(proto)
-	}
 }
 
 func (reg *sessRegistry) resolveNative(name string) uint32 {
 	return uint32(reg.table.GetSymbolID([]byte(name), true))
 }
 
-func (reg *sessRegistry) ResolveAttrSpec(attrSpec string) (def arc.AttrDef, err error) {
+func (reg *sessRegistry) ResolveAttrSpec(attrSpec string, native bool) (def arc.AttrSpec, err error) {
 	expr, err := parse.AttrSpecParser.ParseString("", attrSpec)
 	if err != nil {
-		return arc.AttrDef{}, err
+		return arc.AttrSpec{}, err
 	}
 
-	spec := arc.AttrDef{
-		Native: arc.AttrSpec{
-			AttrName:   reg.resolveNative(expr.AttrName),
-			ElemType:   reg.resolveNative(expr.ElemType),
-			SeriesType: reg.resolveNative(expr.SeriesType),
-			DefID:      reg.resolveNative(attrSpec),
-		},
+	spec := arc.AttrSpec{
+		DefID:           reg.resolveNative(attrSpec),
+		AttrName:        reg.resolveNative(expr.AttrName),
+		ElemType:        reg.resolveNative(expr.ElemType),
+		SeriesSpec:      reg.resolveNative(expr.SeriesSpec),
+		SeriesIndexType: arc.GetSeriesIndexType(expr.SeriesSpec),
 	}
 
-	spec.Client = arc.AttrSpec{
-		AttrName:   reg.nativeToClientID[spec.Native.AttrName],
-		ElemType:   reg.nativeToClientID[spec.Native.ElemType],
-		SeriesType: reg.nativeToClientID[spec.Native.SeriesType],
-		DefID:      reg.nativeToClientID[spec.Native.DefID],
-	}
+	// If resolving a native-only attr spec, also register it since RegisterDefs() is for client defs only.
+	if native {
+		prev, exists := reg.attrDefs[spec.DefID]
+		if exists {
+			if prev.Native != spec {
+				err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: native AttrSpec %v already registered with different fields ", spec.DefID)
+			}
+		} else {
+			// If the client also registers the this attr spec later, the client portion will be updated.
+			reg.attrDefs[spec.DefID] = arc.AttrDef{
+				Native: spec,
+			}
+		}
+	} else {
+		clientSpec := arc.AttrSpec{
+			DefID:           reg.nativeToClientID[spec.DefID],
+			AttrName:        reg.nativeToClientID[spec.AttrName],
+			ElemType:        reg.nativeToClientID[spec.ElemType],
+			SeriesSpec:      reg.nativeToClientID[spec.SeriesSpec],
+			SeriesIndexType: spec.SeriesIndexType,
+		}
 
-	switch {
-	case spec.Client.AttrName == 0 && spec.Native.AttrName != 0:
-		err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q for AttrSpec %q", expr.AttrName, attrSpec)
-	case spec.Client.ElemType == 0 && spec.Native.ElemType != 0:
-		err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q for AttrSpec %q", expr.ElemType, attrSpec)
-	case spec.Client.SeriesType == 0 && spec.Native.SeriesType != 0:
-		err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q for AttrSpec %q", expr.SeriesType, attrSpec)
-	case spec.Client.DefID == 0:
-		err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q", attrSpec)
+		switch {
+		case clientSpec.AttrName == 0 && spec.AttrName != 0:
+			err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q for AttrSpec %q", expr.AttrName, attrSpec)
+		case clientSpec.ElemType == 0 && spec.ElemType != 0:
+			err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q for AttrSpec %q", expr.ElemType, attrSpec)
+		case clientSpec.SeriesSpec == 0 && spec.SeriesSpec != 0:
+			err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q for AttrSpec %q", expr.SeriesSpec, attrSpec)
+		case clientSpec.DefID == 0:
+			err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q", attrSpec)
+		}
+
+		spec = clientSpec
 	}
 
 	return spec, err

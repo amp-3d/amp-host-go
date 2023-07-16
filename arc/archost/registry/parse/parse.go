@@ -6,7 +6,7 @@ import (
 )
 
 type AttrSpecExpr struct {
-	SeriesType string `( "[" @Ident "]" )?`
+	SeriesSpec string `( "[" @Ident "]" )?`
 	ElemType   string ` @Ident `
 	AttrName   string `( ":" @Ident )?`
 }

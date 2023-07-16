@@ -3,6 +3,7 @@ package planet
 import (
 	"encoding/binary"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"reflect"
@@ -19,7 +20,7 @@ import (
 
 // King Jesus, our Lord's Christ, is a servant, our advocate!
 const (
-	AppID           = "v1.planet" + std.AppFamilyDomain
+	AppID           = "planet" + std.AppFamilyDomain
 	HomePlanetAlias = "~" // hard-wired alias for the the current user's home planet
 )
 
@@ -39,12 +40,6 @@ func RegisterApp(reg arc.Registry) {
 	})
 }
 
-//type nodeID uint32
-
-// func (n nodeID) CellID() arc.CellID {
-// 	return arc.CellID(n)
-// }
-
 type appCtx struct {
 	arc.AppContext
 	home   *plSess            // current user's home planet
@@ -63,9 +58,13 @@ func (app *appCtx) OnNew(ctx arc.AppContext) error {
 	return app.mountHomePlanet()
 }
 
-func (app *appCtx) HandleMetaAttr(attr arc.AttrElem) (handled bool) {
-	return false
+func (app *appCtx) HandleURL(*url.URL) error {
+	return arc.ErrUnimplemented
 }
+
+// func (app *appCtx) WillPinCell(res arc.CellResolver, req arc.CellReq) error {
+// 	// do we need to close all mounted planets?
+// }
 
 func (app *appCtx) OnClosing() {
 	// do we need to close all mounted planets?
@@ -105,7 +104,7 @@ func (app *appCtx) resolvePlanet(alias string) (*plSess, error) {
 	//planetID := app.home.GetSymbolID([]byte(alias), false)
 }
 
-func (app *appCtx) ResolveCell(req arc.CellReq) (arc.PinnedCell, error) {
+func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.CellReq) (arc.PinnedCell, error) {
 	var pl *plSess
 
 	// arc://planet/<planet-alias>/<cell-scope>/<cell-alias>
@@ -118,7 +117,8 @@ func (app *appCtx) ResolveCell(req arc.CellReq) (arc.PinnedCell, error) {
 	}
 
 	for {
-		pl, err := app.resolvePlanet(urlParts[0])
+		var err error
+		pl, err = app.resolvePlanet(urlParts[0])
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +183,7 @@ func (app *appCtx) mountPlanet(
 	pl = &plSess{
 		app:    app,
 		dbName: dbName,
-		cells:  make(map[uint32]*plCell),
+		cells:  make(map[arc.CellID]*plCell),
 	}
 
 	dbPath := path.Join(app.LocalDataPath(), dbName)
@@ -217,10 +217,10 @@ func (app *appCtx) mountPlanet(
 	pl.Context, err = app.StartChild(&task.Task{
 		// TODO: home planet should not close -- solution:
 		// IdleClose: 120 * time.Second,
-		Label: fmt.Sprintf("arc://planet/%s/", dbPath),
+		Label: fmt.Sprintf("planet:%s", dbName),
 		OnChildClosing: func(child task.Context) {
 			pl.cellsMu.Lock()
-			delete(pl.cells, child.TaskRef().(uint32))
+			delete(pl.cells, child.TaskRef().(arc.CellID))
 			pl.cellsMu.Unlock()
 		},
 		OnClosed: func() {
@@ -236,6 +236,7 @@ func (app *appCtx) mountPlanet(
 	if err != nil {
 		return nil, err
 	}
+	pl.Context.Info(1, "mounted '", dbPath, "'")
 
 	if genesis != nil {
 		//pl.replayGenesis(seed)  Thanks be unto God for every breath.
@@ -273,11 +274,11 @@ type plSess struct {
 	task.Context
 
 	app      *appCtx
-	symTable symbol.Table       // each planet has separate symbol tables
-	dbName   string             // local pathname to db
-	db       *badger.DB         // db access
-	cells    map[uint32]*plCell // working set of mounted cells (pinned or idle)
-	cellsMu  sync.Mutex         // cells mutex
+	symTable symbol.Table           // each planet has separate symbol tables
+	dbName   string                 // local pathname to db
+	db       *badger.DB             // db access
+	cells    map[arc.CellID]*plCell // working set of mounted cells (pinned or idle)
+	cellsMu  sync.Mutex             // cells mutex
 	//planetID uint32                 // symbol ID (as known by the host's symbol table)
 }
 
@@ -285,11 +286,11 @@ type plSess struct {
 // This can be thought of as the controller for one or more active cell pins.
 // *** implements arc.PinnedCell ***
 type plCell struct {
+	ID      arc.CellID
 	pl      *plSess            // parent planet
 	ctx     task.Context       // arc.PinnedCell ctx
 	newTxns chan *arc.MsgBatch // txns to be pushed to subs
 	dbKey   [kAttrOfs]byte
-	nodeID  uint32
 	// newSubs  chan *plReq        // new requests waiting for state
 	// subsHead *plReq             // single linked list of open reqs on this cell
 	// subsMu   sync.Mutex         // mutex for subs
@@ -305,7 +306,7 @@ type plCell struct {
 // *** implements arc.PinContext ***
 // Instantiated by a client pinning a cell.
 // type plReq struct {
-// 	client arc.PinContext // given by the runtime via CellResolver.PinCell()
+// 	client arc.PinContext // given by the runtime via CellResolver.ResolveCell()
 // 	parent *plCell        // parent cell controller
 // 	next   *plReq         // single linked list of same-cell reqs
 // }
@@ -363,11 +364,11 @@ func (pl *plSess) GetSymbolID(value []byte, autoIssue bool) uint32 {
 	return uint32(pl.symTable.GetSymbolID(value, autoIssue))
 }
 
-func (pl *plSess) GetSymbol(ID uint64, io []byte) []byte {
+func (pl *plSess) GetSymbol(ID uint32, io []byte) []byte {
 	return pl.symTable.GetSymbol(symbol.ID(ID), io)
 }
 
-func (pl *plSess) SetSymbolID(value []byte, ID uint64) uint32 {
+func (pl *plSess) SetSymbolID(value []byte, ID uint32) uint32 {
 	return uint32(pl.symTable.SetSymbolID(value, symbol.ID(ID)))
 }
 
@@ -379,24 +380,27 @@ func (pl *plSess) getCell(scopeID, nodeID uint32) (cell *plCell, err error) {
 	pl.cellsMu.Lock()
 	defer pl.cellsMu.Unlock()
 
+	cellID := arc.CellID(uint64(scopeID)<<32 | uint64(nodeID))
+
 	// If the cell is already open, make sure it doesn't auto-close while we are handling it.
-	cell = pl.cells[nodeID]
+	cell = pl.cells[cellID]
 	if cell != nil && cell.ctx.PreventIdleClose(time.Second) {
 		return cell, nil
 	}
 
 	cell = &plCell{
 		pl:      pl,
-		nodeID:  nodeID,
+		ID:      cellID,
 		newTxns: make(chan *arc.MsgBatch),
 	}
-	symbol.AppendID(cell.dbKey[0:4], scopeID)
-	symbol.AppendID(cell.dbKey[4:8], nodeID)
+
+	binary.BigEndian.PutUint32(cell.dbKey[0:], scopeID)
+	binary.BigEndian.PutUint32(cell.dbKey[4:], nodeID)
 
 	// Start the cell context as a child of the planet db it belongs to
 	cell.ctx, err = pl.Context.StartChild(&task.Task{
 		Label:   fmt.Sprintf("Cell %d", nodeID),
-		TaskRef: nodeID,
+		TaskRef: cellID,
 		OnRun: func(ctx task.Context) {
 
 			// Manage incoming subs, push state to subs, and then maintain state for each sub
@@ -415,7 +419,7 @@ func (pl *plSess) getCell(scopeID, nodeID uint32) (cell *plCell, err error) {
 		return
 	}
 
-	pl.cells[nodeID] = cell
+	pl.cells[cellID] = cell
 	return
 }
 
@@ -637,7 +641,7 @@ func decodeSI(raw uint64) int64 {
 	return int64((raw >> 1) ^ (-(raw & 1)))
 }
 
-func (cell *plCell) ResolveCell(req arc.CellReq) (arc.PinnedCell, error) {
+func (cell *plCell) PinCell(req arc.CellReq) (arc.PinnedCell, error) {
 	// Hmmm, what does it even mean for this or child cells to be pinned by a client?
 	// Is the idea that child cells are either implicit links to cells in the same planet or explicit links to cells in other planets?
 	return nil, arc.ErrCode_Unimplemented.Error("TODO: implement cell pinning")
@@ -660,39 +664,84 @@ func (cell *plCell) PushState(ctx arc.PinContext) error {
 	itr := dbTx.NewIterator(opts)
 	defer itr.Close()
 
-	app := cell.pl.app
+	sess := cell.pl.app.Session()
+	usingNative := ctx.UsingNativeSymbols()
 
 	// Read the Cell from the db and push enabled (current all) attrs it to the client
 	for itr.Rewind(); itr.Valid(); itr.Next() {
 		item := itr.Item()
 
-		attrID := binary.BigEndian.Uint32(item.Key()[kAttrOfs:])
-		val, err := app.NewAttrElem(attrID, true)
+		attrNativeID := binary.BigEndian.Uint32(item.Key()[kAttrOfs:])
+		val, err := sess.NewAttrElem(attrNativeID, usingNative)
 		if err != nil {
-			cell.ctx.Warnf("failed to create attr for ID %d: %v", attrID, err)
+			cell.ctx.Warnf("failed to create attr for native ID %d: %v", attrNativeID, err)
 			continue
 		}
 		err = item.Value(func(valBuf []byte) error {
 			return val.Unmarshal(valBuf)
 		})
-		cell.ctx.Warnf("check %v", reflect.ValueOf(val).Elem().Type().Name())
-		cell.ctx.Warnf("check %v", reflect.TypeOf(val).Name())
 		if err != nil {
 			cell.ctx.Warnf("failed to unmarshal attr %v: %v", reflect.ValueOf(val).Elem().Type().Name(), err)
 			continue
 		}
+
+		//
+		// TODO -- read SI
+		//
+
+		SI_raw := uint64(0)
 		attrElem := arc.AttrElem{
-			AttrID: attrID,
+			AttrID: attrNativeID,
 			Val:    val,
+			SI:     decodeSI(SI_raw),
 		}
 
-		msg, err := attrElem.MarshalToMsg() // short term hack
-		msg.CellID = int64(cell.nodeID)
-		if err == nil {
-			if !ctx.PushMsg(msg) {
-				break
+		push := true // TODO: select which attrs to push based on client's request
+
+		// Don't send the attr if the client never registered it
+		if !usingNative {
+			attrElem.AttrID, push = sess.NativeToClientID(attrElem.AttrID)
+		}
+
+		if push {
+			msg, err := attrElem.MarshalToMsg(cell.ID)
+			if err == nil {
+				if !ctx.PushMsg(msg) {
+					break
+				}
 			}
 		}
+	}
+
+	return nil
+}
+
+func (cell *plCell) MergeTx(tx arc.CellTx) error {
+
+	// TODO: handle SIs
+	dbTx := cell.pl.db.NewTransaction(true)
+	defer dbTx.Discard()
+
+	var keyBuf [32]byte
+	cellKey := append(keyBuf[:0], cell.dbKey[:]...)
+
+	for _, attr := range tx.Attrs {
+		key := binary.BigEndian.AppendUint32(cellKey, attr.AttrID)
+
+		var valBuf []byte
+		err := attr.Val.MarshalToBuf(&valBuf)
+		if err != nil {
+			return err
+		}
+		err = dbTx.Set(key, valBuf)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := dbTx.Commit() // TODO: handle conflict / error
+	if err != nil {
+		return err
 	}
 
 	return nil

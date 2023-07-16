@@ -41,17 +41,19 @@ packages
 
 type Opts struct {
 	assets.AssetServer
-	Desc      string       // label for this host
-	StatePath string       // local fs path where user and state data is stored
-	CachePath string       // local fs path where purgeable data is stored
-	Registry  arc.Registry // registry to use for this host
+	Desc         string        // label for this host
+	StatePath    string        // local fs path where user and state data is stored
+	CachePath    string        // local fs path where purgeable data is stored
+	AppIdleClose time.Duration // how long to wait before closing an idle app
+	Registry     arc.Registry  // registry to use for this host
 }
 
 func DefaultOpts(assetPort int) Opts {
 	opts := Opts{
-		Desc:      "arc.Host",
-		StatePath: "~/_.archost",
-		Registry:  arc.NewRegistry(),
+		Desc:         "arc.Host",
+		StatePath:    "~/_.archost",
+		Registry:     arc.NewRegistry(),
+		AppIdleClose: time.Minute * 1, // 10 mins?
 	}
 
 	if assetPort <= 0 {

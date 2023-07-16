@@ -2,7 +2,6 @@ package oauth
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -12,7 +11,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const kTokenAttrSpec = "tokenAttr:primary"
+const kTokenAttrSpec = "AuthToken:primary"
 
 type Config struct {
 	Config oauth2.Config
@@ -62,7 +61,7 @@ func (auth *Config) pushAuthCodeRequest() error {
 	val := &arc.HandleURI{
 		URI: auth.Config.AuthCodeURL(""),
 	}
-	return auth.ctx.Session().PushMetaAttr(val)
+	return auth.ctx.Session().PushMetaAttr(val, 0)
 }
 
 // NewHttpClient creates a *http.Client that will use the specified access token for its API requests.
@@ -91,9 +90,7 @@ func (auth *Config) Exchange(ctx context.Context, state string, uri *url.URL, op
 }
 
 func (auth *Config) readStoredToken() error {
-	attr := tokenAttr{
-		Token: &oauth2.Token{},
-	}
+	attr := arc.AuthToken{}
 
 	err := auth.ctx.GetAppCellAttr(kTokenAttrSpec, &attr)
 	if err != nil || (attr.AccessToken == "" && attr.RefreshToken == "") {
@@ -104,7 +101,12 @@ func (auth *Config) readStoredToken() error {
 	// fmt.Println("TokenType:    ", tok.TokenType)
 	// fmt.Println("RefreshToken: ", tok.RefreshToken)
 	// fmt.Println("Expiry:       ", tok.Expiry)
-	auth.token = attr.Token
+	auth.token = &oauth2.Token{
+		AccessToken:  attr.AccessToken,
+		TokenType:    attr.TokenType,
+		RefreshToken: attr.RefreshToken,
+		Expiry:       time.Unix(attr.Expiry, 0),
+	}
 	return nil
 }
 
@@ -117,10 +119,13 @@ func (auth *Config) OnTokenUpdated(tok *oauth2.Token, saveToken bool) error {
 
 	var err error
 	if saveToken {
-		attr := tokenAttr{
-			Token: tok,
+		attr := arc.AuthToken{
+			AccessToken:  tok.AccessToken,
+			TokenType:    tok.TokenType,
+			RefreshToken: tok.RefreshToken,
+			Expiry:       tok.Expiry.Unix(),
 		}
-		err := auth.ctx.PutAppCellAttr(kTokenAttrSpec, &attr)
+		err = auth.ctx.PutAppCellAttr(kTokenAttrSpec, &attr)
 		if err == nil {
 			auth.ctx.Info(2, "wrote new oauth token")
 		} else {
@@ -147,29 +152,3 @@ func (auth *Config) Token() (*oauth2.Token, error) {
 	auth.OnTokenUpdated(tok, saveToken)
 	return tok, nil
 }
-
-type tokenAttr struct {
-	*oauth2.Token
-}
-
-func (t *tokenAttr) MarshalToBuf(dst *[]byte) error {
-	tokenJson, err := json.Marshal(t.Token)
-	if err != nil {
-		return err
-	}
-	*dst = append(*dst, tokenJson...)
-	return nil
-}
-
-func (t *tokenAttr) Unmarshal(src []byte) error {
-	return json.Unmarshal(src, t.Token)
-}
-
-func (t *tokenAttr) TypeName() string {
-	return ".oauth2.Token.json"
-}
-
-func (t tokenAttr) New() arc.ElemVal {
-	return &tokenAttr{}
-}
-

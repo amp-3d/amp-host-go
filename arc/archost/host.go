@@ -196,7 +196,11 @@ func (req *cellReq) URLPath() []string {
 	if req.pinURL == nil || req.pinURL.Path == "" {
 		return nil
 	}
-	return strings.Split(req.pinURL.Path, "/")
+	path := req.pinURL.Path
+	if path[0] == '/' {
+		path = path[1:]
+	}
+	return strings.Split(path, "/")
 }
 
 func (req *cellReq) String() string {
@@ -218,6 +222,7 @@ func (req *cellReq) String() string {
 type reqContext struct {
 	task.Context
 	cellReq
+	sess   *hostSess
 	appCtx *appContext
 	pinned arc.PinnedCell
 	cancel chan struct{}
@@ -229,7 +234,11 @@ func (req *reqContext) App() arc.AppContext {
 }
 
 func (req *reqContext) MaintainSync() bool {
-	return req.cellReq.pinReq.MaintainSync
+	return !req.cellReq.pinReq.AutoClose
+}
+
+func (req *reqContext) UsingNativeSymbols() bool {
+	return false
 }
 
 func (req *reqContext) PushMsg(msg *arc.Msg) bool {
@@ -240,7 +249,7 @@ func (req *reqContext) PushMsg(msg *arc.Msg) bool {
 	// Note that we don't need to check on req.cell or req.sess since if either close, all subs will be closed.
 	select {
 
-	case req.appCtx.sess.msgsOut <- msg:
+	case req.sess.msgsOut <- msg:
 		return true
 
 	default:
@@ -251,7 +260,7 @@ func (req *reqContext) PushMsg(msg *arc.Msg) bool {
 			closing = req.cancel
 		}
 		select {
-		case req.appCtx.sess.msgsOut <- msg:
+		case req.sess.msgsOut <- msg:
 			return true
 		case <-closing:
 			return false
@@ -345,6 +354,9 @@ func (sess *hostSess) handleLogin() error {
 	}
 
 	sess.loginReqID = msg.ReqID
+	if sess.loginReqID == 0 {
+		return arc.ErrCode_LoginFailed.Error("missing ReqID")
+	}
 	if err := msg.UnmarshalValue(&sess.login); err != nil {
 		return arc.ErrCode_LoginFailed.Error("failed to unmarshal Login")
 	}
@@ -435,24 +447,25 @@ func (sess *hostSess) handleMetaAttr(msg *arc.Msg) error {
 		return err
 	}
 
-	// Some meta attrs are echoed to all open apps for handling -- others are intercepted
 	switch v := elem.Val.(type) {
 	case *arc.RegisterDefs:
 		return sess.SessionRegistry.RegisterDefs(v)
 	case *arc.HandleURI:
-		// post to to apps
+		{
+			uri, err := url.Parse(v.URI)
+			if err != nil {
+				return err
+			}
+			appCtx, err := sess.appCtxForInvocation(uri.Host, true)
+			if err != nil {
+				return err
+			}
+			return appCtx.appInst.HandleURL(uri)
+		}
 	default:
 		return arc.ErrCode_InvalidReq.Error("unsupported meta attr")
 	}
 
-	// TODO: deadlock if appCtx tries to open a new app
-	sess.openAppsMu.Lock()
-	defer sess.openAppsMu.Unlock()
-
-	for _, appCtx := range sess.openApps {
-		appCtx.appInst.HandleMetaAttr(elem)
-	}
-	return nil
 }
 
 type pinVerb int32
@@ -491,6 +504,7 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *reqContext, err e
 			case insertReq:
 				req = &reqContext{
 					cancel: make(chan struct{}),
+					sess:   sess,
 					cellReq: cellReq{
 						reqID: reqID,
 					},
@@ -513,7 +527,8 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 	}
 
 	pinReq := &req.cellReq.pinReq
-	if err = msg.UnmarshalValue(pinReq); err != nil {
+	err = msg.UnmarshalValue(pinReq)
+	if err != nil {
 		return err
 	}
 
@@ -526,7 +541,7 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 		}
 	}
 
-	var res arc.CellResolver
+	var parent arc.PinnedCell
 	if pinReq.ParentReqID != 0 {
 		parentReq, _ := sess.getReq(pinReq.ParentReqID, getReq)
 		if parentReq == nil {
@@ -534,26 +549,25 @@ func (sess *hostSess) pinCell(msg *arc.Msg) error {
 			return err
 		}
 		req.appCtx = parentReq.appCtx
-		res = parentReq.pinned
+		parent = parentReq.pinned
 	}
 
 	// If no app context is available, choose an app based on the app invocation (appearing as the hostname in the URL)
-	if res == nil && req.pinURL != nil {
+	if req.appCtx == nil && req.pinURL != nil {
 		req.appCtx, err = sess.appCtxForInvocation(req.pinURL.Host, true)
 		if err != nil {
 			return err
 		}
-		res = req.appCtx.appInst
 	}
 
-	if res == nil {
-		err = arc.ErrCode_InvalidReq.Error("unable to resolve cell")
+	if req.appCtx == nil {
+		err = arc.ErrCode_InvalidReq.Error("unable to resolve cell pinner")
 		return err
 	}
 
 	req.appCtx.newReqs <- appReq{
 		reqContext: req,
-		resolver:   res,
+		parent:     parent,
 	}
 
 	return nil
@@ -567,23 +581,28 @@ func (sess *hostSess) LoginInfo() arc.Login {
 	return sess.login
 }
 
-func (sess *hostSess) PushMetaAttr(val arc.ElemVal) error {
-	attrDef, err := sess.SessionRegistry.ResolveAttrSpec(val.TypeName())
+func (sess *hostSess) PushMetaAttr(val arc.ElemVal, reqID uint64) error {
+	attrSpec, err := sess.SessionRegistry.ResolveAttrSpec(val.TypeName(), false)
 	if err != nil {
 		sess.Warnf("ResolveAttrSpec() error: %v", err)
 		return err
 	}
 
 	attrElem := arc.AttrElem{
-		AttrID: attrDef.Client.DefID,
+		AttrID: attrSpec.DefID,
 		Val:    val,
 	}
-	msg, err := attrElem.MarshalToMsg()
+
+	if reqID == 0 {
+		reqID = sess.loginReqID
+	}
+	msg, err := attrElem.MarshalToMsg(arc.CellID(reqID))
 	if err != nil {
 		return err
 	}
 
 	msg.ReqID = sess.loginReqID
+	msg.Op = arc.MsgOp_MetaAttr
 	req, err := sess.getReq(msg.ReqID, getReq)
 	if req != nil && err == nil {
 		if !req.PushMsg(msg) {
@@ -621,16 +640,15 @@ func (sess *hostSess) appContextForUID(appID arc.UID, autoCreate bool) (*appCont
 		}
 
 		app = &appContext{
-			appInst:         appModule.NewAppInstance(),
-			sess:            sess,
-			SessionRegistry: sess.SessionRegistry,
-			module:          appModule,
-			newReqs:         make(chan appReq, 1),
+			appInst: appModule.NewAppInstance(),
+			sess:    sess,
+			module:  appModule,
+			newReqs: make(chan appReq, 1),
 		}
 
 		_, err = sess.StartChild(&task.Task{
 			Label:     appModule.AppID,
-			IdleClose: 1 * time.Minute, // 10 mins?
+			IdleClose: sess.host.Opts.AppIdleClose,
 			OnStart: func(ctx task.Context) error {
 				app.Context = ctx
 				return app.appInst.OnNew(app)
@@ -677,13 +695,12 @@ func (sess *hostSess) appCtxForInvocation(invocation string, autoCreate bool) (*
 
 type appReq struct {
 	*reqContext
-	resolver arc.CellResolver
+	parent arc.PinnedCell
 }
 
 // appContext Implements arc.AppContext
 type appContext struct {
 	task.Context
-	arc.SessionRegistry
 
 	appInst arc.AppInstance
 	sess    *hostSess
@@ -707,6 +724,30 @@ func (ctx *appContext) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) 
 	return ctx.sess.AssetPublisher().PublishAsset(asset, opts)
 }
 
+func (ctx *appContext) PinAppAttrsCell(attrSpec string) (arc.PinnedCell, error) {
+	planetApp, err := ctx.sess.GetAppInstance(planet.AppUID, true)
+	if err != nil {
+		return nil, err
+	}
+
+	req := cellReq{
+		pinReq: arc.PinReq{
+			AutoClose: true,
+		},
+	}
+	req.pinURL, err = url.Parse(fmt.Sprintf("arc://planet/~/%s/.AppAttrs", ctx.module.AppID))
+	if err != nil {
+		return nil, err
+	}
+
+	cell, err := planetApp.PinCell(nil, &req)
+	if err != nil {
+		return nil, err
+	}
+
+	return cell, nil
+}
+
 func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.ElemVal) error {
 	reader := fauxClient{
 		SessionRegistry: ctx.sess.SessionRegistry,
@@ -714,23 +755,13 @@ func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.ElemVal) error {
 		val:             dst,
 	}
 
-	attrDef, err := ctx.sess.SessionRegistry.ResolveAttrSpec(attrSpec)
-	if err != nil {
-		return err
-	}
-	reader.match = attrDef.Client
-
-	planetApp, err := ctx.sess.GetAppInstance(planet.AppUID, true)
+	var err error
+	reader.match, err = ctx.sess.SessionRegistry.ResolveAttrSpec(attrSpec, true)
 	if err != nil {
 		return err
 	}
 
-	req := cellReq{
-		pinReq: arc.PinReq{
-			MaintainSync: false,
-		},
-	}
-	cell, err := planetApp.ResolveCell(&req)
+	cell, err := ctx.PinAppAttrsCell(attrSpec)
 	if err != nil {
 		return err
 	}
@@ -745,14 +776,37 @@ func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.ElemVal) error {
 }
 
 func (ctx *appContext) PutAppCellAttr(attrSpec string, src arc.ElemVal) error {
-	return arc.ErrCellNotFound
+	spec, err := ctx.sess.SessionRegistry.ResolveAttrSpec(attrSpec, true)
+	if err != nil {
+		return err
+	}
+
+	cell, err := ctx.PinAppAttrsCell(attrSpec)
+	if err != nil {
+		return err
+	}
+
+	tx := arc.CellTx{
+		Attrs: []arc.AttrElem{
+			{
+				AttrID: spec.DefID,
+				Val:    src,
+			},
+		},
+	}
+	err = cell.MergeTx(tx)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (app *appContext) handleReq(appReq appReq) error {
 
 	// TODO: resolve to a generic Cell and *then* pin it?
 	req := appReq.reqContext
-	pinned, err := appReq.resolver.ResolveCell(&req.cellReq)
+	pinned, err := req.appCtx.appInst.PinCell(appReq.parent, &req.cellReq)
 	if err != nil {
 		return err
 	}
@@ -787,11 +841,11 @@ func (app *appContext) handleReq(appReq appReq) error {
 // implements arc.PinContext in order to read a planet cell as a "one-shot" read
 type fauxClient struct {
 	task.Context // stays nil since this never spins up as a real PinContext
-	invoker      arc.AppContext
 	arc.SessionRegistry
-	match arc.AttrSpec
-	val   arc.ElemVal
-	err   error
+	invoker arc.AppContext
+	match   arc.AttrSpec
+	val     arc.ElemVal
+	err     error
 }
 
 func (ctx *fauxClient) App() arc.AppContext {
@@ -800,6 +854,10 @@ func (ctx *fauxClient) App() arc.AppContext {
 
 func (ctx *fauxClient) MaintainSync() bool {
 	return false
+}
+
+func (ctx *fauxClient) UsingNativeSymbols() bool {
+	return true
 }
 
 func (ctx *fauxClient) PushMsg(msg *arc.Msg) bool {
