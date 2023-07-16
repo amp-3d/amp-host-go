@@ -10,16 +10,26 @@ import (
 	"github.com/zmb3/spotify/v2"
 )
 
+type Pinner func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error
+
 type spotifyCell struct {
 	amp.CellBase[*appCtx]
 	spotifyID spotify.ID
-	pinner    func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error
+	pinner    Pinner
 	info      arc.CellInfo
 }
 
 type playlistCell struct {
 	spotifyCell
 	amp.MediaPlaylist
+}
+
+type artistCell struct {
+	spotifyCell
+}
+
+type albumCell struct {
+	spotifyCell
 }
 
 type trackCell struct {
@@ -33,11 +43,8 @@ func (cell *spotifyCell) ExportAttrs(app *appCtx, dst *arc.AttrBatch) error {
 	return nil
 }
 
-func (cell *spotifyCell) WillPinCell(app *appCtx, parent amp.Cell[*appCtx], req arc.CellReq) (string, error) {
-	if err := app.waitForSession(); err != nil {
-		return "", err
-	}
-	return cell.CellBase.WillPinCell(app, parent, req)
+func (cell *spotifyCell) Label() string {
+	return cell.info.Title
 }
 
 func (cell *spotifyCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
@@ -184,7 +191,8 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 
 func addChild_dir(dst *amp.PinnedCell[*appCtx], title string) *spotifyCell {
 	cell := &spotifyCell{}
-	dst.NewChild(&cell.CellBase, cell)
+	cell.CellID = dst.App.IssueCellID()
+	dst.AddChild(cell)
 
 	cell.info = arc.CellInfo{
 		CellDefID: dst.App.LinkCellSpec,
@@ -192,22 +200,6 @@ func addChild_dir(dst *amp.PinnedCell[*appCtx], title string) *spotifyCell {
 	}
 
 	return cell
-}
-
-func pin_Playlist(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
-	app := dst.App
-	resp, err := app.client.GetPlaylistItems(app, cell.spotifyID)
-	if err != nil {
-		return err
-	}
-	for _, item := range resp.Items {
-		if item.Track.Track != nil {
-			addChild_Track(dst, *item.Track.Track)
-		} else if item.Track.Episode != nil {
-			// TODO: handle episodes
-		}
-	}
-	return nil
 }
 
 // func pin_Track(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
@@ -230,31 +222,6 @@ func pin_Playlist(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 // 	return nil
 // }
 
-func pin_Album(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
-	resp, err := dst.App.client.GetAlbum(dst.App, cell.spotifyID)
-	if err != nil {
-		return err
-	}
-	for _, track := range resp.Tracks.Tracks {
-		addChild_Track(dst, spotify.FullTrack{
-			SimpleTrack: track,
-			Album:       resp.SimpleAlbum,
-		})
-	}
-	return nil
-}
-
-func pin_ArtistAlbums(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
-	resp, err := dst.App.client.GetArtistAlbums(dst.App, cell.spotifyID, allAlbumTypes)
-	if err != nil {
-		return err
-	}
-	for i := range resp.Albums {
-		addChild_Album(dst, resp.Albums[i])
-	}
-	return nil
-}
-
 var allAlbumTypes = []spotify.AlbumType{
 	spotify.AlbumTypeAlbum,
 	spotify.AlbumTypeSingle,
@@ -265,8 +232,8 @@ var allAlbumTypes = []spotify.AlbumType{
 func addChild_Playlist(dst *amp.PinnedCell[*appCtx], playlist spotify.SimplePlaylist) {
 	cell := &playlistCell{}
 	cell.spotifyID = playlist.ID
-	cell.pinner = pin_Playlist
-	dst.NewChild(&cell.CellBase, cell)
+	cell.CellID = dst.App.IssueCellID()
+	dst.AddChild(cell)
 
 	cell.info = arc.CellInfo{
 		CellDefID: dst.App.PlaylistCellSpec,
@@ -281,11 +248,52 @@ func addChild_Playlist(dst *amp.PinnedCell[*appCtx], playlist spotify.SimplePlay
 	}
 }
 
+func (cell *playlistCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+	app := dst.App
+	resp, err := app.client.GetPlaylistItems(app, cell.spotifyID)
+	if err != nil {
+		return err
+	}
+	for _, item := range resp.Items {
+		if item.Track.Track != nil {
+			addChild_Track(dst, *item.Track.Track)
+		} else if item.Track.Episode != nil {
+			// TODO: handle episodes
+		}
+	}
+	return nil
+}
+
+func (cell *artistCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+	resp, err := dst.App.client.GetArtistAlbums(dst.App, cell.spotifyID, allAlbumTypes)
+	if err != nil {
+		return err
+	}
+	for i := range resp.Albums {
+		addChild_Album(dst, resp.Albums[i])
+	}
+	return nil
+}
+
+func (cell *albumCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+	resp, err := dst.App.client.GetAlbum(dst.App, cell.spotifyID)
+	if err != nil {
+		return err
+	}
+	for _, track := range resp.Tracks.Tracks {
+		addChild_Track(dst, spotify.FullTrack{
+			SimpleTrack: track,
+			Album:       resp.SimpleAlbum,
+		})
+	}
+	return nil
+}
+
 func addChild_Artist(dst *amp.PinnedCell[*appCtx], artist spotify.FullArtist) {
-	cell := &spotifyCell{}
+	cell := &artistCell{}
 	cell.spotifyID = artist.ID
-	cell.pinner = pin_ArtistAlbums
-	dst.NewChild(&cell.CellBase, cell)
+	cell.CellID = dst.App.IssueCellID()
+	dst.AddChild(cell)
 
 	cell.info = arc.CellInfo{
 		CellDefID: dst.App.LinkCellSpec,
@@ -297,9 +305,10 @@ func addChild_Artist(dst *amp.PinnedCell[*appCtx], artist spotify.FullArtist) {
 }
 
 func addChild_Album(dst *amp.PinnedCell[*appCtx], album spotify.SimpleAlbum) {
-	cell := &spotifyCell{}
+	cell := &albumCell{}
 	cell.spotifyID = album.ID
-	cell.pinner = pin_Album
+	cell.CellID = dst.App.IssueCellID()
+	dst.AddChild(cell)
 
 	cell.info = arc.CellInfo{
 		CellDefID: dst.App.LinkCellSpec,
@@ -316,7 +325,8 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 	}
 	cell := &trackCell{}
 	cell.spotifyID = track.ID
-	dst.NewChild(&cell.CellBase, cell)
+	cell.CellID = dst.App.IssueCellID()
+	dst.AddChild(cell)
 
 	artistDesc := formArtistDesc(track.Artists)
 

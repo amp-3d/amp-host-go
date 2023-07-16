@@ -14,7 +14,7 @@ func init() {
 }
 
 const (
-	AppID = "v1.filesys" + amp.AppFamilyDomain
+	AppID = "filesys" + amp.AppFamilyDomain
 )
 
 func UID() arc.UID {
@@ -37,23 +37,25 @@ type appCtx struct {
 	amp.AppBase
 }
 
-func (app *appCtx) ResolveCell(req arc.CellReq) (arc.PinnedCell, error) {
+func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.CellReq) (arc.PinnedCell, error) {
+
+
 	var pathname string
 	if url := req.URL(); url != nil {
 		pathname = url.Path
-	}
-	pathname = path.Clean(pathname)
-	cell, err := app.newCellForPath(pathname)
-	if err != nil {
-		return nil, err
-	}
-
-	pinned, err := cell.SpawnAsPinnedCell(app, pathname)
-	if err != nil {
-		return nil, err
+		pathname = path.Clean(pathname)
+		cell, err := app.newCellForPath(pathname)
+		if err != nil {
+			return nil, err
+		}
+		return amp.NewPinnedCell(app, cell)
 	}
 
-	return pinned, nil
+	if parent != nil {
+		return parent.PinCell(req)
+	}
+	
+	return nil, arc.ErrCode_CellNotFound.Error("missing cell ID / URL")
 }
 
 func (app *appCtx) newCellForPath(pathname string) (amp.Cell[*appCtx], error) {

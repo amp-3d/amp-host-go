@@ -19,6 +19,10 @@ func (cats *categories) ExportAttrs(app *appCtx, dst *arc.AttrBatch) error {
 	return nil
 }
 
+func (cats *categories) Label() string {
+	return "Internet Radio"
+}
+
 type category struct {
 	amp.CellBase[*appCtx]
 	catID uint32 //

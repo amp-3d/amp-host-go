@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	AppID = "v1.bookmark-catalog" + amp.AppFamilyDomain
+	AppID = "bookmark-catalog" + amp.AppFamilyDomain
 )
 
 const kTokenAttrSpec = "LoginInfo:client-login"
@@ -55,7 +55,7 @@ func (app *appCtx) resetLogin() {
 
 }
 
-func (app *appCtx) ResolveCell(req arc.CellReq) (arc.PinnedCell, error) {
+func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.CellReq) (arc.PinnedCell, error) {
 
 	if app.cats == nil {
 		err := app.reloadCategories()
@@ -67,8 +67,7 @@ func (app *appCtx) ResolveCell(req arc.CellReq) (arc.PinnedCell, error) {
 	cats := &categories{
 		//cells: make([]*amp.CellBase[*appCtx], 0, 16),
 	}
-
-	return cats.SpawnAsPinnedCell(app, req.String())
+	return amp.NewPinnedCell[*appCtx](app, cats)
 }
 
 const (

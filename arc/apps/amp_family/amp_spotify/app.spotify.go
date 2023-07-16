@@ -2,7 +2,6 @@ package amp_spotify
 
 import (
 	"net/url"
-	"strings"
 	"sync"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
@@ -16,7 +15,7 @@ import (
 )
 
 const (
-	AppID = "v1.spotify" + amp.AppFamilyDomain
+	AppID = "spotify" + amp.AppFamilyDomain
 )
 
 func UID() arc.UID {
@@ -31,7 +30,7 @@ func RegisterApp(reg arc.Registry) {
 		Version: "v1.2023.2",
 		NewAppInstance: func() arc.AppInstance {
 			return &appCtx{
-				sessReady:  make(chan struct{}),
+				sessReady: make(chan struct{}),
 			}
 		},
 	})
@@ -83,33 +82,23 @@ func (app *appCtx) OnClosing() {
 	app.endSession()
 }
 
-func (app *appCtx) HandleMetaAttr(attr arc.AttrElem) bool {
-	switch v := attr.Val.(type) {
-	case *arc.HandleURI:
-		if strings.Contains(v.URI, "://spotify/auth") {
-			
-			url, err := url.Parse(v.URI)
-			if err == nil {
-				// Redeem the auth code and store the latest token.
-				// Blocks but ok since we pass in the app's Context
-				var token *oauth2.Token
-				token, err = app.auth.Exchange(app, "", url)
-				if err == nil {
-					err = app.auth.OnTokenUpdated(token, true)
-					if err == nil {
-						err = app.tryConnect()
-					}
-				}
-			}
-			
-			if err != nil {
-				app.Warnf("HandleMetaAttr: %v", err)
-			}
-			
-			return true
+func (app *appCtx) HandleURL(url *url.URL) error {
+
+	if url.Path != "/auth" {
+		return arc.ErrCode_InvalidURI.Errorf("unexpected path: %q", url.Path)
+	}
+
+	// Redeem the auth code and store the latest token.
+	// Blocks but ok since we pass in the app's Context
+	token, err := app.auth.Exchange(app, "", url)
+	if err == nil {
+		err = app.auth.OnTokenUpdated(token, true)
+		if err == nil {
+			err = app.tryConnect()
 		}
 	}
-	return false
+
+	return err
 }
 
 // Optionally blocks until the spotify session is ready (or AppContext is closing)
@@ -220,23 +209,29 @@ func (app *appCtx) endSession() {
 	}
 }
 
-func (app *appCtx) ResolveCell(req arc.CellReq) (arc.PinnedCell, error) {
+func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.CellReq) (arc.PinnedCell, error) {
+	if err := app.waitForSession(); err != nil {
+		return nil, err
+	}
+
+	if parent != nil {
+		return parent.PinCell(req)
+	}
 
 	// For now, always just pin a new home (root) cell
 	cell := app.newRootCell()
-	pinned, err := cell.SpawnAsPinnedCell(app, req.String())
-
-	return pinned, err
+	return amp.NewPinnedCell[*appCtx](app, cell)
 }
 
 func (app *appCtx) newRootCell() *spotifyCell {
 	cell := &spotifyCell{}
-
+	cell.CellID = app.IssueCellID()
 	cell.info = arc.CellInfo{
-		Title: "Spotify Home",
+		CellDefID: app.LinkCellSpec,
+		Title:     "Spotify Home",
 		// Glyph: &arc.AssetRef{
 		// },
 	}
-	cell.pinner = pin_appHome // TODO: add (read-only) children to CellBase?
+	cell.pinner = pin_appHome
 	return cell
 }

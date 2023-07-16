@@ -46,17 +46,29 @@ func (item *fsItem) Compare(oth *fsItem) int {
 	return 0
 }
 
+func (item *fsItem) Label() string {
+	label := item.basename
+	if item.isDir {
+		label += "/"
+	}
+	return label
+}
+
 func (item *fsItem) setFrom(fi os.FileInfo) {
 	item.basename = fi.Name()
 	item.mode = fi.Mode()
 	item.modTime = fi.ModTime()
 	item.isHidden = strings.HasPrefix(item.basename, ".")
 	item.isDir = fi.IsDir()
-	if !item.isDir {
+	
+	mediaType := ""
+	extLen := 0
+	if item.isDir {
+		
+	} else {
 		item.size = fi.Size()
+		mediaType, extLen = assets.GetMediaTypeForExt(item.basename)
 	}
-
-	mediaType, extLen := assets.GetMediaTypeForExt(item.basename)
 
 	//////////////////  CellInfo
 	{
@@ -210,11 +222,12 @@ func (dir *fsDir) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 	return nil
 }
 
-func (dir *fsDir) WillPinCell(app *appCtx, parent amp.Cell[*appCtx], req arc.CellReq) (string, error) {
+func (dir *fsDir) WillPinChild(child amp.Cell[*appCtx]) error {
+
 	// if parent == nil {
 	// 	cell, err := app.newCellFromPath("", req)
 	// } else {
-	parentDir := parent.(*fsDir)
-	dir.pathname = path.Join(parentDir.pathname, dir.basename)
-	return dir.pathname, nil
+	item := child.(*fsItem)
+	dir.pathname = path.Join(item.pathname, dir.basename)
+	return nil
 }
