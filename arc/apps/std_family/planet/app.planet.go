@@ -260,9 +260,9 @@ func (app *appCtx) onPlanetClosed(pl *plSess) {
 //
 //	AppSID + NodeSID + AttrNamedTypeSID [+ SI] => ElemVal
 const (
-	kAppOfs  = 0 // byte offset of AppID
-	kNodeOfs = 4 // byte offset of NodeID
-	kAttrOfs = 8 // byte offset of AttrID
+	kScopeOfs = 0 // byte offset of AppID
+	kNodeOfs  = 4 // byte offset of NodeID
+	kAttrOfs  = 8 // byte offset of AttrID
 )
 
 // plSess represents a "mounted" planet (a Cell database), allowing it to be accessed, served, and updated.
@@ -282,10 +282,10 @@ type plSess struct {
 // This can be thought of as the controller for one or more active cell pins.
 // *** implements arc.PinnedCell ***
 type plCell struct {
-	ID      arc.CellID
-	pl      *plSess           // parent planet
-	ctx     task.Context      // arc.PinnedCell ctx
-	newTxns chan *arc.MultiTx // txns to merge
+	arc.CellInfo
+	pl      *plSess       // parent planet
+	ctx     task.Context  // arc.PinnedCell ctx
+	newTxns chan *arc.Msg // txns to merge
 	dbKey   [kAttrOfs]byte
 	// newSubs  chan *plReq        // new requests waiting for state
 	// subsHead *plReq             // single linked list of open reqs on this cell
@@ -386,16 +386,16 @@ func (pl *plSess) getCell(scopeID, nodeID uint32) (cell *plCell, err error) {
 
 	cell = &plCell{
 		pl:      pl,
-		ID:      cellID,
-		newTxns: make(chan *arc.MultiTx),
+		newTxns: make(chan *arc.Msg),
 	}
+	cell.CellID = cellID
 
-	binary.BigEndian.PutUint32(cell.dbKey[0:], scopeID)
-	binary.BigEndian.PutUint32(cell.dbKey[4:], nodeID)
+	binary.BigEndian.PutUint32(cell.dbKey[kScopeOfs:], scopeID)
+	binary.BigEndian.PutUint32(cell.dbKey[kNodeOfs:], nodeID)
 
 	// Start the cell context as a child of the planet db it belongs to
 	cell.ctx, err = pl.Context.StartChild(&task.Task{
-		Label:   fmt.Sprint("cell: ", nodeID),
+		Label:   cell.GetLogLabel(),
 		TaskRef: cellID,
 		OnRun: func(ctx task.Context) {
 
@@ -403,7 +403,10 @@ func (pl *plSess) getCell(scopeID, nodeID uint32) (cell *plCell, err error) {
 			for running := true; running; {
 				select {
 				case tx := <-cell.newTxns:
-					cell.mergeUpdate(tx)
+					err := cell.mergeUpdate(tx)
+					if err != nil {
+						ctx.Error(err)
+					}
 
 				case <-ctx.Closing():
 					running = false
@@ -587,6 +590,10 @@ func decodeSI(raw uint64) int64 {
 	return int64((raw >> 1) ^ (-(raw & 1)))
 }
 
+func (cell *plCell) Info() arc.CellInfo {
+	return cell.CellInfo
+}
+
 func (cell *plCell) PinCell(req arc.PinReq) (arc.PinnedCell, error) {
 	// Hmmm, what does it even mean for this or child cells to be pinned by a client?
 	// Is the idea that child cells are either implicit links to cells in the same planet or explicit links to cells in other planets?
@@ -595,6 +602,10 @@ func (cell *plCell) PinCell(req arc.PinReq) (arc.PinnedCell, error) {
 
 func (cell *plCell) Context() task.Context {
 	return cell.ctx
+}
+
+func (cell *plCell) GetLogLabel() string {
+	return fmt.Sprintf("cell: %0x", cell.CellID)
 }
 
 func (cell *plCell) ServeState(ctx arc.PinContext) error {
@@ -616,12 +627,7 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 
 	valsBuf := make([]byte, 0, 1024)
 
-	cellTx := &arc.CellTxPb{
-		Op:         arc.CellTxOp_InsertCell,
-		CellSpec:   0, // TODO
-		TargetCell: int64(cell.ID),
-		Elems:      make([]*arc.AttrElemPb, 0, 4),
-	}
+	var cellTx *arc.CellTxPb
 
 	// cellTxs := make([]*arc.CellTxPb, 0, 4)
 	// cellTxs = append(cellTxs, cellTx)
@@ -664,17 +670,27 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 				continue
 			}
 
+			if cellTx == nil {
+				cellTx = &arc.CellTxPb{
+					Op:         arc.CellTxOp_InsertCell,
+					CellSpec:   0, // TODO
+					TargetCell: int64(cell.CellID),
+					Elems:      make([]*arc.AttrElemPb, 0, 4),
+				}
+			}
 			cellTx.Elems = append(cellTx.Elems, elem)
 		}
 	}
 
 	msg := arc.NewMsg()
-	msg.CellTxs = append(msg.CellTxs, cellTx)
 	msg.Status = arc.ReqStatus_Synced
+	if cellTx != nil {
+		msg.CellTxs = append(msg.CellTxs, cellTx)
+	}
 	return ctx.PushUpdate(msg)
 }
 
-func (cell *plCell) MergeUpdate(tx *arc.MultiTx) error {
+func (cell *plCell) MergeUpdate(tx *arc.Msg) error {
 	select {
 	case cell.newTxns <- tx:
 		return nil // IDEA: maybe we just block until the txn is merged?  this lets us report errors
@@ -684,7 +700,7 @@ func (cell *plCell) MergeUpdate(tx *arc.MultiTx) error {
 }
 
 // TODO: handle SIs and children!
-func (cell *plCell) mergeUpdate(tx *arc.MultiTx) error {
+func (cell *plCell) mergeUpdate(tx *arc.Msg) error {
 	dbTx := cell.pl.db.NewTransaction(true)
 	defer dbTx.Discard()
 
@@ -693,7 +709,9 @@ func (cell *plCell) mergeUpdate(tx *arc.MultiTx) error {
 	key := keyBuf[:0]
 
 	for _, cellTx := range tx.CellTxs {
-		if cellTx.TargetCell != cell.ID {
+
+		// TODO: handle child cells
+		if cellTx.TargetCell != 0 && arc.CellID(cellTx.TargetCell) != cell.CellID {
 			cell.ctx.Warnf("unsupported child cell merge %d", cellTx.TargetCell)
 			continue
 		}
@@ -706,7 +724,7 @@ func (cell *plCell) mergeUpdate(tx *arc.MultiTx) error {
 		// }
 
 		R := 0
-		for _, elem := range cellTx.ElemsPb {
+		for _, elem := range cellTx.Elems {
 			cellKey := append(key[R:R], cell.dbKey[:]...)
 			key = binary.BigEndian.AppendUint32(cellKey, uint32(elem.AttrID))
 			R = len(key)
@@ -723,11 +741,10 @@ func (cell *plCell) mergeUpdate(tx *arc.MultiTx) error {
 	}
 
 	cell.pushToSubs(tx)
-
 	return nil
 }
 
-func (cell *plCell) pushToSubs(src *arc.MultiTx) {
+func (cell *plCell) pushToSubs(src *arc.Msg) {
 	var childBuf [8]task.Context
 	subs := cell.ctx.GetChildren(childBuf[:0])
 
@@ -755,7 +772,7 @@ func (cell *plCell) pushToSubs(src *arc.MultiTx) {
 						Op:         srcTx.Op,
 						CellSpec:   srcTx.CellSpec,
 						TargetCell: int64(srcTx.TargetCell),
-						Elems:      srcTx.ElemsPb,
+						Elems:      srcTx.Elems,
 					}
 				}
 				err := subCtx.PushUpdate(msg)
