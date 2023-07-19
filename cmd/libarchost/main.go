@@ -24,7 +24,7 @@ func Call_SessionBegin(userDataPath, sharedCachePath string) int64 {
 		return 0
 	}
 
-	hostOpts := archost.DefaultOpts(0)
+	hostOpts := archost.DefaultOpts(0, false)
 	hostOpts.CachePath = sharedCachePath
 	hostOpts.StatePath = userDataPath
 	host, err := archost.StartNewHost(hostOpts)

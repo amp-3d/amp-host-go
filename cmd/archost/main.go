@@ -23,9 +23,9 @@ func main() {
 
 	hostPort := flag.Int("host-port", int(arc.Const_DefaultGrpcServicePort), "Sets the port used to bind HostGrpc service")
 	assetPort := flag.Int("asset-port", int(arc.Const_DefaultGrpcServicePort+1), "Sets the port used for serving pinned assets")
+	debugMode := flag.Bool("debug", false, "Enables debug mode")
 	showTree := flag.Int("show-tree", 0, "Prints the task tree periodically, checking every given number of seconds")
 	dataPath := flag.String("data-path", defaultDataPath, "Specifies the path for all file access and storage")
-
 	flag.Set("logtostderr", "true")
 	flag.Set("v", "2")
 
@@ -37,7 +37,7 @@ func main() {
 
 	flag.Parse()
 
-	hostOpts := archost.DefaultOpts(*assetPort)
+	hostOpts := archost.DefaultOpts(*assetPort, *debugMode)
 	hostOpts.StatePath = *dataPath
 	host, err := archost.StartNewHost(hostOpts)
 	if err != nil {
