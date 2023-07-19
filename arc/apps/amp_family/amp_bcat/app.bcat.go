@@ -55,7 +55,7 @@ func (app *appCtx) resetLogin() {
 
 }
 
-func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.CellReq) (arc.PinnedCell, error) {
+func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCell, error) {
 
 	if app.cats == nil {
 		err := app.reloadCategories()
@@ -67,7 +67,9 @@ func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.CellReq) (arc.PinnedCe
 	cats := &categories{
 		//cells: make([]*amp.CellBase[*appCtx], 0, 16),
 	}
-	return amp.NewPinnedCell[*appCtx](app, cats)
+	cats.CellSpec = app.LinkCellSpec
+	cats.Self = nil // cats
+	return amp.NewPinnedCell[*appCtx](app, &cats.CellBase)
 }
 
 const (
@@ -144,9 +146,8 @@ func (app *appCtx) reloadCategories() error {
 		}
 
 		cat.CellInfo = arc.CellInfo{
-			CellDefID: app.LinkCellSpec,
-			Title:     entry.Title,
-			About:     entry.Description,
+			Title: entry.Title,
+			About: entry.Description,
 			Glyph: &arc.AssetRef{
 				URI:    entry.Image,
 				Scheme: arc.URIScheme_File,

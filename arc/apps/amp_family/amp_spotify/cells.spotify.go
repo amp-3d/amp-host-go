@@ -38,8 +38,8 @@ type trackCell struct {
 	playable *arc.AssetRef // non-nil when pinned
 }
 
-func (cell *spotifyCell) ExportAttrs(app *appCtx, dst *arc.AttrBatch) error {
-	dst.Add(app.CellInfoAttr, &cell.info)
+func (cell *spotifyCell) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
+	dst.Marshal(app.CellInfoAttr, 0, &cell.info)
 	return nil
 }
 
@@ -51,17 +51,17 @@ func (cell *spotifyCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 	return cell.pinner(dst, cell)
 }
 
-func (cell *playlistCell) ExportAttrs(app *appCtx, dst *arc.AttrBatch) error {
-	cell.spotifyCell.ExportAttrs(app, dst)
-	dst.Add(app.MediaPlaylistAttr, &cell.MediaPlaylist)
+func (cell *playlistCell) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
+	cell.spotifyCell.MarshalAttrs(app, dst)
+	dst.Marshal(app.MediaPlaylistAttr, 0, &cell.MediaPlaylist)
 	return nil
 }
 
-func (cell *trackCell) ExportAttrs(app *appCtx, dst *arc.AttrBatch) error {
-	cell.spotifyCell.ExportAttrs(app, dst)
-	dst.Add(app.MediaInfoAttr, &cell.MediaInfo)
+func (cell *trackCell) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
+	cell.spotifyCell.MarshalAttrs(app, dst)
+	dst.Marshal(app.MediaInfoAttr, 0, &cell.MediaInfo)
 	if cell.playable != nil {
-		dst.Add(app.PlayableAssetAttr, cell.playable)
+		dst.Marshal(app.PlayableAssetAttr, 0, cell.playable)
 	}
 	return nil
 }
@@ -87,11 +87,6 @@ func (cell *trackCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 }
 
 func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
-
-	// app := cell.app
-	// if err := app.waitForSession(); err != nil {
-	// 	return err
-	// }
 
 	{
 		child := addChild_dir(dst, "Followed Playlists")
@@ -191,14 +186,10 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 
 func addChild_dir(dst *amp.PinnedCell[*appCtx], title string) *spotifyCell {
 	cell := &spotifyCell{}
-	cell.CellID = dst.App.IssueCellID()
-	dst.AddChild(cell)
-
+	cell.AddTo(dst, cell, dst.App.LinkCellSpec)
 	cell.info = arc.CellInfo{
-		CellDefID: dst.App.LinkCellSpec,
-		Title:     title,
+		Title: title,
 	}
-
 	return cell
 }
 
@@ -232,14 +223,12 @@ var allAlbumTypes = []spotify.AlbumType{
 func addChild_Playlist(dst *amp.PinnedCell[*appCtx], playlist spotify.SimplePlaylist) {
 	cell := &playlistCell{}
 	cell.spotifyID = playlist.ID
-	cell.CellID = dst.App.IssueCellID()
-	dst.AddChild(cell)
+	cell.AddTo(dst, cell, dst.App.PlaylistCellSpec)
 
 	cell.info = arc.CellInfo{
-		CellDefID: dst.App.PlaylistCellSpec,
-		Title:     playlist.Name,
-		Subtitle:  playlist.Description,
-		Link:      chooseBestLink(playlist.ExternalURLs),
+		Title:    playlist.Name,
+		Subtitle: playlist.Description,
+		Link:     chooseBestLink(playlist.ExternalURLs),
 	}
 	setGlyphs(playlist.Images, &cell.info)
 
@@ -292,14 +281,12 @@ func (cell *albumCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 func addChild_Artist(dst *amp.PinnedCell[*appCtx], artist spotify.FullArtist) {
 	cell := &artistCell{}
 	cell.spotifyID = artist.ID
-	cell.CellID = dst.App.IssueCellID()
-	dst.AddChild(cell)
+	cell.AddTo(dst, cell, dst.App.LinkCellSpec)
 
 	cell.info = arc.CellInfo{
-		CellDefID: dst.App.LinkCellSpec,
-		Title:     artist.Name,
-		Subtitle:  fmt.Sprintf("%d followers", artist.Followers.Count),
-		Link:      chooseBestLink(artist.ExternalURLs),
+		Title:    artist.Name,
+		Subtitle: fmt.Sprintf("%d followers", artist.Followers.Count),
+		Link:     chooseBestLink(artist.ExternalURLs),
 	}
 	setGlyphs(artist.Images, &cell.info)
 }
@@ -307,14 +294,12 @@ func addChild_Artist(dst *amp.PinnedCell[*appCtx], artist spotify.FullArtist) {
 func addChild_Album(dst *amp.PinnedCell[*appCtx], album spotify.SimpleAlbum) {
 	cell := &albumCell{}
 	cell.spotifyID = album.ID
-	cell.CellID = dst.App.IssueCellID()
-	dst.AddChild(cell)
+	cell.AddTo(dst, cell, dst.App.LinkCellSpec)
 
 	cell.info = arc.CellInfo{
-		CellDefID: dst.App.LinkCellSpec,
-		Title:     album.Name,
-		Subtitle:  formArtistDesc(album.Artists),
-		Link:      chooseBestLink(album.ExternalURLs),
+		Title:    album.Name,
+		Subtitle: formArtistDesc(album.Artists),
+		Link:     chooseBestLink(album.ExternalURLs),
 	}
 	setGlyphs(album.Images, &cell.info)
 }
@@ -325,17 +310,15 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 	}
 	cell := &trackCell{}
 	cell.spotifyID = track.ID
-	cell.CellID = dst.App.IssueCellID()
-	dst.AddChild(cell)
+	cell.AddTo(dst, cell, dst.App.PlayableCellSpec)
 
 	artistDesc := formArtistDesc(track.Artists)
 
 	cell.info = arc.CellInfo{
-		CellDefID: dst.App.PlayableCellSpec,
-		Title:     track.Name,
-		Subtitle:  artistDesc,
-		About:     track.Album.Name,
-		Link:      chooseBestLink(track.ExternalURLs),
+		Title:    track.Name,
+		Subtitle: artistDesc,
+		About:    track.Album.Name,
+		Link:     chooseBestLink(track.ExternalURLs),
 	}
 	setGlyphs(track.Album.Images, &cell.info)
 

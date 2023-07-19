@@ -16,7 +16,6 @@ type fsItem struct {
 
 	basename  string // base file name
 	pathname  string // non-nil when pinned (could be alternative OS handle)
-	mediaType string
 	isHidden  bool
 	mode      os.FileMode
 	size      int64
@@ -60,11 +59,11 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 	item.modTime = fi.ModTime()
 	item.isHidden = strings.HasPrefix(item.basename, ".")
 	item.isDir = fi.IsDir()
-	
+
 	mediaType := ""
 	extLen := 0
 	if item.isDir {
-		
+
 	} else {
 		item.size = fi.Size()
 		mediaType, extLen = assets.GetMediaTypeForExt(item.basename)
@@ -115,13 +114,24 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 	}
 }
 
+func (item *fsItem) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
+	dst.Marshal(app.CellInfoAttr, 0, &item.info)
+	return nil
+}
+
+func (item *fsItem) OnPinned(parent amp.Cell[*appCtx]) error {
+	parentDir := parent.(*fsDir)
+	item.pathname = path.Join(parentDir.pathname, item.basename)
+	return nil
+}
+
 type fsFile struct {
 	fsItem
 	pinnedURL string
 }
 
-func (item *fsFile) ExportAttrs(app *appCtx, dst *arc.AttrBatch) error {
-	dst.Add(app.CellInfoAttr, &item.info)
+func (item *fsFile) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
+	dst.Marshal(app.CellInfoAttr, 0, &item.info)
 
 	if item.mediaFlags != 0 {
 		media := &amp.MediaInfo{
@@ -129,11 +139,11 @@ func (item *fsFile) ExportAttrs(app *appCtx, dst *arc.AttrBatch) error {
 			Title:      item.info.Title,
 			Collection: item.info.Subtitle,
 		}
-		dst.Add(app.MediaInfoAttr, media)
+		dst.Marshal(app.MediaInfoAttr, 0, media)
 	}
 
 	if item.pinnedURL != "" {
-		dst.Add(app.PlayableAssetAttr, &arc.AssetRef{
+		dst.Marshal(app.PlayableAssetAttr, 0, &arc.AssetRef{
 			URI: item.pinnedURL,
 		})
 	}
@@ -157,77 +167,65 @@ type fsDir struct {
 	fsItem
 }
 
+
 // reads the fsDir's catalog and issues new items as needed.
 func (dir *fsDir) PinInto(dst *amp.PinnedCell[*appCtx]) error {
-	panic("TODO")
-	/*
-		items       []arc.CellID // ordered
-		itemsByID   map[arc.CellID]*fsItem
+/*
 
-		{
-			//dir.subs = make(map[arc.CellID]os.DirEntry)
-			f, err := os.Open(dir.pathname)
-			if err != nil {
-				return err
+	{
+		//dir.subs = make(map[arc.CellID]os.DirEntry)
+		f, err := os.Open(dir.pathname)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		lookup := make(map[string]*fsItem, len(dir.itemsByID))
+		for _, sub := range dir.itemsByID {
+			lookup[sub.basename] = sub
+		}
+
+		dirItems, err := f.Readdir(-1)
+		f.Close()
+		if err != nil {
+			return nil
+		}
+
+		N := len(dirItems)
+		dir.itemsByID = make(map[arc.CellID]*fsItem, N)
+		dir.items = dir.items[:0]
+
+		var tmp *fsItem
+		for _, fi := range dirItems {
+			sub := tmp
+			if sub == nil {
+				sub = &fsItem{}
 			}
-			defer f.Close()
-
-			lookup := make(map[string]*fsItem, len(dir.itemsByID))
-			for _, sub := range dir.itemsByID {
-				lookup[sub.basename] = sub
-			}
-
-			dirItems, err := f.Readdir(-1)
-			f.Close()
-			if err != nil {
-				return nil
-			}
-
-			N := len(dirItems)
-			dir.itemsByID = make(map[arc.CellID]*fsItem, N)
-			dir.items = dir.items[:0]
-
-			var tmp *fsItem
-			for _, fi := range dirItems {
-				sub := tmp
-				if sub == nil {
-					sub = &fsItem{}
-				}
-				sub.setFrom(fi)
-				if sub.isHidden {
-					continue
-				}
-
-				// preserve items that have not changed
-				old := lookup[sub.basename]
-				if old == nil || old.Compare(sub) != 0 {
-					sub.CellID = dir.app.IssueCellID()
-					tmp = nil
-				} else {
-					sub = old
-				}
-
-				dir.itemsByID[sub.CellID] = sub
-				dir.items = append(dir.items, sub.CellID)
+			sub.setFrom(fi)
+			if sub.isHidden {
+				continue
 			}
 
-			items := dir.items
-			sort.Slice(items, func(i, j int) bool {
-				ii := dir.itemsByID[items[i]]
-				jj := dir.itemsByID[items[j]]
-				return ii.Compare(jj) < 0
-			})
+			// preserve items that have not changed
+			old := lookup[sub.basename]
+			if old == nil || old.Compare(sub) != 0 {
+				sub.CellID = dir.app.IssueCellID()
+				tmp = nil
+			} else {
+				sub = old
+			}
+
+			dir.itemsByID[sub.CellID] = sub
+			dir.items = append(dir.items, sub.CellID)
+		}
+
+		items := dir.items
+		sort.Slice(items, func(i, j int) bool {
+			ii := dir.itemsByID[items[i]]
+			jj := dir.itemsByID[items[j]]
+			return ii.Compare(jj) < 0
+		})
 
 		}*/
-	return nil
-}
-
-func (dir *fsDir) WillPinChild(child amp.Cell[*appCtx]) error {
-
-	// if parent == nil {
-	// 	cell, err := app.newCellFromPath("", req)
-	// } else {
-	item := child.(*fsItem)
-	dir.pathname = path.Join(item.pathname, dir.basename)
 	return nil
 }

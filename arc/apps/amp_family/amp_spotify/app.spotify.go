@@ -127,7 +127,7 @@ func (app *appCtx) tryConnect() error {
 	app.resetSignal()
 
 	if app.auth == nil {
-		app.auth = oauth.NewAuth(app.AppContext, oauthConfig)
+		app.auth = oauth.NewAuth(app, oauthConfig)
 	}
 
 	// If we don't have a token, ask the client launch a URL that will start oauth
@@ -209,7 +209,7 @@ func (app *appCtx) endSession() {
 	}
 }
 
-func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.CellReq) (arc.PinnedCell, error) {
+func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCell, error) {
 	if err := app.waitForSession(); err != nil {
 		return nil, err
 	}
@@ -220,15 +220,17 @@ func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.CellReq) (arc.PinnedCe
 
 	// For now, always just pin a new home (root) cell
 	cell := app.newRootCell()
-	return amp.NewPinnedCell[*appCtx](app, cell)
+	return amp.NewPinnedCell[*appCtx](app, &cell.CellBase)
 }
 
 func (app *appCtx) newRootCell() *spotifyCell {
 	cell := &spotifyCell{}
 	cell.CellID = app.IssueCellID()
+	cell.CellSpec = app.LinkCellSpec
+	cell.Self = cell
+
 	cell.info = arc.CellInfo{
-		CellDefID: app.LinkCellSpec,
-		Title:     "Spotify Home",
+		Title: "Spotify Home",
 		// Glyph: &arc.AssetRef{
 		// },
 	}

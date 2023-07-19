@@ -35,34 +35,25 @@ type AppBase struct {
 	PlayableAssetAttr uint32
 }
 
-func (parent *PinnedCell[AppT]) GetCell(target arc.CellID) Cell[AppT] {
-	parentID := parent.ID()
-	if target == parentID {
-		return parent
-	} else {
-		return parent.GetChildCell(target)
-	}
-}
 
-type Cell[AppT arc.AppInstance] interface {
-	ExportAttrs(app AppT, dst *arc.AttrBatch) error
-	WillPinChild(child Cell[AppT]) error // Called when a cell is pinned as a child
+type Cell[AppT arc.AppContext] interface {
+	MarshalAttrs(app AppT, dst *arc.CellTx) error
+	OnPinned(parent Cell[AppT]) error // Called when a cell is pinned as a child
 	PinInto(dst *PinnedCell[AppT]) error
-	ID() arc.CellID
 	Label() string
-	//Info() arc.CellInfo
 }
 
-type CellBase[AppT arc.AppInstance] struct {
-	CellID arc.CellID
-	//Impl   Cell[AppT]
+type CellBase[AppT arc.AppContext] struct {
+	Self     Cell[AppT]
+	CellID   arc.CellID
+	CellSpec uint32
 }
 
-type PinnedCell[AppT arc.AppInstance] struct {
-	Cell[AppT]
+type PinnedCell[AppT arc.AppContext] struct {
+	*CellBase[AppT]
 	App AppT
 
 	cellCtx   task.Context
-	children  []Cell[AppT]         // ordered list of children
-	childByID map[arc.CellID]int32 // index into []children
+	children  []*CellBase[AppT]     // ordered list of children
+	childByID map[arc.CellID]uint32 // index into []children
 }

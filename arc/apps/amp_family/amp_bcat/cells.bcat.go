@@ -10,9 +10,8 @@ type categories struct {
 	//items []*
 }
 
-func (cats *categories) ExportAttrs(app *appCtx, dst *arc.AttrBatch) error {
-	dst.Add(app.CellInfoAttr, &arc.CellInfo{
-		CellDefID: app.LinkCellSpec,
+func (cats *categories) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
+	dst.Marshal(app.CellInfoAttr, 0, &arc.CellInfo{
 		Title:     "Internet Radio",
 		Glyph:     amp.DirGlyph,
 	})
@@ -102,7 +101,7 @@ type station struct {
 	links string
 }
 
-func (sta *station) ExportAttrs(app *appCtx, dst *arc.AttrBatch) error {
+func (sta *station) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
 
 }
 

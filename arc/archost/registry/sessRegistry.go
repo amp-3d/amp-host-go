@@ -669,7 +669,7 @@ func (req *CellReq) PushBeginPin(target CellID) {
 	m := NewMsg()
 	m.CellID = target.U64()
 	m.Op = MsgOp_PinCell
-	req.PushMsg(m)
+	req.PushUpdate(m)
 }
 
 func (req *CellReq) PushInsertCell(target CellID, schema *AttrSchema) {
@@ -679,7 +679,7 @@ func (req *CellReq) PushInsertCell(target CellID, schema *AttrSchema) {
 		m.Op = MsgOp_InsertChildCell
 		m.ValType = int32(ValType_SchemaID)
 		m.ValInt = int64(schema.SchemaID)
-		req.PushMsg(m)
+		req.PushUpdate(m)
 	}
 }
 
@@ -701,7 +701,7 @@ func (req *CellReq) PushAttr(target CellID, schema *AttrSchema, attrURI string, 
 	if attr.ValTypeID != 0 { // what is this for!?
 		m.ValType = int32(attr.ValTypeID)
 	}
-	req.PushMsg(m)
+	req.PushUpdate(m)
 }
 
 func (req *CellReq) PushCheckpoint(err error) {
@@ -711,7 +711,7 @@ func (req *CellReq) PushCheckpoint(err error) {
 	if err != nil {
 		m.setVal(err)
 	}
-	req.PushMsg(m)
+	req.PushUpdate(m)
 }
 
 */

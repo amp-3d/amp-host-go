@@ -37,11 +37,9 @@ type appCtx struct {
 	amp.AppBase
 }
 
-func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.CellReq) (arc.PinnedCell, error) {
-
-
+func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCell, error) {
 	var pathname string
-	if url := req.URL(); url != nil {
+	if url := req.Params().URL; url != nil {
 		pathname = url.Path
 		pathname = path.Clean(pathname)
 		cell, err := app.newCellForPath(pathname)
@@ -54,11 +52,11 @@ func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.CellReq) (arc.PinnedCe
 	if parent != nil {
 		return parent.PinCell(req)
 	}
-	
+
 	return nil, arc.ErrCode_CellNotFound.Error("missing cell ID / URL")
 }
 
-func (app *appCtx) newCellForPath(pathname string) (amp.Cell[*appCtx], error) {
+func (app *appCtx) newCellForPath(pathname string) (*amp.CellBase[*appCtx], error) {
 	if pathname == "" {
 		return nil, arc.ErrCode_CellNotFound.Error("missing cell ID / URL")
 	}
@@ -70,26 +68,25 @@ func (app *appCtx) newCellForPath(pathname string) (amp.Cell[*appCtx], error) {
 		return nil, arc.ErrCode_CellNotFound.Errorf("local pathname not found: %q", pathname)
 	}
 
-	var cell amp.Cell[*appCtx]
 	var item *fsItem
 	isDir := fi.IsDir()
 	if isDir {
 		dir := &fsDir{}
-		cell = dir
+		dir.Self = dir
 		item = &dir.fsItem
 	} else {
 		file := &fsFile{}
-		cell = file
+		file.Self = file
 		item = &file.fsItem
 	}
 	item.pathname = pathname
 	item.setFrom(fi)
 	item.CellID = app.IssueCellID()
 
-	return cell, nil
+	return &item.CellBase, nil
 }
 
-// func (app *appCtx) pinByPath(pathname string, req arc.CellReq) (arc.PinnedCell, error) {
+// func (app *appCtx) pinByPath(pathname string, req arc.PinReq) (arc.PinnedCell, error) {
 // 	if pathname == "" {
 // 		if url := req.URL(); url != nil {
 // 			pathname = url.Path
