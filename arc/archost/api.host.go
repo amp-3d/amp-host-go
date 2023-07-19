@@ -56,8 +56,8 @@ func DefaultOpts(assetPort int, debugMode bool) Opts {
 		StatePath:    "~/_.archost",
 		Registry:     arc.NewRegistry(),
 		Debug:        debugMode,
-		AppIdleClose: 10 * time.Minute,
-		LoginTimeout: 3 * time.Second,
+		AppIdleClose: 5 * time.Minute,
+		LoginTimeout: 9 * time.Second,
 	}
 	
 	if opts.Debug {
