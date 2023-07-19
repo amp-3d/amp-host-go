@@ -1,6 +1,10 @@
 package registry
 
 import (
+	"runtime"
+	"sync/atomic"
+	"time"
+
 	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
 	"github.com/arcspace/go-archost/arc/archost/registry/parse"
@@ -12,6 +16,9 @@ type elemDef struct {
 
 type sessRegistry struct {
 	table symbol.Table
+
+	timeMu atomic.Int32 // mutex for issuing time IDs
+	timeID int64        // previously issued time ID
 
 	nativeToClientID map[uint32]uint32 // maps a native symbol ID to a client symbol ID
 	clientToNativeID map[uint32]uint32 // maps a client symbol ID to a native symbol ID
@@ -42,6 +49,24 @@ func (reg *sessRegistry) ClientSymbols() symbol.Table {
 func (reg *sessRegistry) NativeToClientID(nativeID uint32) (uint32, bool) {
 	clientID, ok := reg.nativeToClientID[nativeID]
 	return clientID, ok
+}
+
+func (reg *sessRegistry) IssueTimeID() arc.TimeID {
+	now := int64(arc.ConvertToUTC(time.Now()))
+
+	if !reg.timeMu.CompareAndSwap(0, 1) { // spin lock
+		runtime.Gosched()
+	}
+	issued := reg.timeID
+	if issued < now {
+		issued = now
+	} else {
+		issued += 1
+	}
+	reg.timeID = issued
+	reg.timeMu.Store(0) // spin unlock
+
+	return arc.TimeID(issued)
 }
 
 func (reg *sessRegistry) NewAttrElem(attrID uint32, native bool) (arc.ElemVal, error) {
