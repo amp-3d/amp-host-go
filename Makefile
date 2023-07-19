@@ -15,7 +15,7 @@ ANDROID_NDK := ${UNITY_PATH}/PlaybackEngines/AndroidPlayer/NDK
 ANDROID_CC := ${ANDROID_NDK}/toolchains/llvm/prebuilt/darwin-x86_64/bin
 
 ARC_SDK_PKG := "github.com/arcspace/go-arc-sdk"  
-ARC_SDK_PATH := $(shell go list -f '{{.Dir}}' $(ARC_SDK_PKG)) # errors until adk has version assigned
+ARC_SDK_PATH := $(shell go list -f '{{.Dir}}' $(ARC_SDK_PKG)) # errors until sdk has official version assigned
 ARC_SDK_PATH := "${PARENT_PATH}/go-arc-sdk"
 CAPNP_INCLUDE := "${ARC_SDK_PATH}/apis/capnp/include"
 

@@ -187,7 +187,7 @@ func (reg *sessRegistry) ResolveAttrSpec(attrSpec string, native bool) (def arc.
 		prev, exists := reg.attrDefs[spec.DefID]
 		if exists {
 			if prev.Native != spec {
-				err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: native AttrSpec %v already registered with different fields ", spec.DefID)
+				err = arc.ErrCode_BadSchema.Errorf("native AttrSpec %v already registered with different fields ", spec.DefID)
 			}
 		} else {
 			// If the client also registers the this attr spec later, the client portion will be updated.
@@ -206,13 +206,13 @@ func (reg *sessRegistry) ResolveAttrSpec(attrSpec string, native bool) (def arc.
 
 		switch {
 		case clientSpec.AttrName == 0 && spec.AttrName != 0:
-			err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q for AttrSpec %q", expr.AttrName, attrSpec)
+			err = arc.ErrCode_BadSchema.Errorf("failed to resolve AttrName %q for AttrSpec %q", expr.AttrName, attrSpec)
 		case clientSpec.ElemType == 0 && spec.ElemType != 0:
-			err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q for AttrSpec %q", expr.ElemType, attrSpec)
+			err = arc.ErrCode_BadSchema.Errorf("failed to resolve ElemType %q for AttrSpec %q", expr.ElemType, attrSpec)
 		case clientSpec.SeriesSpec == 0 && spec.SeriesSpec != 0:
-			err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q for AttrSpec %q", expr.SeriesSpec, attrSpec)
+			err = arc.ErrCode_BadSchema.Errorf("failed to resolve SeriesSpec %q for AttrSpec %q", expr.SeriesSpec, attrSpec)
 		case clientSpec.DefID == 0:
-			err = arc.ErrCode_BadSchema.Errorf("ResolveAttrSpec: failed to resolve %q", attrSpec)
+			err = arc.ErrCode_BadSchema.Errorf("failed to resolve %q", attrSpec)
 		}
 
 		spec = clientSpec
@@ -757,36 +757,3 @@ func (req *CellReq) PushCheckpoint(err error) {
 // 	//UnmarshalBuf(src []byte, dst V) error
 // }
 
-// type ElemValTypeBase[V Serializable] struct {
-
-// }
-
-// func (typ ElemValTypeBase[V]) New() V {
-//     return V{}
-// }
-
-// type CellInfoType struct {}
-
-// func (typ CellInfoType) TypeName() string {
-//     return ".CellInfo"
-// }
-
-// func (typ CellInfoType) New() ElemVal {
-//     return &CellInfo{}
-// }
-
-// func (typ ElemValType[V]) New() V {
-// 	return typ.New()
-// }
-
-// type CellInfoType struct {
-//     ElemValType[*CellInfo]
-// }
-
-// func (typ CellInfoType) New() *CellInfo {
-//     return &CellInfo{}
-// }
-
-// func (typ CellInfoType) TypeName() string {
-//     return ".CellInfo"
-// }
