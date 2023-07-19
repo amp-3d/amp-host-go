@@ -132,7 +132,7 @@ message KeyInfo {
     // Specifies which crypto suite to invoke.
                 CryptoKitID         CryptoKitID                 = 2;
 
-   // Unix timestamp << 16 (TimeFS) when this key was created (or 0 if not set)
+   // Unix timestamp << 16 ("UTC16") when this key was created (or 0 if not set)
                 int64               TimeCreated                 = 3;
 
     // Public part of the key; how this key is also referenced publicly (in base-256 form)

@@ -411,7 +411,7 @@ type KeyInfo struct {
 	KeyType KeyType `protobuf:"varint,1,opt,name=KeyType,proto3,enum=ski.KeyType" json:"KeyType,omitempty"`
 	// Specifies which crypto suite to invoke.
 	CryptoKitID CryptoKitID `protobuf:"varint,2,opt,name=CryptoKitID,proto3,enum=ski.CryptoKitID" json:"CryptoKitID,omitempty"`
-	// Unix timestamp << 16 (TimeFS) when this key was created (or 0 if not set)
+	// Unix timestamp << 16 (UTC16) when this key was created (or 0 if not set)
 	TimeCreated int64 `protobuf:"varint,3,opt,name=TimeCreated,proto3" json:"TimeCreated,omitempty"`
 	// Public part of the key; how this key is also referenced publicly (in base-256 form)
 	PubKey []byte `protobuf:"bytes,4,opt,name=PubKey,proto3" json:"PubKey,omitempty"`

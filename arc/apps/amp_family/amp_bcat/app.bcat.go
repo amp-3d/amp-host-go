@@ -154,10 +154,10 @@ func (app *appCtx) reloadCategories() error {
 			},
 		}
 		if created, err := time.Parse(time.RFC3339, entry.TimestampCreated); err == nil {
-			cat.Created = int64(arc.ConvertToTimeFS(created))
+			cat.Created = int64(arc.ConvertToUTC(created))
 		}
 		if modified, err := time.Parse(time.RFC3339, entry.TimestampModified); err == nil {
-			cat.Modified = int64(arc.ConvertToTimeFS(modified))
+			cat.Modified = int64(arc.ConvertToUTC(modified))
 		}
 		app.cats = append(app.cats, cat)
 	}

@@ -328,7 +328,7 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 		AuthorDesc:  artistDesc,
 		Collection:  track.Album.Name,
 		ItemNumber:  int32(track.TrackNumber),
-		Duration16:  int64(arc.ConvertMsToTimeFS(int64(track.Duration))),
+		Duration16:  int64(arc.ConvertMsToUTC(int64(track.Duration))),
 		CoverArt:    cell.info.Glyph.URI,
 		Popularity:  .01 * float32(track.Popularity), // 0..100 => 0..1
 		ReleaseTime: track.Album.ReleaseDateTime().Unix(),

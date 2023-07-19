@@ -38,7 +38,10 @@ type AppBase struct {
 
 type Cell[AppT arc.AppContext] interface {
 	MarshalAttrs(app AppT, dst *arc.CellTx) error
-	OnPinned(parent Cell[AppT]) error // Called when a cell is pinned as a child
+	
+	// Called when this cell is pinned from a parent (vs an absolute URL)
+	OnPinned(parent Cell[AppT]) error 
+	
 	PinInto(dst *PinnedCell[AppT]) error
 	Label() string
 }

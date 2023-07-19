@@ -450,55 +450,6 @@ func (ctx *appContext) startCell(req *reqContext) error {
 	return nil
 }
 
-func (ctx *appContext) bindAndStart(req *reqContext) (cell *cellInst, err error) {
-	ctx.cellsMu.Lock()
-	defer ctx.cellsMu.Unlock()
-
-	ID := req.pinned.ID()
-
-	// If the cell is already open, we're done
-	cell = ctx.cells[ID]
-	if cell != nil {
-		return
-	}
-
-	cell = &cellInst{
-		CellID:  ID,
-		newReqs: make(chan *reqContext),
-		newTxns: make(chan *arc.MsgBatch),
-	}
-
-	cell.Context, err = ctx.Context.StartChild(&task.Task{
-		//Label: req.pinned.Context.Label(),
-		Label: fmt.Sprintf("CellID %d", ID),
-		OnRun: func(ctx task.Context) {
-
-			for running := true; running; {
-
-				// Manage incoming subs, push state to subs, and then maintain state for each sub.
-				select {
-				case req := <-cell.newReqs:
-					var err error
-					{
-						req.PushBeginPin(cell.CellID)
-
-						// TODO: verify that a cell pushing state doesn't escape idle or close analysis
-						err = req.pinned.PushCellState(&req.PinReq, arc.PushAsParent)
-					}
-					req.PushCheckpoint(err)
-
-				case tx := <-cell.newTxns:
-					cell.pushToSubs(tx)
-
-				case <-cell.Context.Closing():
-					running = false
-				}
-
-			}
-
-		},
-	})
-
 
 
 func (sess *hostSess) ServeState(req *reqContext) error {
@@ -571,7 +522,6 @@ func (pl *planetSess) onRun(task.Context) {
 
 
 func (pl *plSess) addSub(req arc.PinReq) error {
-
 
 	// Add incoming req to the cell IDs list of subs
 	cell.subsMu.Lock()
@@ -864,29 +814,6 @@ func (pl *planetSess) getUser(req arc.Login, autoCreate bool) (seat arc.UserSeat
 }
 
 // WIP -- placeholder hack until cell+attr support is added to the db
-func (pl *planetSess) PushTx(tx *arc.MsgBatch) error {
-	cellSymID := pl.symTable.GetSymbolID(tx.Msgs[0].ValBuf, true)
-
-	var buf [512]byte
-	key := append(buf[:0], kCellStorage)
-	key = cellSymID.WriteTo(key)
-
-	txn := arc.Txn{
-		Msgs: tx.Msgs,
-	}
-	txData, _ := txn.Marshal()
-	tx.Reclaim()
-
-	dbTx := pl.db.NewTransaction(true)
-	defer dbTx.Discard()
-
-	dbTx.Set(key, txData)
-	err := dbTx.Commit()
-
-	return err
-}
-
-// WIP -- placeholder hack until cell+attr support is added to the db
 // Full replacement of all attrs is not how this will work in the future -- this is just a placeholder
 func (pl *planetSess) ReadCell(cellKey []byte, schema *arc.AttrSchema, msgs func(msg *arc.Msg)) error {
 	cellSymID := pl.symTable.GetSymbolID(cellKey, false)
@@ -1031,40 +958,6 @@ func (csess *cellInst) ServeState(req *nodeReq) error {
 	}
 
 	return nil
-}
-
-
-
-
-func (host *host) mountHomePlanet() error {
-	var err error
-
-	if host.homePlanetID == 0 {
-		host.homePlanetID = hackHostPlanetID
-
-		_, err = host.getPlanet(host.homePlanetID)
-
-		//pl, err = host.mountPlanet(0, &arc.PlanetEpoch{
-		// 	EpochTID:   utils.RandomBytes(16),
-		// 	CommonName: "HomePlanet",
-		// })
-	}
-
-	return err
-	// // Add a new home/root planent if none exists
-	// if host.seat.HomePlanetID == 0 {
-	// 	pl, err = host.mountPlanet(0, &arc.PlanetEpoch{
-	// 		EpochTID:   utils.RandomBytes(16),
-	// 		CommonName: "HomePlanet",
-	// 	})
-	// 	if err == nil {
-	// 		host.seat.HomePlanetID = pl.planetID
-	// 		host.commitSeatChanges()
-	// 	}
-	// } else {
-
-	// }
-
 }
 
 

@@ -72,7 +72,7 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 	//////////////////  CellInfo
 	{
 		info := arc.CellInfo{
-			Modified: int64(arc.ConvertToTimeFS(item.modTime)),
+			Modified: int64(arc.ConvertToUTC(item.modTime)),
 		}
 
 		base := item.basename[:len(item.basename)-extLen]

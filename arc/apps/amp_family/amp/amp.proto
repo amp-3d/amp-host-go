@@ -91,7 +91,7 @@ message MediaInfo {
     string     Collection   = 6;  // album or series name
     string     CoverArt     = 9;  // URL or local path to cover art image 
     int32      ItemNumber   = 10; // track or episode number (0 if n/a)
-    int64      Duration16   = 11; // duration in seconds << 16 (see TimeFS); 0 if n/a
+    int64      Duration16   = 11; // duration in seconds << 16 (see UTC16); 0 if n/a
     float      Popularity   = 12; // 0.0 to 1.0
     int64      ReleaseTime  = 14; // Unix UTC in seconds
 }
