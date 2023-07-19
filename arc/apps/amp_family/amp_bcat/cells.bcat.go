@@ -11,14 +11,14 @@ type categories struct {
 }
 
 func (cats *categories) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellInfoAttr, 0, &arc.CellInfo{
+	dst.Marshal(app.CellLabelsAttr, 0, &arc.CellLabels{
 		Title:     "Internet Radio",
 		Glyph:     amp.DirGlyph,
 	})
 	return nil
 }
 
-func (cats *categories) Label() string {
+func (cats *categories) GetLogLabel() string {
 	return "Internet Radio"
 }
 
@@ -67,7 +67,7 @@ func (cat *category) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 			links: entry.Url,
 		}
 		sta.CellBase.ResetState(dst.App.IssueCellID(), sta)
-		sta.CellBase.AddAttr(dst.App, "", &arc.CellInfo{
+		sta.CellBase.AddAttr(dst.App, "", &arc.CellLabels{
 			Title:    entry.Title,
 			Subtitle: entry.Summary,
 			About:    entry.Description,

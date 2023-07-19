@@ -10,8 +10,8 @@ $CSharp.namespace("Arcspace");
 # Pinned attr for playableCellSpec
 const playableAssetAttrSpec  :Text = "AssetRef:playable";
 
-const playableCellSpec       :Text = "(CellInfo,MediaInfo)(AssetRef:playable)";
-const playlistCellSpec       :Text = "(CellInfo,MediaPlaylist)()";
+const playableCellSpec       :Text = "(CellLabels,MediaInfo)(AssetRef:playable)";
+const playlistCellSpec       :Text = "(CellLabels,MediaPlaylist)()";
 
 
 const listItemSeparator :Text = " · ";

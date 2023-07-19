@@ -145,7 +145,7 @@ func (app *appCtx) reloadCategories() error {
 			catID: entry.Id,
 		}
 
-		cat.CellInfo = arc.CellInfo{
+		cat.CellLabels = arc.CellLabels{
 			Title: entry.Title,
 			About: entry.Description,
 			Glyph: &arc.AssetRef{
@@ -172,6 +172,6 @@ func (app *appCtx) reloadCategories() error {
 }
 
 type categoryInfo struct {
-	arc.CellInfo
+	arc.CellLabels
 	catID uint32
 }

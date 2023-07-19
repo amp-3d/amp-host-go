@@ -47,7 +47,7 @@ func NewPinnedCell[AppT arc.AppContext](app AppT, cell *CellBase[AppT]) (arc.Pin
 
 	// Like most apps, pinned items are started as direct child contexts of the app context\
 	pinned.cellCtx, err = app.StartChild(&task.Task{
-		Label: cell.Self.Label(),
+		Label: cell.Self.GetLogLabel(),
 	})
 	if err != nil {
 		return nil, err
@@ -72,6 +72,10 @@ func (parent *PinnedCell[AppT]) GetCell(target arc.CellID) *CellBase[AppT] {
 	}
 }
 
+func (cell *CellBase[AppT]) Info() arc.CellInfo {
+	return cell.CellInfo
+}
+
 func (cell *CellBase[AppT]) OnPinned(parent Cell[AppT]) error {
 	return nil
 }
@@ -80,7 +84,7 @@ func (parent *PinnedCell[AppT]) AddChild(child *CellBase[AppT]) {
 	parent.children = append(parent.children, child)
 }
 
-func (parent *PinnedCell[AppT]) MergeUpdate(tx *arc.MultiTx) error {
+func (parent *PinnedCell[AppT]) MergeUpdate(tx *arc.Msg) error {
 	return arc.ErrUnimplemented
 }
 

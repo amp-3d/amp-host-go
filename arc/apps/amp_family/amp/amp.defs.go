@@ -35,21 +35,23 @@ type AppBase struct {
 	PlayableAssetAttr uint32
 }
 
-
 type Cell[AppT arc.AppContext] interface {
+	arc.Cell
+
+	// Returns a human-readable label for this cell useful for debugging and logging.
+	GetLogLabel() string
+
 	MarshalAttrs(app AppT, dst *arc.CellTx) error
-	
+
 	// Called when this cell is pinned from a parent (vs an absolute URL)
-	OnPinned(parent Cell[AppT]) error 
-	
+	OnPinned(parent Cell[AppT]) error
+
 	PinInto(dst *PinnedCell[AppT]) error
-	Label() string
 }
 
 type CellBase[AppT arc.AppContext] struct {
-	Self     Cell[AppT]
-	CellID   arc.CellID
-	CellSpec uint32
+	arc.CellInfo
+	Self Cell[AppT]
 }
 
 type PinnedCell[AppT arc.AppContext] struct {

@@ -58,15 +58,11 @@ func (auth *Config) CurrentToken() *oauth2.Token {
 
 // Pushes a msg to the client to launch a URL that starts oauth flow.
 func (auth *Config) pushAuthCodeRequest() error {
-	elem := arc.AttrElem{
-		Val: &arc.HandleURI{
-			URI: auth.Config.AuthCodeURL(""),
-		},
+	val := &arc.HandleURI{
+		URI: auth.Config.AuthCodeURL(""),
 	}
-	return arc.SendMetaAttr(auth.ctx.Session(), elem)
+	return arc.SendClientMetaAttr(auth.ctx.Session(), 0, val)
 }
-
-
 
 // NewHttpClient creates a *http.Client that will use the specified access token for its API requests.
 // Combine this with spotify.HTTPClientOpt.

@@ -22,7 +22,7 @@ type fsItem struct {
 	isDir     bool
 	modTime   time.Time
 
-	info       arc.CellInfo
+	info       arc.CellLabels
 	mediaFlags amp.MediaFlags
 }
 
@@ -45,7 +45,7 @@ func (item *fsItem) Compare(oth *fsItem) int {
 	return 0
 }
 
-func (item *fsItem) Label() string {
+func (item *fsItem) GetLogLabel() string {
 	label := item.basename
 	if item.isDir {
 		label += "/"
@@ -69,9 +69,9 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 		mediaType, extLen = assets.GetMediaTypeForExt(item.basename)
 	}
 
-	//////////////////  CellInfo
+	//////////////////  CellLabels
 	{
-		info := arc.CellInfo{
+		info := arc.CellLabels{
 			Modified: int64(arc.ConvertToUTC(item.modTime)),
 		}
 
@@ -115,7 +115,7 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 }
 
 func (item *fsItem) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellInfoAttr, 0, &item.info)
+	dst.Marshal(app.CellLabelsAttr, 0, &item.info)
 	return nil
 }
 
@@ -131,7 +131,7 @@ type fsFile struct {
 }
 
 func (item *fsFile) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellInfoAttr, 0, &item.info)
+	dst.Marshal(app.CellLabelsAttr, 0, &item.info)
 
 	if item.mediaFlags != 0 {
 		media := &amp.MediaInfo{

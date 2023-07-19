@@ -229,7 +229,7 @@ func (app *appCtx) newRootCell() *spotifyCell {
 	cell.CellSpec = app.LinkCellSpec
 	cell.Self = cell
 
-	cell.info = arc.CellInfo{
+	cell.info = arc.CellLabels{
 		Title: "Spotify Home",
 		// Glyph: &arc.AssetRef{
 		// },

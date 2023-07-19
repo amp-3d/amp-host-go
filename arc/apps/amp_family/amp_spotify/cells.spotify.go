@@ -16,7 +16,7 @@ type spotifyCell struct {
 	amp.CellBase[*appCtx]
 	spotifyID spotify.ID
 	pinner    Pinner
-	info      arc.CellInfo
+	info      arc.CellLabels
 }
 
 type playlistCell struct {
@@ -39,11 +39,11 @@ type trackCell struct {
 }
 
 func (cell *spotifyCell) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellInfoAttr, 0, &cell.info)
+	dst.Marshal(app.CellLabelsAttr, 0, &cell.info)
 	return nil
 }
 
-func (cell *spotifyCell) Label() string {
+func (cell *spotifyCell) GetLogLabel() string {
 	return cell.info.Title
 }
 
@@ -187,7 +187,7 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 func addChild_dir(dst *amp.PinnedCell[*appCtx], title string) *spotifyCell {
 	cell := &spotifyCell{}
 	cell.AddTo(dst, cell, dst.App.LinkCellSpec)
-	cell.info = arc.CellInfo{
+	cell.info = arc.CellLabels{
 		Title: title,
 	}
 	return cell
@@ -225,7 +225,7 @@ func addChild_Playlist(dst *amp.PinnedCell[*appCtx], playlist spotify.SimplePlay
 	cell.spotifyID = playlist.ID
 	cell.AddTo(dst, cell, dst.App.PlaylistCellSpec)
 
-	cell.info = arc.CellInfo{
+	cell.info = arc.CellLabels{
 		Title:    playlist.Name,
 		Subtitle: playlist.Description,
 		Link:     chooseBestLink(playlist.ExternalURLs),
@@ -283,7 +283,7 @@ func addChild_Artist(dst *amp.PinnedCell[*appCtx], artist spotify.FullArtist) {
 	cell.spotifyID = artist.ID
 	cell.AddTo(dst, cell, dst.App.LinkCellSpec)
 
-	cell.info = arc.CellInfo{
+	cell.info = arc.CellLabels{
 		Title:    artist.Name,
 		Subtitle: fmt.Sprintf("%d followers", artist.Followers.Count),
 		Link:     chooseBestLink(artist.ExternalURLs),
@@ -296,7 +296,7 @@ func addChild_Album(dst *amp.PinnedCell[*appCtx], album spotify.SimpleAlbum) {
 	cell.spotifyID = album.ID
 	cell.AddTo(dst, cell, dst.App.LinkCellSpec)
 
-	cell.info = arc.CellInfo{
+	cell.info = arc.CellLabels{
 		Title:    album.Name,
 		Subtitle: formArtistDesc(album.Artists),
 		Link:     chooseBestLink(album.ExternalURLs),
@@ -314,7 +314,7 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 
 	artistDesc := formArtistDesc(track.Artists)
 
-	cell.info = arc.CellInfo{
+	cell.info = arc.CellLabels{
 		Title:    track.Name,
 		Subtitle: artistDesc,
 		About:    track.Album.Name,
@@ -339,7 +339,7 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
  *  Helpers
  */
 
-func setGlyphs(images []spotify.Image, info *arc.CellInfo) (glyph *arc.AssetRef, cover *arc.AssetRef) {
+func setGlyphs(images []spotify.Image, info *arc.CellLabels) (glyph *arc.AssetRef, cover *arc.AssetRef) {
 	info.Glyph = chooseBestImage(images, 200)
 	if info.Glyph != nil {
 		if len(images) > 1 {
