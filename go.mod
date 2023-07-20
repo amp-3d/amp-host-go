@@ -18,7 +18,7 @@ go 1.18
 require (
 	capnproto.org/go/capnp/v3 v3.0.0-alpha-29
 	github.com/alecthomas/participle/v2 v2.0.0
-	github.com/arcspace/go-arc-sdk v0.0.0-20230716000543-1bbb23c7ed45
+	github.com/arcspace/go-arc-sdk v0.0.0-20230719204915-b33fb10f99f2
 	github.com/arcspace/go-librespot v0.0.0-20230715225509-ef2b77e5ed3c
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/gogo/protobuf v1.3.2
@@ -50,7 +50,7 @@ require (
 	golang.org/x/sys v0.10.0 // indirect
 	golang.org/x/text v0.11.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230711160842-782d3b101e98 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230717213848-3f92550aa753 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	zenhack.net/go/util v0.0.0-20230607025951-8b02fee814ae // indirect
 )

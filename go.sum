@@ -39,8 +39,8 @@ github.com/alecthomas/assert/v2 v2.2.2 h1:Z/iVC0xZfWTaFNE6bA3z07T86hd45Xe2eLt6WV
 github.com/alecthomas/participle/v2 v2.0.0 h1:Fgrq+MbuSsJwIkw3fEj9h75vDP0Er5JzepJ0/HNHv0g=
 github.com/alecthomas/participle/v2 v2.0.0/go.mod h1:rAKZdJldHu8084ojcWevWAL8KmEU+AT+Olodb+WoN2Y=
 github.com/alecthomas/repr v0.2.0 h1:HAzS41CIzNW5syS8Mf9UwXhNH1J9aix/BvDRf1Ml2Yk=
-github.com/arcspace/go-arc-sdk v0.0.0-20230716000543-1bbb23c7ed45 h1:034h8Y/D8x5d8oYYOxijkplRZemRzLnROFAQbprIa7w=
-github.com/arcspace/go-arc-sdk v0.0.0-20230716000543-1bbb23c7ed45/go.mod h1:v7gxwBSBp/QpjyPDzCPUChfE92uWn5W1wm+GDe91SLY=
+github.com/arcspace/go-arc-sdk v0.0.0-20230719204915-b33fb10f99f2 h1:B03EB+nNkAktJc8WDrBkpNymwxI7a9ktcgZGgJizwBg=
+github.com/arcspace/go-arc-sdk v0.0.0-20230719204915-b33fb10f99f2/go.mod h1:v7gxwBSBp/QpjyPDzCPUChfE92uWn5W1wm+GDe91SLY=
 github.com/arcspace/go-librespot v0.0.0-20230715225509-ef2b77e5ed3c h1:uXWvXruhWhGqBZlOJVE9iCnsG9mJSPjJm5i0hiSl8QY=
 github.com/arcspace/go-librespot v0.0.0-20230715225509-ef2b77e5ed3c/go.mod h1:wfM8k5webkHJsO2Ss312Y9oH0SarFq/1UdeE76Mavq8=
 github.com/brynbellomy/klog v0.0.0-20200414031930-87fbf2e555ae h1:FO8VxsnMvWNRzx3vGjBmS2kotWl9f455Yj0H+9k01zk=
@@ -418,8 +418,8 @@ google.golang.org/genproto v0.0.0-20200618031413-b414f8b61790/go.mod h1:jDfRM7Fc
 google.golang.org/genproto v0.0.0-20200729003335-053ba62fc06f/go.mod h1:FWY/as6DDZQgahTzZj3fqbO1CbirC29ZNUFHwi0/+no=
 google.golang.org/genproto v0.0.0-20200804131852-c06518451d9c/go.mod h1:FWY/as6DDZQgahTzZj3fqbO1CbirC29ZNUFHwi0/+no=
 google.golang.org/genproto v0.0.0-20200825200019-8632dd797987/go.mod h1:FWY/as6DDZQgahTzZj3fqbO1CbirC29ZNUFHwi0/+no=
-google.golang.org/genproto/googleapis/rpc v0.0.0-20230711160842-782d3b101e98 h1:bVf09lpb+OJbByTj913DRJioFFAjf/ZGxEz7MajTp2U=
-google.golang.org/genproto/googleapis/rpc v0.0.0-20230711160842-782d3b101e98/go.mod h1:TUfxEVdsvPg18p6AslUXFoLdpED4oBnGwyqk3dV1XzM=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20230717213848-3f92550aa753 h1:XUODHrpzJEUeWmVo/jfNTLj0YyVveOo28oE6vkFbkO4=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20230717213848-3f92550aa753/go.mod h1:TUfxEVdsvPg18p6AslUXFoLdpED4oBnGwyqk3dV1XzM=
 google.golang.org/grpc v1.19.0/go.mod h1:mqu4LbDTu4XGKhr4mRzUsmM4RtVoemTSY81AxZiDr8c=
 google.golang.org/grpc v1.20.1/go.mod h1:10oTOabMzJvdu6/UiuZezV6QK5dSlG84ov/aaiqXj38=
 google.golang.org/grpc v1.21.1/go.mod h1:oYelfM1adQP15Ek0mdvEgi9Df8B9CZIaU1084ijfRaM=
