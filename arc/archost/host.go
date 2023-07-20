@@ -388,7 +388,7 @@ func (sess *hostSess) consumeInbox() {
 			msg.Reclaim()
 
 		case <-sess.Closing():
-			sess.cancelAll()
+			sess.closeAllReqs()
 			running = false
 		}
 	}
@@ -464,13 +464,16 @@ const (
 	getReq
 )
 
-func (sess *hostSess) cancelAll() {
+func (sess *hostSess) closeAllReqs() {
 	sess.openReqsMu.Lock()
-	defer sess.openReqsMu.Unlock()
-
-	for reqID := range sess.openReqs {
+	toClose := make([]uint64, 0, len(sess.openReqs))
+	for reqID, _ := range sess.openReqs {
+		toClose = append(toClose, reqID)
+	}
+	sess.openReqsMu.Unlock()
+	
+	for _, reqID := range toClose {
 		sess.closeReq(reqID, true, arc.ErrShuttingDown)
-		delete(sess.openReqs, reqID)
 	}
 }
 
