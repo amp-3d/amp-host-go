@@ -66,7 +66,7 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 		host:     host,
 		msgsIn:   make(chan *arc.Msg),
 		msgsOut:  make(chan *arc.Msg, 4),
-		openReqs: make(map[uint64]*reqContext),
+		openReqs: make(map[uint64]*appReq),
 		openApps: make(map[arc.UID]*appContext),
 	}
 
@@ -157,12 +157,12 @@ type hostSess struct {
 	task.Context
 	arc.SessionRegistry
 
-	nextID     atomic.Uint64          // next CellID to be issued
-	host       *host                  // parent host
-	msgsIn     chan *arc.Msg          // msgs inbound to this hostSess
-	msgsOut    chan *arc.Msg          // msgs outbound from this hostSess
-	openReqs   map[uint64]*reqContext // ReqID maps to an open request.
-	openReqsMu sync.Mutex             // protects openReqs
+	nextID     atomic.Uint64      // next CellID to be issued
+	host       *host              // parent host
+	msgsIn     chan *arc.Msg      // msgs inbound to this hostSess
+	msgsOut    chan *arc.Msg      // msgs outbound from this hostSess
+	openReqs   map[uint64]*appReq // ReqID maps to an open request.
+	openReqsMu sync.Mutex         // protects openReqs
 
 	login      arc.Login
 	loginReqID uint64 // ReqID of the login, allowing us to send session attrs back to the client.
@@ -171,22 +171,23 @@ type hostSess struct {
 }
 
 // *** implements PinContext ***
-type reqContext struct {
+type appReq struct {
 	task.Context
 	arc.PinReqParams
 	sess    *hostSess
 	appCtx  *appContext
 	pinned  arc.PinnedCell
+	parent  arc.PinnedCell
 	cancel  chan struct{}
-	started chan struct{} // closed once the cell is on service
+	pinning chan struct{} // closed once the cell is pinned
 	closed  atomic.Int32
 }
 
-func (req *reqContext) App() arc.AppContext {
+func (req *appReq) App() arc.AppContext {
 	return req.appCtx
 }
 
-func (req *reqContext) GetLogLabel() string {
+func (req *appReq) GetLogLabel() string {
 	var strBuf [128]byte
 
 	str := fmt.Appendf(strBuf[:0], "req %d", req.ReqID)
@@ -196,7 +197,7 @@ func (req *reqContext) GetLogLabel() string {
 	return string(str)
 }
 
-func (req *reqContext) PushUpdate(msg *arc.Msg) error {
+func (req *appReq) PushUpdate(msg *arc.Msg) error {
 	status := msg.Status
 	if status == arc.ReqStatus_Synced {
 		if (req.PinReq.Flags & arc.PinFlags_CloseOnSync) != 0 {
@@ -235,13 +236,6 @@ func (req *reqContext) PushUpdate(msg *arc.Msg) error {
 	return err
 }
 
-func (req *reqContext) closeReq(sendClose bool, err error) {
-	if req == nil {
-		return
-	}
-	req.sess.closeReq(req.ReqID, sendClose, err)
-}
-
 func (sess *hostSess) closeReq(reqID uint64, sendClose bool, err error) {
 	req, _ := sess.getReq(reqID, removeReq)
 	if req != nil {
@@ -275,12 +269,10 @@ func (sess *hostSess) closeReq(reqID uint64, sendClose bool, err error) {
 		// 	cell.pl.cancelSub(req)
 		// }
 
-		req.sess.closeReq(req.ReqID, sendClose, err)
-
 		// finally, close the cancel chan now that the close msg has been pushed
 		close(req.cancel)
 
-		// TODO: there is a race condition where the ctx could be set
+		// TODO: is there is a race condition where the ctx may not be set?
 		if req.Context != nil {
 			req.Context.Close()
 		}
@@ -417,7 +409,7 @@ func (sess *hostSess) handleMetaAttr(reqID uint64, attr *arc.AttrElemPb) (keepOp
 	switch arc.ConstSymbol(attr.AttrID) {
 	case arc.ConstSymbol_PinRequest:
 		{
-			var req *reqContext
+			var req *appReq
 			req, err = sess.getReq(reqID, insertReq)
 			if err != nil {
 				return
@@ -482,8 +474,8 @@ func (sess *hostSess) cancelAll() {
 	}
 }
 
-// onReq performs the given pinVerb on given reqID and returns its reqContext
-func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *reqContext, err error) {
+// onReq performs the given pinVerb on given reqID and returns its appReq
+func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *appReq, err error) {
 
 	sess.openReqsMu.Lock()
 	{
@@ -498,9 +490,9 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *reqContext, err e
 		} else {
 			switch verb {
 			case insertReq:
-				req = &reqContext{
+				req = &appReq{
 					cancel:  make(chan struct{}),
-					started: make(chan struct{}),
+					pinning: make(chan struct{}),
 					sess:    sess,
 				}
 				req.ReqID = reqID
@@ -515,9 +507,9 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *reqContext, err e
 }
 
 func (sess *hostSess) PinCell(pinReq arc.PinReq) (arc.PinContext, error) {
-	req := &reqContext{
+	req := &appReq{
 		cancel:  make(chan struct{}),
-		started: make(chan struct{}),
+		pinning: make(chan struct{}),
 		sess:    sess,
 	}
 	req.PinReqParams = *pinReq.Params()
@@ -526,11 +518,11 @@ func (sess *hostSess) PinCell(pinReq arc.PinReq) (arc.PinContext, error) {
 		return nil, err
 	}
 
-	<-req.started
+	<-req.pinning
 	return req, nil
 }
 
-func (sess *hostSess) pinCell(req *reqContext) error {
+func (sess *hostSess) pinCell(req *appReq) error {
 	var err error
 
 	req.Target = arc.CellID(req.PinReq.PinCellID)
@@ -546,7 +538,6 @@ func (sess *hostSess) pinCell(req *reqContext) error {
 		}
 	}
 
-	var parent arc.PinnedCell
 	if pinReq.ParentReqID != 0 {
 		parentReq, _ := sess.getReq(pinReq.ParentReqID, getReq)
 		if parentReq == nil {
@@ -554,7 +545,7 @@ func (sess *hostSess) pinCell(req *reqContext) error {
 			return err
 		}
 		req.appCtx = parentReq.appCtx
-		parent = parentReq.pinned
+		req.parent = parentReq.pinned
 	}
 
 	// If no app context is available, choose an app based on the app invocation (appearing as the hostname in the URL)
@@ -570,11 +561,7 @@ func (sess *hostSess) pinCell(req *reqContext) error {
 		return err
 	}
 
-	req.appCtx.appReqs <- appReq{
-		reqContext: req,
-		parent:     parent,
-	}
-
+	req.appCtx.appReqs <- req
 	return nil
 }
 
@@ -648,7 +635,7 @@ func (sess *hostSess) appContextForUID(appID arc.UID, autoCreate bool) (*appCont
 			appInst: appModule.NewAppInstance(),
 			sess:    sess,
 			module:  appModule,
-			appReqs: make(chan appReq, 1),
+			appReqs: make(chan *appReq, 1),
 		}
 
 		_, err = sess.StartChild(&task.Task{
@@ -661,9 +648,9 @@ func (sess *hostSess) appContextForUID(appID arc.UID, autoCreate bool) (*appCont
 			OnRun: func(ctx task.Context) {
 				for running := true; running; {
 					select {
-					case appReq := <-app.appReqs:
-						if reqErr := app.handleAppReq(appReq); reqErr != nil {
-							appReq.reqContext.closeReq(true, reqErr)
+					case req := <-app.appReqs:
+						if reqErr := app.handleAppReq(req); reqErr != nil {
+							req.sess.closeReq(req.ReqID, true, reqErr)
 						}
 					case <-ctx.Closing():
 						running = false
@@ -698,11 +685,6 @@ func (sess *hostSess) appCtxForInvocation(invocation string, autoCreate bool) (*
 	return ctx, nil
 }
 
-type appReq struct {
-	*reqContext
-	parent arc.PinnedCell
-}
-
 // appContext Implements arc.AppContext
 type appContext struct {
 	task.Context
@@ -710,7 +692,7 @@ type appContext struct {
 	appInst arc.AppInstance
 	sess    *hostSess
 	module  *arc.AppModule
-	appReqs chan appReq // incoming requests for the app
+	appReqs chan *appReq // incoming requests for the app
 }
 
 func (ctx *appContext) IssueCellID() arc.CellID {
@@ -729,7 +711,7 @@ func (ctx *appContext) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) 
 	return ctx.sess.AssetPublisher().PublishAsset(asset, opts)
 }
 
-func (ctx *appContext) PinAppCell(flags arc.PinFlags) (*reqContext, error) {
+func (ctx *appContext) PinAppCell(flags arc.PinFlags) (*appReq, error) {
 	// planetApp, err := ctx.sess.GetAppInstance(planet.AppUID, true)
 	// if err != nil {
 	// 	return nil, err
@@ -745,7 +727,7 @@ func (ctx *appContext) PinAppCell(flags arc.PinFlags) (*reqContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pinCtx.(*reqContext), nil
+	return pinCtx.(*appReq), nil
 }
 
 func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.ElemVal) error {
@@ -809,16 +791,18 @@ func (ctx *appContext) PutAppCellAttr(attrSpec string, src arc.ElemVal) error {
 	return nil
 }
 
-func (app *appContext) handleAppReq(appReq appReq) error {
+func (app *appContext) handleAppReq(req *appReq) error {
 
 	// TODO: resolve to a generic Cell and *then* pin it?
 	// Also, use pinned cell ref counting to know when it it safe to idle close?
 	var err error
-	req := appReq.reqContext
-	req.pinned, err = req.appCtx.appInst.PinCell(appReq.parent, req)
+	req.pinned, err = req.appCtx.appInst.PinCell(req.parent, req)
 	if err != nil {
 		return err
 	}
+
+	// Now that we have the target cell pinned, no need to retain a reference to the parent cell
+	req.parent = nil
 
 	label := req.LogLabel
 	if label == "" {
@@ -827,6 +811,7 @@ func (app *appContext) handleAppReq(appReq appReq) error {
 
 	// FUTURE: switch to ref counting rather than task.Context close detection?
 	// Once the cell is resolved, serve state in child context of the PinnedCell
+	// Even if the client closes the req before StartChild() (causing it to error), the err result will no op.
 	req.Context, err = req.pinned.Context().StartChild(&task.Task{
 		TaskRef:   arc.PinContext(req),
 		Label:     label,
@@ -840,17 +825,18 @@ func (app *appContext) handleAppReq(appReq appReq) error {
 				pinCtx.Close()
 			} else {
 				<-pinCtx.Closing()
+
+			}
+
+			// If this is a client req, send a close if needed (no-op if already closed)
+			if req.ReqID != 0 {
+				req.sess.closeReq(req.ReqID, true, nil)
 			}
 		},
-		OnClosing: func() {
-			appReq.reqContext.closeReq(true, nil)
-		},
 	})
-	// Check race condition where the req was closed before the pinned cell is resolved
-	close(req.started)
-	if err == nil && appReq.reqContext.closed.Load() != 0 {
 
-	}
+	// release those waiting on this appReq to be on service
+	close(req.pinning)
 
 	return err
 }

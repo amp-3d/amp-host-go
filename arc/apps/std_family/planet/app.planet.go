@@ -290,7 +290,7 @@ type plCell struct {
 	// newSubs  chan *plReq        // new requests waiting for state
 	// subsHead *plReq             // single linked list of open reqs on this cell
 	// subsMu   sync.Mutex         // mutex for subs
-	// newReqs  chan *reqContext      // new requests waiting for state
+	// newReqs  chan *appReq      // new requests waiting for state
 	// idleSecs int32              // ticks up as time passes when there are no subs
 }
 
@@ -424,7 +424,7 @@ func (pl *plSess) getCell(scopeID, nodeID uint32) (cell *plCell, err error) {
 
 /*
 
-func (ctx *appContext) startCell(req *reqContext) error {
+func (ctx *appContext) startCell(req *appReq) error {
 	if req.cell != nil {
 		panic("already has sub")
 	}
@@ -455,7 +455,7 @@ func (ctx *appContext) startCell(req *reqContext) error {
 
 
 
-func (sess *hostSess) ServeState(req *reqContext) error {
+func (sess *hostSess) ServeState(req *appReq) error {
 
 	pl, err := sess.host.getPlanet(req.PlanetID)
 	if err != nil {
@@ -1025,7 +1025,7 @@ func (host *host) mountPlanet(
 		planetID: planetID,
 		dbPath:   path.Join(host.Opts.StatePath, string(fsName)),
 		cells:    make(map[arc.CellID]*cellInst),
-		//newReqs:  make(chan *reqContext, 1),
+		//newReqs:  make(chan *appReq, 1),
 	}
 
 	// The db should already exist if opening and vice versa
