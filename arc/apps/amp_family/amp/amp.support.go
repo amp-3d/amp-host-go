@@ -47,7 +47,7 @@ func NewPinnedCell[AppT arc.AppContext](app AppT, cell *CellBase[AppT]) (arc.Pin
 
 	// Like most apps, pinned items are started as direct child contexts of the app context\
 	pinned.cellCtx, err = app.StartChild(&task.Task{
-		Label: cell.Self.GetLogLabel(),
+		Label: "cell: " + cell.Self.GetLogLabel(),
 	})
 	if err != nil {
 		return nil, err
