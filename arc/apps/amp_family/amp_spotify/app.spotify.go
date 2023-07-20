@@ -2,7 +2,6 @@ package amp_spotify
 
 import (
 	"net/url"
-	"strings"
 	"sync"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
@@ -16,7 +15,7 @@ import (
 )
 
 const (
-	AppURI = amp.AppFamily + "spotify/v1"
+	AppID = "spotify" + amp.AppFamilyDomain
 )
 
 func UID() arc.UID {
@@ -25,16 +24,14 @@ func UID() arc.UID {
 
 func RegisterApp(reg arc.Registry) {
 	reg.RegisterApp(&arc.AppModule{
-		URI:     AppURI,
+		AppID:   AppID,
 		UID:     UID(),
 		Desc:    "client for Spotify",
 		Version: "v1.2023.2",
-		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {
-			app := &appCtx{
-				AppContext: ctx,
-				sessReady:  make(chan struct{}),
+		NewAppInstance: func() arc.AppInstance {
+			return &appCtx{
+				sessReady: make(chan struct{}),
 			}
-			return app, nil
 		},
 	})
 }
@@ -70,42 +67,38 @@ var oauthConfig = oauth2.Config{
 }
 
 type appCtx struct {
-	arc.AppContext
+	amp.AppBase
 	sessReady chan struct{}        // closed when session is established
 	client    *spotify.Client      // nil if not signed in
 	me        *spotify.PrivateUser // nil if not signed in
 	respot    respot.Session       // nil if not signed in
 	auth      *oauth.Config
-	home      AmpCell
 	sessMu    sync.Mutex
+	// home      AmpCell
+	// rootCells []*amp.CellBase[*appCtx]
 }
 
 func (app *appCtx) OnClosing() {
 	app.endSession()
 }
 
-func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
-	if msg.ValType == arc.ValType_HandleURI {
-		uri := string(msg.ValBuf)
-		if strings.Contains(uri, "://spotify/auth") {
-			url, err := url.Parse(uri)
-			if err != nil {
-				return true, err
-			}
+func (app *appCtx) HandleURL(url *url.URL) error {
 
-			// redeem the code for the token and store it as the latest token -- this is blocking but handled properly since we pass in the app's process.Context
-			token, err := app.auth.Exchange(app, "", url)
-			if err == nil {
-				err = app.auth.OnTokenUpdated(token, true)
-				if err == nil {
-					err = app.tryConnect()
-				}
-			}
+	if url.Path != "/auth" {
+		return arc.ErrCode_InvalidURI.Errorf("unexpected path: %q", url.Path)
+	}
 
-			return true, err
+	// Redeem the auth code and store the latest token.
+	// Blocks but ok since we pass in the app's Context
+	token, err := app.auth.Exchange(app, "", url)
+	if err == nil {
+		err = app.auth.OnTokenUpdated(token, true)
+		if err == nil {
+			err = app.tryConnect()
 		}
 	}
-	return false, nil
+
+	return err
 }
 
 // Optionally blocks until the spotify session is ready (or AppContext is closing)
@@ -134,7 +127,7 @@ func (app *appCtx) tryConnect() error {
 	app.resetSignal()
 
 	if app.auth == nil {
-		app.auth = oauth.NewAuth(app.AppContext, oauthConfig)
+		app.auth = oauth.NewAuth(app, oauthConfig)
 	}
 
 	// If we don't have a token, ask the client launch a URL that will start oauth
@@ -161,7 +154,7 @@ func (app *appCtx) tryConnect() error {
 	// At this point we have a token -- TODO it may be expired
 	if token := app.auth.CurrentToken(); token != nil {
 		if app.respot == nil {
-			info := app.User().LoginInfo()
+			info := app.Session().LoginInfo()
 			ctx := respot.DefaultSessionContext(info.DeviceLabel)
 			ctx.Context = app
 			app.respot, err = respot.StartNewSession(ctx)
@@ -206,7 +199,6 @@ func (app *appCtx) endSession() {
 	app.resetSignal()
 
 	if app.client != nil {
-		app.home = nil
 		app.me = nil
 		app.client = nil
 		app.auth = nil
@@ -217,14 +209,31 @@ func (app *appCtx) endSession() {
 	}
 }
 
-func (app *appCtx) PinCell(req *arc.CellReq) (arc.Cell, error) {
-
-	// TODO: regen home once token arrives?
-	if app.home == nil {
-		cell := newRootCell(app)
-		app.home = cell
-		return app.home, nil
+func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCell, error) {
+	if err := app.waitForSession(); err != nil {
+		return nil, err
 	}
 
-	return nil, nil
+	if parent != nil {
+		return parent.PinCell(req)
+	}
+
+	// For now, always just pin a new home (root) cell
+	cell := app.newRootCell()
+	return amp.NewPinnedCell[*appCtx](app, &cell.CellBase)
+}
+
+func (app *appCtx) newRootCell() *spotifyCell {
+	cell := &spotifyCell{}
+	cell.CellID = app.IssueCellID()
+	cell.CellSpec = app.LinkCellSpec
+	cell.Self = cell
+
+	cell.info = arc.CellLabels{
+		Title: "Spotify Home",
+		// Glyph: &arc.AssetRef{
+		// },
+	}
+	cell.pinner = pin_appHome
+	return cell
 }

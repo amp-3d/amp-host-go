@@ -7,6 +7,6 @@ import (
 )
 
 func RegisterStdApps(reg arc.Registry) {
-	amp_family.RegisterFamily(reg)
 	std_family.RegisterFamily(reg)
+	amp_family.RegisterFamily(reg)
 }

@@ -1,7 +1,10 @@
 package amp_bcat
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
@@ -9,8 +12,10 @@ import (
 )
 
 const (
-	AppURI = amp.AppFamily + "bookmark-catalog/v1"
+	AppID = "bookmark-catalog" + amp.AppFamilyDomain
 )
+
+const kTokenAttrSpec = "LoginInfo:client-login"
 
 func UID() arc.UID {
 	return arc.FormUID(0xd2849a95ddb047b3, 0xa787d8a52d039c32)
@@ -18,73 +23,53 @@ func UID() arc.UID {
 
 func RegisterApp(reg arc.Registry) {
 	reg.RegisterApp(&arc.AppModule{
-		URI:     AppURI,
+		AppID:   AppID,
 		UID:     UID(),
 		Desc:    "bookmark catalog service",
 		Version: "v1.2023.2",
-		NewAppInstance: func(ctx arc.AppContext) (arc.AppRuntime, error) {
-			app := &appCtx{
-				AppContext: ctx,
-			}
-			return app, nil
+		NewAppInstance: func() arc.AppInstance {
+			return &appCtx{}
 		},
 	})
 }
 
 type appCtx struct {
-	arc.AppContext
-	client     *http.Client
-	categories *stationCategories
+	amp.AppBase
+	client *http.Client
+	cats   []*categoryInfo
 }
 
-func (app *appCtx) HandleMetaMsg(msg *arc.Msg) (handled bool, err error) {
-	return false, nil
-}
-
-func (app *appCtx) OnClosing() {
-}
-
-func (app *appCtx) loadTokens(user arc.User) (arc.Cell, error) {
-
-	// TODO: the right way to do this is like in the Unity client: register all ValTypes and then dynamically build AttrSpecs
-	// Since we're not doing that, for onw just build an AttrSpec from primitive types.
-
-	//usr.MakeSchemaForStruct(app, LoginInfo)
+func (app *appCtx) readStoredToken() error {
 
 	// Pins the named cell relative to the user's home planet and appID (guaranteeing app and user scope)
-	val, err := app.GetAppValue(".bookmark-server-client-login")
-	var login amp.LoginInfo
-	if err == nil {
-		err = login.Unmarshal(val)
-	}
+	login := &amp.LoginInfo{}
+	err := app.GetAppCellAttr(kTokenAttrSpec, login)
 	if err != nil {
-		if arc.GetErrCode(err) == arc.ErrCode_CellNotFound {
 
-		}
 	}
 
-	return nil, nil
+	return nil
 }
 
 func (app *appCtx) resetLogin() {
 
 }
 
-func (app *appCtx) PinCell(req *arc.CellReq) (arc.Cell, error) {
+func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCell, error) {
 
-	if req.PinCell == 0 {
-		if app.categories == nil {
-			app.categories = &stationCategories{
-				app:            app,
-				CellID:         app.IssueCellID(),
-				catsByServerID: make(map[uint32]*category),
-				catsByCellID:   make(map[arc.CellID]*category),
-			}
+	if app.cats == nil {
+		err := app.reloadCategories()
+		if err != nil {
+			return nil, err
 		}
-		return app.categories, nil
 	}
 
-	return nil, nil
+	cats := &categories{
+		//cells: make([]*amp.CellBase[*appCtx], 0, 16),
+	}
+	cats.CellSpec = app.LinkCellSpec
+	cats.Self = nil // cats
+	return amp.NewPinnedCell[*appCtx](app, &cats.CellBase)
 }
 
 const (
@@ -94,7 +79,6 @@ const (
 )
 
 func (app *appCtx) makeReady() error {
-
 	if app.client != nil {
 		return nil
 	}
@@ -108,4 +92,86 @@ func (app *appCtx) makeReady() error {
 	}
 
 	return nil
+}
+
+func (app *appCtx) doReq(endpoint string, params url.Values) (*json.Decoder, error) {
+	if err := app.makeReady(); err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%s%s?%s", "https://amp.soundspectrum.com/v1/", endpoint, params.Encode())
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err // SERVER DOWN error
+	}
+	req.Header = map[string][]string{
+		"Authorization": {"Token " + kTokenHack},
+	}
+	resp, err := app.client.Do(req)
+	if err != nil {
+		return nil, err // SERVER DOWN error
+	}
+
+	jsonDecoder := json.NewDecoder(resp.Body)
+	return jsonDecoder, nil
+}
+
+func (app *appCtx) reloadCategories() error {
+	params := url.Values{}
+	params.Add("subtype", "S")
+
+	json, err := app.doReq("categories/", params)
+	if err != nil {
+		return err
+	}
+
+	// read '['
+	_, err = json.Token()
+	if err != nil {
+		return err
+	}
+
+	// while the array contains values
+	for json.More() {
+		var entry amp.CategoryInfo
+		err := json.Decode(&entry)
+		if err != nil {
+			return err
+		}
+		if entry.Title == "Unlisted" {
+			continue
+		}
+		cat := &categoryInfo{
+			catID: entry.Id,
+		}
+
+		cat.CellLabels = arc.CellLabels{
+			Title: entry.Title,
+			About: entry.Description,
+			Glyph: &arc.AssetRef{
+				URI:    entry.Image,
+				Scheme: arc.URIScheme_File,
+			},
+		}
+		if created, err := time.Parse(time.RFC3339, entry.TimestampCreated); err == nil {
+			cat.Created = int64(arc.ConvertToUTC(created))
+		}
+		if modified, err := time.Parse(time.RFC3339, entry.TimestampModified); err == nil {
+			cat.Modified = int64(arc.ConvertToUTC(modified))
+		}
+		app.cats = append(app.cats, cat)
+	}
+
+	// read ']'
+	_, err = json.Token()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type categoryInfo struct {
+	arc.CellLabels
+	catID uint32
 }

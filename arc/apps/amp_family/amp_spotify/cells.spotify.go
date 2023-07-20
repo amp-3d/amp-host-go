@@ -10,310 +10,208 @@ import (
 	"github.com/zmb3/spotify/v2"
 )
 
-type ampAttr struct {
-	attrID string
-	val    interface{}
-	valSI  string
-}
-
-type ampCell struct {
-	//process.Context
-	arc.CellID
-	app         *appCtx
-	loadedAt    arc.TimeFS
-	attrs       []ampAttr
-	self        AmpCell
-	dataModelID string
-
-	childCells []AmpCell
-	//childByID     map[arc.CellID]arc.Cell
-}
-
-func (cell *ampCell) init(self AmpCell, app *appCtx) {
-	cell.app = app
-	cell.self = self
-	cell.CellID = app.IssueCellID()
-	cell.attrs = make([]ampAttr, 0, 4)
-}
-
-func (cell *ampCell) ID() arc.CellID {
-	return cell.CellID
-}
-
-func (cell *ampCell) CellDataModel() string {
-	return cell.dataModelID
-}
-
-func (cell *ampCell) PushCellState(req *arc.CellReq, opts arc.PushCellOpts) error {
-	var schema *arc.AttrSchema
-	if opts.PushAsChild() {
-		schema = req.GetChildSchema(cell.dataModelID)
-		req.PushInsertCell(cell.CellID, schema)
-	} else if opts.PushAsParent() {
-		schema = req.ContentSchema
-	}
-	if schema == nil {
-		return nil
-	}
-
-	// Push this cells attributes according to what is requested by the schema
-	// Future: use a channel to push attrs for better pipelining
-	for _, attr := range cell.attrs {
-		req.PushAttr(cell.CellID, schema, attr.attrID, attr.val)
-	}
-
-	if opts.PushAsParent() {
-		if cell.loadedAt == 0 {
-			cell.loadedAt = arc.TimeNowFS()
-			cell.childCells = cell.childCells[:0]
-
-			err := cell.self.loadChildren(req)
-			if err != nil {
-				return err
-			}
-		}
-
-		for _, child := range cell.childCells {
-			//child := cell.childByID[subID]
-			err := child.PushCellState(req, arc.PushAsChild)
-			if err != nil {
-				cell.app.Warnf("pushCellState: %v", err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (cell *ampCell) PinCell(req *arc.CellReq) (arc.Cell, error) {
-	if req.PinCell == cell.CellID {
-		return cell.self.pinSelf(req)
-	}
-
-	// TODO: build a map on demand when needed
-	for _, child := range cell.childCells {
-		if child.ID() == req.PinCell {
-			return child.pinSelf(req)
-		}
-	}
-	return nil, arc.ErrCellNotFound
-}
-
-func (cell *ampCell) pinSelf(req *arc.CellReq) (arc.Cell, error) {
-	return cell.self, nil
-}
-
-func (cell *ampCell) SetAttr(attrID string, val interface{}) {
-	for i, attr := range cell.attrs {
-		if attr.attrID == attrID {
-			cell.attrs[i] = ampAttr{
-				attrID: attrID,
-				val:    val,
-			}
-			return
-		}
-	}
-	cell.AddAttr(attrID, val)
-}
-
-func (cell *ampCell) AddAttr(attrID string, val interface{}) {
-	cell.attrs = append(cell.attrs, ampAttr{
-		attrID: attrID,
-		val:    val,
-	})
-}
-
-type AmpCell interface {
-	arc.Cell
-
-	pinSelf(req *arc.CellReq) (arc.Cell, error)
-	loadChildren(req *arc.CellReq) error
-}
-
-const kGlyphPixelSz = 128
-
-func newRootCell(app *appCtx) *spotifyCell {
-	cell := &spotifyCell{}
-	cell.init(cell, app)
-	cell.dataModelID = amp.CellDataModel_Dir
-	cell.loader = reloadHome
-	return cell
-}
-
-func reloadHome(cell *spotifyCell) error {
-	app := cell.app
-	if err := app.waitForSession(); err != nil {
-		return err
-	}
-
-	child := newSpotifyCell(app)
-	cell.childCells = append(cell.childCells, child)
-	child.AddAttr(amp.Attr_Title, "Followed Playlists")
-	child.AddAttr(amp.Attr_Glyph, &arc.AssetRef{
-		URI:    "/icons/ui/providers/playlists.png",
-		Scheme: arc.URIScheme_File,
-	})
-	child.dataModelID = amp.CellDataModel_Dir
-	//child.AddAttr(amp.Attr_Subtitle, playlist.Description)
-	// if glyph := chooseBestGlyph(playlist.Images, kGlyphPixelSz); glyph != nil {
-	// 	cell.AddAttr(amp.Attr_Glyph, glyph)
-	// }
-	child.loader = func(parent *spotifyCell) error {
-		resp, err := parent.app.client.CurrentUsersPlaylists(parent.app)
-		if err != nil {
-			return err
-		}
-		for i := range resp.Playlists {
-			parent.newChildPlaylist(resp.Playlists[i])
-		}
-		return nil
-	}
-
-	child = newSpotifyCell(app)
-	cell.childCells = append(cell.childCells, child)
-	child.AddAttr(amp.Attr_Title, "Followed Artists")
-	child.dataModelID = amp.CellDataModel_Dir
-	child.AddAttr(amp.Attr_Glyph, &arc.AssetRef{
-		URI:    "/icons/ui/providers/artists.png",
-		Scheme: arc.URIScheme_File,
-	})
-	child.loader = func(parent *spotifyCell) error {
-		resp, err := parent.app.client.CurrentUsersFollowedArtists(parent.app)
-		if err != nil {
-			return err
-		}
-		for i := range resp.Artists {
-			parent.newChildArtist(resp.Artists[i])
-		}
-		return nil
-	}
-
-	child = newSpotifyCell(app)
-	cell.childCells = append(cell.childCells, child)
-	child.AddAttr(amp.Attr_Title, "Recently Played")
-	child.dataModelID = amp.CellDataModel_Playlist
-	child.AddAttr(amp.Attr_Glyph, &arc.AssetRef{
-		URI:    "/icons/ui/providers/tracks.png",
-		Scheme: arc.URIScheme_File,
-	})
-	child.loader = func(parent *spotifyCell) error {
-		resp, err := parent.app.client.CurrentUsersTopTracks(parent.app)
-		if err != nil {
-			return err
-		}
-		for i := range resp.Tracks {
-			parent.newChildTrack(resp.Tracks[i])
-		}
-		return nil
-	}
-
-	child = newSpotifyCell(app)
-	cell.childCells = append(cell.childCells, child)
-	child.AddAttr(amp.Attr_Title, "Recently Played Artists")
-	child.dataModelID = amp.CellDataModel_Dir
-	child.AddAttr(amp.Attr_Glyph, &arc.AssetRef{
-		URI:    "/icons/ui/providers/artists.png",
-		Scheme: arc.URIScheme_File,
-	})
-	child.loader = func(parent *spotifyCell) error {
-		resp, err := parent.app.client.CurrentUsersTopArtists(parent.app)
-		if err != nil {
-			return err
-		}
-		for i := range resp.Artists {
-			parent.newChildArtist(resp.Artists[i])
-		}
-		return nil
-	}
-
-	child = newSpotifyCell(app)
-	cell.childCells = append(cell.childCells, child)
-	child.AddAttr(amp.Attr_Title, "Saved Albums")
-	child.dataModelID = amp.CellDataModel_Dir
-	child.AddAttr(amp.Attr_Glyph, &arc.AssetRef{
-		URI:    "/icons/ui/providers/albums.png",
-		Scheme: arc.URIScheme_File,
-	})
-	child.loader = func(parent *spotifyCell) error {
-		resp, err := parent.app.client.CurrentUsersAlbums(parent.app)
-		if err != nil {
-			return err
-		}
-		for i := range resp.Albums {
-			parent.newChildAlbum(resp.Albums[i].SimpleAlbum)
-		}
-		return nil
-	}
-	
-	// CurrentUsersShows
-
-	return nil
-}
+type Pinner func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error
 
 type spotifyCell struct {
-	ampCell
+	amp.CellBase[*appCtx]
 	spotifyID spotify.ID
-	loader    func(cell *spotifyCell) error
-}
-
-func newSpotifyCell(app *appCtx) *spotifyCell {
-	cell := &spotifyCell{}
-	cell.init(cell, app)
-	return cell
-}
-
-func (cell *spotifyCell) loadChildren(req *arc.CellReq) error {
-	app := cell.app
-	if err := app.waitForSession(); err != nil {
-		return err
-	}
-
-	if err := cell.loader(cell); err != nil {
-		return err
-	}
-	return nil
+	pinner    Pinner
+	info      arc.CellLabels
 }
 
 type playlistCell struct {
 	spotifyCell
-	//playlist spotify.SimplePlaylist
-}
-
-func playlistLoader(parent *spotifyCell) error {
-	resp, err := parent.app.client.GetPlaylistItems(parent.app, parent.spotifyID)
-	if err != nil {
-		return err
-	}
-	for _, item := range resp.Items {
-		if item.Track.Track != nil {
-			parent.newChildTrack(*item.Track.Track)
-		} else if item.Track.Episode != nil {
-			// TODO: handle episodes
-		}
-	}
-	return nil
-}
-
-func (parent *spotifyCell) newChildPlaylist(playlist spotify.SimplePlaylist) *playlistCell {
-	cell := &playlistCell{}
-	cell.init(cell, parent.app)
-	cell.spotifyID = playlist.ID
-	cell.loader = playlistLoader
-	cell.dataModelID = amp.CellDataModel_Playlist
-
-	cell.AddAttr(amp.Attr_Title, playlist.Name)
-	cell.AddAttr(amp.Attr_Subtitle, playlist.Description)
-	if glyph := chooseBestGlyph(playlist.Images, kGlyphPixelSz); glyph != nil {
-		cell.AddAttr(amp.Attr_Glyph, glyph)
-	}
-
-	parent.childCells = append(parent.childCells, cell)
-	return cell
+	amp.MediaPlaylist
 }
 
 type artistCell struct {
 	spotifyCell
 }
+
+type albumCell struct {
+	spotifyCell
+}
+
+type trackCell struct {
+	spotifyCell
+	amp.MediaInfo
+	playable *arc.AssetRef // non-nil when pinned
+}
+
+func (cell *spotifyCell) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
+	dst.Marshal(app.CellLabelsAttr, 0, &cell.info)
+	return nil
+}
+
+func (cell *spotifyCell) GetLogLabel() string {
+	return cell.info.Title
+}
+
+func (cell *spotifyCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+	return cell.pinner(dst, cell)
+}
+
+func (cell *playlistCell) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
+	cell.spotifyCell.MarshalAttrs(app, dst)
+	dst.Marshal(app.MediaPlaylistAttr, 0, &cell.MediaPlaylist)
+	return nil
+}
+
+func (cell *trackCell) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
+	cell.spotifyCell.MarshalAttrs(app, dst)
+	dst.Marshal(app.MediaInfoAttr, 0, &cell.MediaInfo)
+	if cell.playable != nil {
+		dst.Marshal(app.PlayableAssetAttr, 0, cell.playable)
+	}
+	return nil
+}
+
+func (cell *trackCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+	app := dst.App
+	asset, err := app.respot.PinTrack(string(cell.spotifyID), respot.PinOpts{})
+	if err != nil {
+		return err
+	}
+	url, err := app.PublishAsset(asset, arc.PublishOpts{
+		HostAddr: app.Session().LoginInfo().HostAddr,
+	})
+	if err != nil {
+		return err
+	}
+
+	cell.playable = &arc.AssetRef{
+		MediaType: asset.MediaType(),
+		URI:       url,
+	}
+	return nil
+}
+
+func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
+
+	{
+		child := addChild_dir(dst, "Followed Playlists")
+		child.info.Glyph = &arc.AssetRef{
+			URI:    "/icons/ui/providers/playlists.png",
+			Scheme: arc.URIScheme_File,
+		}
+		child.pinner = func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
+			resp, err := dst.App.client.CurrentUsersPlaylists(dst.App)
+			if err != nil {
+				return err
+			}
+			for i := range resp.Playlists {
+				addChild_Playlist(dst, resp.Playlists[i])
+			}
+			return nil
+		}
+	}
+
+	{
+		child := addChild_dir(dst, "Followed Artists")
+		child.info.Glyph = &arc.AssetRef{
+			URI:    "/icons/ui/providers/artists.png",
+			Scheme: arc.URIScheme_File,
+		}
+		child.pinner = func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
+			resp, err := dst.App.client.CurrentUsersFollowedArtists(dst.App)
+			if err != nil {
+				return err
+			}
+			for i := range resp.Artists {
+				addChild_Artist(dst, resp.Artists[i])
+			}
+			return nil
+		}
+	}
+
+	{
+		child := addChild_dir(dst, "Recently Played")
+		child.info.Glyph = &arc.AssetRef{
+			URI:    "/icons/ui/providers/tracks.png",
+			Scheme: arc.URIScheme_File,
+		}
+		child.pinner = func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
+			resp, err := dst.App.client.CurrentUsersTopTracks(dst.App)
+			if err != nil {
+				return err
+			}
+			for i := range resp.Tracks {
+				addChild_Track(dst, resp.Tracks[i])
+			}
+			return nil
+		}
+	}
+
+	{
+		child := addChild_dir(dst, "Recently Played Artists")
+		child.info.Glyph = &arc.AssetRef{
+			URI:    "/icons/ui/providers/artists.png",
+			Scheme: arc.URIScheme_File,
+		}
+		child.pinner = func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
+			resp, err := dst.App.client.CurrentUsersTopArtists(dst.App)
+			if err != nil {
+				return err
+			}
+			for i := range resp.Artists {
+				addChild_Artist(dst, resp.Artists[i])
+			}
+			return nil
+		}
+	}
+
+	{
+		child := addChild_dir(dst, "Saved Albums")
+		child.info.Glyph = &arc.AssetRef{
+			URI:    "/icons/ui/providers/albums.png",
+			Scheme: arc.URIScheme_File,
+		}
+		child.pinner = func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
+			resp, err := dst.App.client.CurrentUsersAlbums(dst.App)
+			if err != nil {
+				return err
+			}
+			for i := range resp.Albums {
+				addChild_Album(dst, resp.Albums[i].SimpleAlbum)
+			}
+			return nil
+		}
+
+	}
+
+	// CurrentUsersShows
+
+	return nil
+}
+
+func addChild_dir(dst *amp.PinnedCell[*appCtx], title string) *spotifyCell {
+	cell := &spotifyCell{}
+	cell.AddTo(dst, cell, dst.App.LinkCellSpec)
+	cell.info = arc.CellLabels{
+		Title: title,
+	}
+	return cell
+}
+
+// func pin_Track(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
+// 	app := dst.App
+// 	asset, err := app.respot.PinTrack(string(cell.spotifyID), respot.PinOpts{})
+// 	if err != nil {
+// 		return err
+// 	}
+// 	assetRef := &arc.AssetRef{
+// 		MediaType: asset.MediaType(),
+// 	}
+// 	assetRef.URI, err = app.PublishAsset(asset, arc.PublishOpts{
+// 		HostAddr: app.Session().LoginInfo().HostAddr,
+// 	})
+// 	if err != nil {
+// 		return err
+// 	}
+// 	cell.(*trackCell).MediaInfo.URI = assetRef.URI
+// 	cell.SetAttr(dst.App, amp.Attr_Playable, assetRef)
+// 	return nil
+// }
 
 var allAlbumTypes = []spotify.AlbumType{
 	spotify.AlbumTypeAlbum,
@@ -322,24 +220,57 @@ var allAlbumTypes = []spotify.AlbumType{
 	spotify.AlbumTypeCompilation,
 }
 
-func artistLoader(parent *spotifyCell) error {
-	resp, err := parent.app.client.GetArtistAlbums(parent.app, parent.spotifyID, allAlbumTypes)
+func addChild_Playlist(dst *amp.PinnedCell[*appCtx], playlist spotify.SimplePlaylist) {
+	cell := &playlistCell{}
+	cell.spotifyID = playlist.ID
+	cell.AddTo(dst, cell, dst.App.PlaylistCellSpec)
+
+	cell.info = arc.CellLabels{
+		Title:    playlist.Name,
+		Subtitle: playlist.Description,
+		Link:     chooseBestLink(playlist.ExternalURLs),
+	}
+	setGlyphs(playlist.Images, &cell.info)
+
+	cell.MediaPlaylist = amp.MediaPlaylist{
+		TotalItems: int32(playlist.Tracks.Total),
+	}
+}
+
+func (cell *playlistCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+	app := dst.App
+	resp, err := app.client.GetPlaylistItems(app, cell.spotifyID)
 	if err != nil {
 		return err
 	}
-	for i := range resp.Albums {
-		parent.newChildAlbum(resp.Albums[i])
+	for _, item := range resp.Items {
+		if item.Track.Track != nil {
+			addChild_Track(dst, *item.Track.Track)
+		} else if item.Track.Episode != nil {
+			// TODO: handle episodes
+		}
 	}
 	return nil
 }
 
-func albumLoader(parent *spotifyCell) error {
-	resp, err := parent.app.client.GetAlbum(parent.app, parent.spotifyID)
+func (cell *artistCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+	resp, err := dst.App.client.GetArtistAlbums(dst.App, cell.spotifyID, allAlbumTypes)
+	if err != nil {
+		return err
+	}
+	for i := range resp.Albums {
+		addChild_Album(dst, resp.Albums[i])
+	}
+	return nil
+}
+
+func (cell *albumCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+	resp, err := dst.App.client.GetAlbum(dst.App, cell.spotifyID)
 	if err != nil {
 		return err
 	}
 	for _, track := range resp.Tracks.Tracks {
-		parent.newChildTrack(spotify.FullTrack{
+		addChild_Track(dst, spotify.FullTrack{
 			SimpleTrack: track,
 			Album:       resp.SimpleAlbum,
 		})
@@ -347,118 +278,78 @@ func albumLoader(parent *spotifyCell) error {
 	return nil
 }
 
-func (parent *spotifyCell) newChildArtist(artist spotify.FullArtist) *artistCell {
+func addChild_Artist(dst *amp.PinnedCell[*appCtx], artist spotify.FullArtist) {
 	cell := &artistCell{}
-	cell.init(cell, parent.app)
-	cell.dataModelID = amp.CellDataModel_Playlist
-	cell.loader = artistLoader
 	cell.spotifyID = artist.ID
-	cell.AddAttr(amp.Attr_Title, artist.Name)
-	cell.AddAttr(amp.Attr_Subtitle, fmt.Sprintf("%d followers", artist.Followers.Count))
-	if glyph := chooseBestGlyph(artist.Images, kGlyphPixelSz); glyph != nil {
-		cell.AddAttr(amp.Attr_Glyph, glyph)
-	}
+	cell.AddTo(dst, cell, dst.App.LinkCellSpec)
 
-	parent.childCells = append(parent.childCells, cell)
-	return cell
+	cell.info = arc.CellLabels{
+		Title:    artist.Name,
+		Subtitle: fmt.Sprintf("%d followers", artist.Followers.Count),
+		Link:     chooseBestLink(artist.ExternalURLs),
+	}
+	setGlyphs(artist.Images, &cell.info)
 }
 
-func (parent *spotifyCell) newChildAlbum(album spotify.SimpleAlbum) *artistCell {
-	cell := &artistCell{}
-	cell.init(cell, parent.app)
-	cell.dataModelID = amp.CellDataModel_Playlist
-	cell.loader = albumLoader
+func addChild_Album(dst *amp.PinnedCell[*appCtx], album spotify.SimpleAlbum) {
+	cell := &albumCell{}
 	cell.spotifyID = album.ID
-	cell.AddAttr(amp.Attr_Title, album.Name)
+	cell.AddTo(dst, cell, dst.App.LinkCellSpec)
 
-	str := strings.Builder{}
-	for i, artist := range album.Artists {
-		if i > 0 {
-			str.WriteString(" \u2022 ")
-		}
-		str.WriteString(artist.Name)
+	cell.info = arc.CellLabels{
+		Title:    album.Name,
+		Subtitle: formArtistDesc(album.Artists),
+		Link:     chooseBestLink(album.ExternalURLs),
 	}
-	cell.AddAttr(amp.Attr_Subtitle, str.String())
-
-	if glyph := chooseBestGlyph(album.Images, kGlyphPixelSz); glyph != nil {
-		cell.AddAttr(amp.Attr_Glyph, glyph)
-	}
-
-	parent.childCells = append(parent.childCells, cell)
-	return cell
+	setGlyphs(album.Images, &cell.info)
 }
 
-// GET EXCITED: Capn prot will work GREAT with schemas and storing attrs!
-
-type trackCell struct {
-	spotifyCell
-}
-
-func (parent *spotifyCell) newChildTrack(track spotify.FullTrack) *trackCell {
+func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 	if track.IsPlayable != nil && !*track.IsPlayable {
-		return nil
+		return
 	}
 	cell := &trackCell{}
-	cell.init(AmpCell(cell), parent.app)
-	cell.dataModelID = amp.CellDataModel_Playable
 	cell.spotifyID = track.ID
-	cell.AddAttr(amp.Attr_Title, track.Name)
-	{
-		artistDesc := ""
-		if len(track.Artists) > 0 {
-			artistDesc = track.Artists[0].Name
-			for _, artist := range track.Artists[1:] {
-				artistDesc += ", " + artist.Name
-			}
-		}
-		if len(artistDesc) > 0 {
-			cell.AddAttr(amp.Attr_ArtistDesc, artistDesc)
-			cell.AddAttr(amp.Attr_Subtitle, artistDesc)
-		}
+	cell.AddTo(dst, cell, dst.App.PlayableCellSpec)
+
+	artistDesc := formArtistDesc(track.Artists)
+
+	cell.info = arc.CellLabels{
+		Title:    track.Name,
+		Subtitle: artistDesc,
+		About:    track.Album.Name,
+		Link:     chooseBestLink(track.ExternalURLs),
 	}
+	setGlyphs(track.Album.Images, &cell.info)
 
-	if len(track.Album.Name) > 0 {
-		cell.AddAttr(amp.Attr_AlbumDesc, track.Album.Name)
+	cell.MediaInfo = amp.MediaInfo{
+		Flags:       amp.HasAudio | amp.IsSeekable | amp.NeedsNetwork,
+		Title:       track.Name,
+		AuthorDesc:  artistDesc,
+		Collection:  track.Album.Name,
+		ItemNumber:  int32(track.TrackNumber),
+		Duration16:  int64(arc.ConvertMsToUTC(int64(track.Duration))),
+		CoverArt:    cell.info.Glyph.URI,
+		Popularity:  .01 * float32(track.Popularity), // 0..100 => 0..1
+		ReleaseTime: track.Album.ReleaseDateTime().Unix(),
 	}
-
-	if glyph := chooseBestGlyph(track.Album.Images, kGlyphPixelSz); glyph != nil {
-		cell.AddAttr(amp.Attr_Glyph, glyph)
-	}
-
-	parent.childCells = append(parent.childCells, cell)
-	return cell
-}
-
-func (cell *trackCell) pinSelf(req *arc.CellReq) (arc.Cell, error) {
-	asset, err := cell.app.respot.PinTrack(string(cell.spotifyID), respot.PinOpts{})
-	if err != nil {
-		return nil, err
-	}
-
-	assetRef := &arc.AssetRef{}
-	assetRef.URI, err = cell.app.PublishAsset(asset, arc.PublishOpts{})
-	if err != nil {
-		return nil, err
-	}
-	assetRef.MediaType = asset.MediaType()
-	cell.SetAttr(amp.Attr_Playable, assetRef)
-
-	return cell.self, nil
-}
-
-// Must be present for above PinCell() override to work
-func (cell *trackCell) loadChildren(req *arc.CellReq) error {
-	return nil
 }
 
 /**********************************************************
-*  Helpers
+ *  Helpers
  */
 
-func chooseBestGlyph(images []spotify.Image, closestSize int) *arc.AssetRef {
-	if len(images) == 0 {
-		return nil
+func setGlyphs(images []spotify.Image, info *arc.CellLabels) (glyph *arc.AssetRef, cover *arc.AssetRef) {
+	info.Glyph = chooseBestImage(images, 200)
+	if info.Glyph != nil {
+		if len(images) > 1 {
+			info.GlyphLarge = chooseBestImage(images, 800)
+		}
 	}
+	return
+}
+
+func chooseBestImage(images []spotify.Image, closestSize int) *arc.AssetRef {
 	bestImg := -1
 	bestDiff := 0x7fffffff
 
@@ -467,7 +358,7 @@ func chooseBestGlyph(images []spotify.Image, closestSize int) *arc.AssetRef {
 
 		// If the image is smaller than what we're looking for, make differences matter more
 		if diff < 0 {
-			diff *= -4
+			diff *= -2
 		}
 
 		if diff < bestDiff {
@@ -475,10 +366,40 @@ func chooseBestGlyph(images []spotify.Image, closestSize int) *arc.AssetRef {
 			bestDiff = diff
 		}
 	}
+	if bestImg < 0 {
+		return nil
+	}
 	return &arc.AssetRef{
 		MediaType: "image/x-spotify",
 		URI:       images[bestImg].URL,
 		PixWidth:  int32(images[bestImg].Width),
 		PixHeight: int32(images[bestImg].Height),
+	}
+}
+
+func chooseBestLink(links map[string]string) *arc.AssetRef {
+	if url, ok := links["spotify"]; ok {
+		return &arc.AssetRef{
+			URI: url,
+		}
+	}
+	return nil
+}
+
+func formArtistDesc(artists []spotify.SimpleArtist) string {
+	switch len(artists) {
+	case 0:
+		return ""
+	case 1:
+		return artists[0].Name
+	default:
+		str := strings.Builder{}
+		for i, artist := range artists {
+			if i > 0 {
+				str.WriteString(amp.ListItemSeparator)
+			}
+			str.WriteString(artist.Name)
+		}
+		return str.String()
 	}
 }

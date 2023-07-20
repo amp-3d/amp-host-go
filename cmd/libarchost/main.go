@@ -6,7 +6,6 @@ import "C"
 import (
 	"fmt"
 	"log"
-	"sync"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/arc/archost"
@@ -24,14 +23,15 @@ func Call_SessionBegin(userDataPath, sharedCachePath string) int64 {
 		return 0
 	}
 
-	hostOpts := archost.DefaultOpts(0)
-	hostOpts.CachePath = sharedCachePath
-	hostOpts.StatePath = userDataPath
+	// Copy the param strings since they will be invalid after exits
+	hostOpts := archost.DefaultOpts(0, false)
+	hostOpts.CachePath = string(append([]byte{}, sharedCachePath...))
+	hostOpts.StatePath = string(append([]byte{}, userDataPath...))
 	host, err := archost.StartNewHost(hostOpts)
 	if err != nil {
 		log.Fatalf("failed to start new host: %v", err)
+		return 0
 	}
-
 
 	opts := lib_service.DefaultLibServiceOpts()
 	gLibService = opts.NewLibService()
@@ -98,8 +98,17 @@ func Call_WaitOnMsg(msg_pb *[]byte) int64 {
 		return -1
 	}
 
-	sess.DequeueOutgoing(msg_pb)
-	return 0
+	err := sess.DequeueOutgoing(msg_pb)
+	if err == nil {
+		return 0
+	}
+
+	arcErr, ok := err.(*arc.Err)
+	if ok {
+		return int64(arcErr.Code)
+	} else {
+		return -1
+	}
 }
 
 //export Call_Realloc
@@ -199,9 +208,6 @@ func RenderFrame(fbID int32) {
 	frame.pixels[offset+2] = frame.pixels[offset+2] + 2
 	frame.pixels[offset+3] = 0xFF
 }
-
-var count int
-var mtx sync.Mutex
 
 func main() {
 

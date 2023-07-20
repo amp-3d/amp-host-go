@@ -2,59 +2,19 @@ package symbol_table
 
 import (
 	"encoding/binary"
-	"errors"
 	"sync/atomic"
 
 	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
 	"github.com/dgraph-io/badger/v4"
 )
 
-var ErrIssuerClosed = errors.New("issuer is closed")
-
-func NewVolatileIssuer() symbol.Issuer {
-	iss := &atomicIssuer{}
-	iss.nextID.Store(symbol.MinIssuedID)
-	iss.refCount.Store(1)
-	return iss
-}
-
-// atomicIssuer implements symbol.Issuer using an atomic int
-type atomicIssuer struct {
-	nextID   atomic.Uint64
-	refCount atomic.Int32
-	closed   bool
-}
-
-func (iss *atomicIssuer) IssueNextID() (symbol.ID, error) {
-	if iss.closed {
-		return 0, ErrIssuerClosed
-	}
-	nextID := iss.nextID.Add(1)
-	return symbol.ID(nextID), nil
-}
-
-func (iss *atomicIssuer) AddRef() {
-	iss.refCount.Add(1)
-}
-
-func (iss *atomicIssuer) Close() error {
-	if iss.refCount.Add(-1) > 0 {
-		return nil
-	}
-	if iss.closed {
-		return ErrIssuerClosed
-	}
-	iss.closed = true
-	return nil
-}
-
-func NewBadgerIssuer(db *badger.DB, dbKeyPrefix byte) (symbol.Issuer, error) {
+func NewBadgerIssuer(db *badger.DB, dbKeyPrefix byte, initsAt symbol.ID) (symbol.Issuer, error) {
 	iss := &badgerIssuer{
 		db: db,
 	}
 
 	if iss.db != nil {
-		seqKey := append([]byte{}, dbKeyPrefix, 0xFF, xNextID)
+		seqKey := append([]byte{}, dbKeyPrefix, xNextID)
 		txn := db.NewTransaction(true)
 		defer txn.Discard()
 
@@ -64,7 +24,7 @@ func NewBadgerIssuer(db *badger.DB, dbKeyPrefix byte) (symbol.Issuer, error) {
 			var buf [8]byte
 
 			// TODO: re-implement with the ID value being IDSz (vs 8)
-			binary.BigEndian.PutUint64(buf[:], symbol.MinIssuedID)
+			binary.BigEndian.PutUint64(buf[:], uint64(initsAt))
 			err = txn.Set(seqKey, buf[:])
 			if err == nil {
 				err = txn.Commit()
@@ -92,7 +52,7 @@ type badgerIssuer struct {
 
 func (iss *badgerIssuer) IssueNextID() (symbol.ID, error) {
 	if iss.db == nil {
-		return 0, ErrIssuerClosed
+		return 0, symbol.ErrIssuerNotOpen
 	}
 
 	nextID, err := iss.nextIDSeq.Next()
@@ -100,11 +60,17 @@ func (iss *badgerIssuer) IssueNextID() (symbol.ID, error) {
 }
 
 func (iss *badgerIssuer) AddRef() {
-	iss.refCount.Add(1)
+	if iss.refCount.Add(1) <= 1 {
+		panic("AddRef() called on closed issuer")
+	}
 }
 
 func (iss *badgerIssuer) Close() error {
-	if iss.refCount.Add(-1) > 0 {
+	newRefCount := iss.refCount.Add(-1)
+	if newRefCount < 0 {
+		return symbol.ErrIssuerNotOpen
+	}
+	if newRefCount > 0 {
 		return nil
 	}
 	return iss.close()

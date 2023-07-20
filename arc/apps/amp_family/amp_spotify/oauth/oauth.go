@@ -2,7 +2,6 @@ package oauth
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -12,7 +11,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const kTokenNameID = ".oauth2.Token"
+const kTokenAttrSpec = "AuthToken:primary"
 
 type Config struct {
 	Config oauth2.Config
@@ -59,10 +58,10 @@ func (auth *Config) CurrentToken() *oauth2.Token {
 
 // Pushes a msg to the client to launch a URL that starts oauth flow.
 func (auth *Config) pushAuthCodeRequest() error {
-	url := auth.Config.AuthCodeURL("")
-	msg := arc.NewMsg()
-	msg.SetValBuf(arc.ValType_HandleURI, []byte(url))
-	return auth.ctx.User().PushMetaMsg(msg)
+	val := &arc.HandleURI{
+		URI: auth.Config.AuthCodeURL(""),
+	}
+	return arc.SendClientMetaAttr(auth.ctx.Session(), 0, val)
 }
 
 // NewHttpClient creates a *http.Client that will use the specified access token for its API requests.
@@ -91,14 +90,10 @@ func (auth *Config) Exchange(ctx context.Context, state string, uri *url.URL, op
 }
 
 func (auth *Config) readStoredToken() error {
-	tok := &oauth2.Token{}
+	attr := arc.AuthToken{}
 
-	tokenJson, err := auth.ctx.GetAppValue(kTokenNameID)
-	if err == nil {
-		err = json.Unmarshal(tokenJson, tok)
-	}
-
-	if err != nil || (tok.AccessToken == "" && tok.RefreshToken == "") {
+	err := auth.ctx.GetAppCellAttr(kTokenAttrSpec, &attr)
+	if err != nil || (attr.AccessToken == "" && attr.RefreshToken == "") {
 		return arc.ErrNoAuthToken
 	}
 
@@ -106,23 +101,35 @@ func (auth *Config) readStoredToken() error {
 	// fmt.Println("TokenType:    ", tok.TokenType)
 	// fmt.Println("RefreshToken: ", tok.RefreshToken)
 	// fmt.Println("Expiry:       ", tok.Expiry)
-	auth.token = tok
+	auth.token = &oauth2.Token{
+		AccessToken:  attr.AccessToken,
+		TokenType:    attr.TokenType,
+		RefreshToken: attr.RefreshToken,
+		Expiry:       time.Unix(attr.Expiry, 0),
+	}
 	return nil
 }
 
 func (auth *Config) OnTokenUpdated(tok *oauth2.Token, saveToken bool) error {
 	auth.token = tok
 
+	if tok == nil {
+		return arc.ErrCode_InternalErr.Error("oauth token is nil")
+	}
+
 	var err error
 	if saveToken {
-		tokenJson, err := json.Marshal(tok)
+		attr := arc.AuthToken{
+			AccessToken:  tok.AccessToken,
+			TokenType:    tok.TokenType,
+			RefreshToken: tok.RefreshToken,
+			Expiry:       tok.Expiry.Unix(),
+		}
+		err = auth.ctx.PutAppCellAttr(kTokenAttrSpec, &attr)
 		if err == nil {
-			err = auth.ctx.PutAppValue(kTokenNameID, tokenJson)
-			if err == nil {
-				auth.ctx.Info(2, "wrote new oauth token")
-			} else {
-				auth.ctx.Error("error storing token:", err)
-			}
+			auth.ctx.Info(2, "wrote new oauth token")
+		} else {
+			auth.ctx.Error("error storing token:", err)
 		}
 	}
 	return err

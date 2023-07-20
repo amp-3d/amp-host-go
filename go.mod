@@ -11,21 +11,23 @@ go 1.18
 // Go Modules Reference:
 //    https://www.practical-go-lessons.com/chap-17-go-modules
 
-//replace github.com/arcspace/go-arc-sdk => ../go-arc-sdk
+// replace github.com/arcspace/go-arc-sdk => ../go-arc-sdk
 
-//replace github.com/arcspace/go-librespot => ../go-librespot
+// replace github.com/arcspace/go-librespot => ../go-librespot
 
 require (
-	github.com/arcspace/go-arc-sdk v0.0.0-20230601211326-e3536632032d
-	github.com/arcspace/go-librespot v0.0.0-20230606184812-c46c08f32b80
+	capnproto.org/go/capnp/v3 v3.0.0-alpha-29
+	github.com/alecthomas/participle/v2 v2.0.0
+	github.com/arcspace/go-arc-sdk v0.0.0-20230719204915-b33fb10f99f2
+	github.com/arcspace/go-librespot v0.0.0-20230715225509-ef2b77e5ed3c
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/h2non/filetype v1.1.3
 	github.com/pkg/errors v0.9.1
 	github.com/zmb3/spotify/v2 v2.3.1
-	golang.org/x/crypto v0.9.0
-	golang.org/x/oauth2 v0.8.0
-	google.golang.org/grpc v1.55.0
+	golang.org/x/crypto v0.11.0
+	golang.org/x/oauth2 v0.10.0
+	google.golang.org/grpc v1.56.2
 )
 
 require (
@@ -39,15 +41,16 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/klauspost/compress v1.16.5 // indirect
+	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/rs/cors v1.9.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/net v0.10.0 // indirect
-	golang.org/x/sync v0.2.0 // indirect
-	golang.org/x/sys v0.8.0 // indirect
-	golang.org/x/text v0.9.0 // indirect
+	golang.org/x/net v0.12.0 // indirect
+	golang.org/x/sync v0.3.0 // indirect
+	golang.org/x/sys v0.10.0 // indirect
+	golang.org/x/text v0.11.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230530153820-e85fd2cbaebc // indirect
-	google.golang.org/protobuf v1.30.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230717213848-3f92550aa753 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
+	zenhack.net/go/util v0.0.0-20230607025951-8b02fee814ae // indirect
 )

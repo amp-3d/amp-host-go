@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	xValueIndex = byte(0xFE)
-	xNextID     = byte(0xFF)
+	xByID    = byte(0)
+	xByValue = byte('$')
+	xNextID  = byte('N')
 )
 
 func (st *symbolTable) Issuer() symbol.Issuer {
@@ -70,6 +71,11 @@ func (st *symbolTable) SetSymbolID(val []byte, symID symbol.ID) symbol.ID {
 //	    if mapID == true, both value-to-ID and ID-to-value assignments are (over)written.
 func (st *symbolTable) getsetValueIDPair(val []byte, symID symbol.ID, mapID bool) symbol.ID {
 
+	// The empty string is always hard-wired to ID 0
+	if len(val) == 0 {
+		return 0
+	}
+
 	{
 		txn := st.opts.Db.NewTransaction(true)
 		defer txn.Discard()
@@ -82,9 +88,8 @@ func (st *symbolTable) getsetValueIDPair(val []byte, symID symbol.ID, mapID bool
 		)
 
 		keyBuf[0] = st.opts.DbKeyPrefix
-		keyBuf[1] = 0xFF
-		keyBuf[2] = xValueIndex
-		valKey := append(keyBuf[:3], val...)
+		keyBuf[1] = xByValue
+		valKey := append(keyBuf[:2], val...)
 
 		var existingID symbol.ID
 		if symID == 0 || !mapID {
@@ -132,9 +137,9 @@ func (st *symbolTable) getsetValueIDPair(val []byte, symID symbol.ID, mapID bool
 
 			// set (value => ID) entry
 			idBuf[0] = st.opts.DbKeyPrefix
-			idKey := symID.WriteTo(idBuf[:1])
-			err := txn.Set(valKey, idKey[1:])
-
+			idBuf[1] = xByID
+			idKey := symID.AppendTo(idBuf[:2])
+			err := txn.Set(valKey, idKey[2:])
 			if err == nil {
 				if reassignID {
 					err = txn.Set(idKey, val)
@@ -172,7 +177,8 @@ func (st *symbolTable) GetSymbol(symID symbol.ID, io []byte) []byte {
 
 	var idBuf [8]byte
 	idBuf[0] = st.opts.DbKeyPrefix
-	tokenKey := symID.WriteTo(idBuf[:1])
+	idBuf[1] = xByID
+	tokenKey := symID.AppendTo(idBuf[:2])
 	item, err := txn.Get(tokenKey)
 	if err == nil {
 		err = item.Value(func(val []byte) error {

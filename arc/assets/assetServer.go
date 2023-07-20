@@ -11,15 +11,15 @@ import (
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/process"
+	"github.com/arcspace/go-arc-sdk/stdlib/task"
 )
 
 const kAssetLinkPrefix = "/asset/"
 
 type httpServer struct {
-	process.Context
+	task.Context
 
-	host      process.Context
+	host      task.Context
 	opts      HttpServerOpts
 	server    *http.Server
 	serverMux *http.ServeMux
@@ -29,7 +29,7 @@ type httpServer struct {
 }
 
 type assetEntry struct {
-	process.Context
+	task.Context
 	arc.MediaAsset
 }
 
@@ -72,10 +72,10 @@ func newHttpServer(opts HttpServerOpts) AssetServer {
 
 		w.Header().Set("Content-Type", asset.MediaType())
 
-		readerCtx, _ := entry.Context.StartChild(&process.Task{
+		readerCtx, _ := entry.Context.StartChild(&task.Task{
 			IdleClose: time.Nanosecond,
 			Label:     fmt.Sprintf("AssetReader.(*%v)", reflect.ValueOf(assetReader).Elem().Type().Name()),
-			OnRun: func(ctx process.Context) {
+			OnRun: func(ctx task.Context) {
 				http.ServeContent(w, r, asset.Label(), time.Time{}, assetReader)
 			},
 			OnClosing: func() {
@@ -90,7 +90,7 @@ func newHttpServer(opts HttpServerOpts) AssetServer {
 	return srv
 }
 
-func (srv *httpServer) StartService(host process.Context) error {
+func (srv *httpServer) StartService(host task.Context) error {
 	if srv.host != nil || srv.Context != nil {
 		panic("already started")
 	}
@@ -101,9 +101,9 @@ func (srv *httpServer) StartService(host process.Context) error {
 	}
 
 	srv.host = host
-	srv.Context, err = srv.host.StartChild(&process.Task{
+	srv.Context, err = srv.host.StartChild(&task.Task{
 		Label: fmt.Sprintf("AssetServer %v", lis.Addr().String()),
-		OnRun: func(ctx process.Context) {
+		OnRun: func(ctx task.Context) {
 			srv.server.Serve(lis)
 			ctx.Info(2, "Serve COMPLETE")
 		},
@@ -136,7 +136,7 @@ func (srv *httpServer) GracefulStop() {
 func (srv *httpServer) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) (URL string, err error) {
 	assetID := GenerateAssetID(srv.rng, 28)
 
-	assetCtx, err := srv.Context.StartChild(&process.Task{
+	assetCtx, err := srv.Context.StartChild(&task.Task{
 		Label:   asset.Label(),
 		OnStart: asset.OnStart,
 		OnClosing: func() {
