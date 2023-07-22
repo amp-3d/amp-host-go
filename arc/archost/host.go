@@ -205,9 +205,9 @@ func (req *appReq) GetLogLabel() string {
 
 func (req *appReq) PushUpdate(msg *arc.Msg) error {
 	status := msg.Status
-	if status == arc.OpStatus_Synced {
+	if status == arc.ReqStatus_Synced {
 		if (req.PinReq.Flags & arc.PinFlags_CloseOnSync) != 0 {
-			status = arc.OpStatus_Closed
+			status = arc.ReqStatus_Closed
 		}
 	}
 	msg.Status = status
@@ -235,7 +235,7 @@ func (req *appReq) PushUpdate(msg *arc.Msg) error {
 		}
 	}
 
-	if msg.Status == arc.OpStatus_Closed {
+	if msg.Status == arc.ReqStatus_Closed {
 		req.sess.closeReq(req.ReqID, false, nil)
 	}
 
@@ -254,7 +254,7 @@ func (sess *hostSess) closeReq(reqID uint64, sendClose bool, err error) {
 	if sendClose {
 		msg := arc.NewMsg()
 		msg.ReqID = reqID
-		msg.Status = arc.OpStatus_Closed
+		msg.Status = arc.ReqStatus_Closed
 
 		if err != nil {
 			elem := &arc.AttrElemPb{
@@ -291,7 +291,7 @@ func (sess *hostSess) SendMsg(msg *arc.Msg) error {
 	// If we see a signal for a meta attr, send it to the client's session controller.
 	if msg.ReqID == 0 {
 		msg.ReqID = sess.loginReqID
-		msg.Status = arc.OpStatus_Synced
+		msg.Status = arc.ReqStatus_Synced
 	}
 
 	select {
@@ -374,7 +374,7 @@ func (sess *hostSess) consumeInbox() {
 
 		case msg := <-sess.msgsIn:
 			keepOpen := false
-			if msg.Status == arc.OpStatus_Closed {
+			if msg.Status == arc.ReqStatus_Closed {
 				sess.closeReq(msg.ReqID, false, nil)
 			} else {
 				var err error

@@ -180,7 +180,7 @@ func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
 
 	msg := arc.NewMsg()
 	msg.CellTxs = txs
-	msg.Status = arc.OpStatus_Synced
+	msg.Status = arc.ReqStatus_Synced
 	return ctx.PushUpdate(msg)
 }
 

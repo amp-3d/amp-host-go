@@ -683,7 +683,7 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 	}
 
 	msg := arc.NewMsg()
-	msg.Status = arc.OpStatus_Synced
+	msg.Status = arc.ReqStatus_Synced
 	if cellTx != nil {
 		msg.CellTxs = append(msg.CellTxs, cellTx)
 	}
