@@ -126,9 +126,6 @@ func (parent *PinnedCell[AppT]) PinCell(req arc.PinReq) (arc.PinnedCell, error) 
 		return parent, nil
 	}
 
-	parent.children = parent.children[:0]
-	parent.childByID = nil
-
 	child := parent.GetChildCell(params.Target)
 	if child == nil {
 		return nil, arc.ErrCellNotFound

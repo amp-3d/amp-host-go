@@ -216,11 +216,12 @@ func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCel
 
 	if parent != nil {
 		return parent.PinCell(req)
-	}
+	} else {
 
-	// For now, always just pin a new home (root) cell
-	cell := app.newRootCell()
-	return amp.NewPinnedCell[*appCtx](app, &cell.CellBase)
+		// For now, just always pin a new home (root) cell
+		cell := app.newRootCell()
+		return amp.NewPinnedCell[*appCtx](app, &cell.CellBase)
+	}
 }
 
 func (app *appCtx) newRootCell() *spotifyCell {
