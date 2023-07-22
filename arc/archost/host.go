@@ -108,12 +108,14 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 					if msg != nil {
 						err := via.SendMsg(msg)
 						msg.Reclaim()
-						if err != nil /*&& err != TransportClosed */ {
-							ctx.Warnf("Transport.SendMsg() err: %v", err)
+						if err != nil {
+							if arc.GetErrCode(err) != arc.ErrCode_NotConnected {
+								ctx.Warnf("Transport.SendMsg() err: %v", err)
+							}
 						}
 					}
 				case <-sessDone:
-					ctx.Info(2, "<-hostDone")
+					ctx.Info(2, "session closed")
 					via.Close()
 					running = false
 				}
@@ -131,9 +133,9 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 				msg, err := via.RecvMsg()
 				if err != nil {
 					if err == arc.ErrStreamClosed {
-						ctx.Info(2, "Transport closed")
+						ctx.Info(2, "transport closed")
 					} else {
-						ctx.Warnf("RecvMsg() error: %v", err)
+						ctx.Warnf("RecvMsg error: %v", err)
 					}
 					sess.Context.Close()
 					running = false
