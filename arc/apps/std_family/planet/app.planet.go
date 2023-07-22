@@ -672,7 +672,7 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 
 			if cellTx == nil {
 				cellTx = &arc.CellTxPb{
-					Op:         arc.CellTxOp_InsertCell,
+					Op:         arc.CellTxOp_UpsertCell,
 					CellSpec:   0, // TODO
 					TargetCell: int64(cell.CellID),
 					Elems:      make([]*arc.AttrElemPb, 0, 4),
@@ -683,7 +683,7 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 	}
 
 	msg := arc.NewMsg()
-	msg.Status = arc.ReqStatus_Synced
+	msg.Status = arc.OpStatus_Synced
 	if cellTx != nil {
 		msg.CellTxs = append(msg.CellTxs, cellTx)
 	}
@@ -752,6 +752,7 @@ func (cell *plCell) pushToSubs(src *arc.Msg) {
 	//   Maybe each sub maintains a queue of Msg channels that push to it?
 	//   - when the queue closes, it moves on to the next
 	//   - this would ensure a sub doesn't get 2+ msg batches at once
+	//   - see related comments for appReq
 	for _, sub := range subs {
 		if sub.PreventIdleClose(time.Second) {
 			if subCtx, ok := sub.TaskRef().(arc.PinContext); ok {

@@ -149,7 +149,7 @@ func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
 
 	marshalToTx := func(dst **arc.CellTxPb, target *CellBase[AppT]) error {
 		var tx arc.CellTx
-		tx.Clear(arc.CellTxOp_InsertCell)
+		tx.Clear(arc.CellTxOp_UpsertCell)
 		tx.TargetCell = target.CellID
 		tx.CellSpec = target.CellSpec
 		if tx.CellSpec == 0 || tx.TargetCell == 0 {
@@ -183,7 +183,7 @@ func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
 
 	msg := arc.NewMsg()
 	msg.CellTxs = txs
-	msg.Status = arc.ReqStatus_Synced
+	msg.Status = arc.OpStatus_Synced
 	return ctx.PushUpdate(msg)
 }
 
