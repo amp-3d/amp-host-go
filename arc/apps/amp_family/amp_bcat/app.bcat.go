@@ -67,7 +67,6 @@ func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCel
 	cats := &categories{
 		//cells: make([]*amp.CellBase[*appCtx], 0, 16),
 	}
-	cats.CellSpec = app.LinkCellSpec
 	cats.Self = nil // cats
 	return amp.NewPinnedCell[*appCtx](app, &cats.CellBase)
 }
@@ -145,19 +144,22 @@ func (app *appCtx) reloadCategories() error {
 			catID: entry.Id,
 		}
 
-		cat.CellLabels = arc.CellLabels{
+		cat.labels = arc.CellLabels{
 			Title: entry.Title,
 			About: entry.Description,
-			Glyph: &arc.AssetRef{
+		}
+		cat.glyphs = arc.CellGlyphs{
+			Icon: &arc.AssetRef{
 				URI:    entry.Image,
 				Scheme: arc.URIScheme_File,
 			},
 		}
+				
 		if created, err := time.Parse(time.RFC3339, entry.TimestampCreated); err == nil {
-			cat.Created = int64(arc.ConvertToUTC(created))
+			cat.labels.Created = int64(arc.ConvertToUTC(created))
 		}
 		if modified, err := time.Parse(time.RFC3339, entry.TimestampModified); err == nil {
-			cat.Modified = int64(arc.ConvertToUTC(modified))
+			cat.labels.Modified = int64(arc.ConvertToUTC(modified))
 		}
 		app.cats = append(app.cats, cat)
 	}
@@ -172,6 +174,7 @@ func (app *appCtx) reloadCategories() error {
 }
 
 type categoryInfo struct {
-	arc.CellLabels
+	labels arc.CellLabels
+	glyphs arc.CellGlyphs
 	catID uint32
 }

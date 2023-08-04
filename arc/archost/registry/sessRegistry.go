@@ -25,7 +25,7 @@ type sessRegistry struct {
 
 	elemDefs map[uint32]elemDef     // by ElemTypeID by native ID
 	attrDefs map[uint32]arc.AttrDef // by AttrID by native ID
-	cellDefs map[uint32]arc.CellDef // by CellTypeID by native ID
+	//cellDefs map[uint32]arc.CellDef // by CellTypeID by native ID
 }
 
 func NewSessionRegistry(table symbol.Table) arc.SessionRegistry {
@@ -36,7 +36,7 @@ func NewSessionRegistry(table symbol.Table) arc.SessionRegistry {
 
 		elemDefs: make(map[uint32]elemDef),
 		attrDefs: make(map[uint32]arc.AttrDef),
-		cellDefs: make(map[uint32]arc.CellDef),
+		//cellDefs: make(map[uint32]arc.CellDef),
 	}
 	arc.RegisterConstSymbols(reg)
 	return reg
@@ -153,13 +153,13 @@ func (reg *sessRegistry) RegisterDefs(defs *arc.RegisterDefs) error {
 	//
 	//
 	// CellSpecs
-	for _, cellSpec := range defs.Cells {
-		def := arc.CellDef{
-			ClientDefID: cellSpec.DefID,
-			NativeDefID: reg.clientToNativeID[cellSpec.DefID],
-		}
-		reg.cellDefs[def.NativeDefID] = def
-	}
+	// for _, cellSpec := range defs.Cells {
+	// 	def := arc.CellDef{
+	// 		ClientDefID: cellSpec.DefID,
+	// 		NativeDefID: reg.clientToNativeID[cellSpec.DefID],
+	// 	}
+	// 	reg.cellDefs[def.NativeDefID] = def
+	// }
 
 	return nil
 }

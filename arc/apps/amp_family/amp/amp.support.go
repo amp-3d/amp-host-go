@@ -20,14 +20,6 @@ func (app *AppBase) OnNew(ctx arc.AppContext) (err error) {
 	if app.PlayableAssetAttr, err = app.ResolveAppAttr(PlayableAssetAttrSpec); err != nil {
 		return err
 	}
-
-	if app.PlayableCellSpec, err = app.ResolveAppCell(PlayableCellSpec); err != nil {
-		return err
-	}
-	if app.PlaylistCellSpec, err = app.ResolveAppCell(PlaylistCellSpec); err != nil {
-		return
-	}
-
 	return nil
 }
 
@@ -56,9 +48,8 @@ func NewPinnedCell[AppT arc.AppContext](app AppT, cell *CellBase[AppT]) (arc.Pin
 	return pinned, nil
 }
 
-func (cell *CellBase[AppT]) AddTo(dst *PinnedCell[AppT], self Cell[AppT], cellSpec uint32) {
+func (cell *CellBase[AppT]) AddTo(dst *PinnedCell[AppT], self Cell[AppT]) {
 	cell.CellID = dst.App.IssueCellID()
-	cell.CellSpec = cellSpec
 	cell.Self = self
 	dst.AddChild(cell)
 }
@@ -148,8 +139,7 @@ func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
 		var tx arc.CellTx
 		tx.Clear(arc.CellTxOp_UpsertCell)
 		tx.TargetCell = target.CellID
-		tx.CellSpec = target.CellSpec
-		if tx.CellSpec == 0 || tx.TargetCell == 0 {
+		if tx.TargetCell == 0 {
 			return arc.ErrBadCellTx
 		}
 		err := target.Self.MarshalAttrs(parent.App, &tx)
@@ -158,7 +148,6 @@ func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
 		}
 		pb := &arc.CellTxPb{
 			Op:         tx.Op,
-			CellSpec:   tx.CellSpec,
 			TargetCell: int64(tx.TargetCell),
 			Elems:      tx.ElemsPb,
 		}

@@ -473,7 +473,7 @@ const (
 func (sess *hostSess) closeAllReqs() {
 	sess.openReqsMu.Lock()
 	toClose := make([]uint64, 0, len(sess.openReqs))
-	for reqID, _ := range sess.openReqs {
+	for reqID := range sess.openReqs {
 		toClose = append(toClose, reqID)
 	}
 	sess.openReqsMu.Unlock()

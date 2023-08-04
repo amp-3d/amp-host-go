@@ -227,7 +227,6 @@ func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCel
 func (app *appCtx) newRootCell() *spotifyCell {
 	cell := &spotifyCell{}
 	cell.CellID = app.IssueCellID()
-	cell.CellSpec = app.LinkCellSpec
 	cell.Self = cell
 
 	cell.info = arc.CellLabels{

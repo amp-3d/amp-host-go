@@ -22,7 +22,8 @@ type fsItem struct {
 	isDir     bool
 	modTime   time.Time
 
-	info       arc.CellLabels
+	labels     arc.CellLabels
+	glyphs     arc.CellGlyphs
 	mediaFlags amp.MediaFlags
 }
 
@@ -71,32 +72,32 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 
 	//////////////////  CellLabels
 	{
-		info := arc.CellLabels{
+		labels := arc.CellLabels{
 			Modified: int64(arc.ConvertToUTC(item.modTime)),
 		}
 
 		base := item.basename[:len(item.basename)-extLen]
 		splitAt := strings.LastIndex(base, " - ")
 		if splitAt > 0 {
-			info.Title = base[splitAt+3:]
-			info.Subtitle = base[:splitAt]
+			labels.Title = base[splitAt+3:]
+			labels.Subtitle = base[:splitAt]
 		} else {
-			info.Title = base
+			labels.Title = base
 		}
 
 		if item.isDir {
-			info.Glyph = amp.DirGlyph
+			item.glyphs.Icon = amp.DirGlyph
 		} else {
-			info.Glyph = &arc.AssetRef{
+			item.glyphs.Icon = &arc.AssetRef{
 				MediaType: mediaType,
 			}
-			info.Link = &arc.AssetRef{
+			labels.Link = &arc.AssetRef{
 				MediaType: mediaType,
 				URI:       item.pathname,
 				Scheme:    arc.URIScheme_File,
 			}
 		}
-		item.info = info
+		item.labels = labels
 	}
 
 	//////////////////  MediaInfo
@@ -115,7 +116,8 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 }
 
 func (item *fsItem) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellLabelsAttr, 0, &item.info)
+	dst.Marshal(app.CellLabelsAttr, 0, &item.labels)
+	dst.Marshal(app.CellLabelsAttr, 0, &item.glyphs)
 	return nil
 }
 
@@ -131,13 +133,13 @@ type fsFile struct {
 }
 
 func (item *fsFile) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellLabelsAttr, 0, &item.info)
+	item.fsItem.MarshalAttrs(app, dst)
 
 	if item.mediaFlags != 0 {
 		media := &amp.MediaInfo{
 			Flags:      item.mediaFlags,
-			Title:      item.info.Title,
-			Collection: item.info.Subtitle,
+			Title:      item.labels.Title,
+			Collection: item.labels.Subtitle,
 		}
 		dst.Marshal(app.MediaInfoAttr, 0, media)
 	}

@@ -16,9 +16,7 @@
     //     - memory efficient 
     // string              SI              = 17;
     
-    - On CellSchemas
-      - use pb or capnp?
-      - registers types under each CellSchemaz type
+
 ---
 
 See [arcspace.unity-app](https://github.com/arcspace/arcspace.unity-app) to get started.

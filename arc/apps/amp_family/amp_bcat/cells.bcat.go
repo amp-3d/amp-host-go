@@ -12,8 +12,10 @@ type categories struct {
 
 func (cats *categories) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
 	dst.Marshal(app.CellLabelsAttr, 0, &arc.CellLabels{
-		Title:     "Internet Radio",
-		Glyph:     amp.DirGlyph,
+		Title: "Internet Radio",
+	})
+	dst.Marshal(app.CellLabelsAttr, 0, &arc.CellGlyphs{
+		Icon: amp.DirGlyph,
 	})
 	return nil
 }

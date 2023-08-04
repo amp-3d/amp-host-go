@@ -673,7 +673,6 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 			if cellTx == nil {
 				cellTx = &arc.CellTxPb{
 					Op:         arc.CellTxOp_UpsertCell,
-					CellSpec:   0, // TODO
 					TargetCell: int64(cell.CellID),
 					Elems:      make([]*arc.AttrElemPb, 0, 4),
 				}
@@ -771,7 +770,6 @@ func (cell *plCell) pushToSubs(src *arc.Msg) {
 				for j, srcTx := range src.CellTxs {
 					msg.CellTxs[j] = &arc.CellTxPb{
 						Op:         srcTx.Op,
-						CellSpec:   srcTx.CellSpec,
 						TargetCell: int64(srcTx.TargetCell),
 						Elems:      srcTx.Elems,
 					}

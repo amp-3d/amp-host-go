@@ -25,10 +25,6 @@ var (
 type AppBase struct {
 	arc.AppBase
 
-	// cell types
-	PlayableCellSpec uint32
-	PlaylistCellSpec uint32
-
 	// attr specs
 	MediaInfoAttr     uint32
 	MediaPlaylistAttr uint32
