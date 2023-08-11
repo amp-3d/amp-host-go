@@ -16,8 +16,8 @@ type spotifyCell struct {
 	amp.CellBase[*appCtx]
 	spotifyID spotify.ID
 	pinner    Pinner
-	info      arc.CellLabels
-	glyphs    arc.CellGlyphs
+	hdr       arc.CellHeader
+	text      arc.CellText
 }
 
 type playlistCell struct {
@@ -39,10 +39,8 @@ type trackCell struct {
 	playable *arc.AssetRef // non-nil when pinned
 }
 
-
-
 func (cell *spotifyCell) GetLogLabel() string {
-	return cell.info.Title
+	return cell.text.Title
 }
 
 func (cell *spotifyCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
@@ -50,8 +48,8 @@ func (cell *spotifyCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 }
 
 func (cell *spotifyCell) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellLabelsAttr, 0, &cell.info)
-	dst.Marshal(app.CellLabelsAttr, 0, &cell.glyphs)
+	dst.Marshal(app.CellHeaderAttr, 0, &cell.hdr)
+	dst.Marshal(app.CellTextAttr, 0, &cell.text)
 	return nil
 }
 
@@ -94,7 +92,7 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 
 	{
 		child := addChild_dir(dst, "Followed Playlists")
-		child.glyphs.Icon = &arc.AssetRef{
+		child.hdr.Icon = &arc.AssetRef{
 			URI:    "/icons/ui/providers/playlists.png",
 			Scheme: arc.URIScheme_File,
 		}
@@ -112,7 +110,7 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 
 	{
 		child := addChild_dir(dst, "Followed Artists")
-		child.glyphs.Icon = &arc.AssetRef{
+		child.hdr.Icon = &arc.AssetRef{
 			URI:    "/icons/ui/providers/artists.png",
 			Scheme: arc.URIScheme_File,
 		}
@@ -130,7 +128,7 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 
 	{
 		child := addChild_dir(dst, "Recently Played")
-		child.glyphs.Icon = &arc.AssetRef{
+		child.hdr.Icon = &arc.AssetRef{
 			URI:    "/icons/ui/providers/tracks.png",
 			Scheme: arc.URIScheme_File,
 		}
@@ -148,7 +146,7 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 
 	{
 		child := addChild_dir(dst, "Recently Played Artists")
-		child.glyphs.Icon = &arc.AssetRef{
+		child.hdr.Icon = &arc.AssetRef{
 			URI:    "/icons/ui/providers/artists.png",
 			Scheme: arc.URIScheme_File,
 		}
@@ -166,7 +164,7 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 
 	{
 		child := addChild_dir(dst, "Saved Albums")
-		child.glyphs.Icon = &arc.AssetRef{
+		child.hdr.Icon = &arc.AssetRef{
 			URI:    "/icons/ui/providers/albums.png",
 			Scheme: arc.URIScheme_File,
 		}
@@ -191,7 +189,7 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 func addChild_dir(dst *amp.PinnedCell[*appCtx], title string) *spotifyCell {
 	cell := &spotifyCell{}
 	cell.AddTo(dst, cell)
-	cell.info = arc.CellLabels{
+	cell.text = arc.CellText{
 		Title: title,
 	}
 	return cell
@@ -229,11 +227,11 @@ func addChild_Playlist(dst *amp.PinnedCell[*appCtx], playlist spotify.SimplePlay
 	cell.spotifyID = playlist.ID
 	cell.AddTo(dst, cell)
 
-	cell.info = arc.CellLabels{
+	cell.text = arc.CellText{
 		Title:    playlist.Name,
 		Subtitle: playlist.Description,
-		Link:     chooseBestLink(playlist.ExternalURLs),
 	}
+	cell.hdr.Link = chooseBestLink(playlist.ExternalURLs)
 	cell.setGlyphs(playlist.Images)
 
 	cell.MediaPlaylist = amp.MediaPlaylist{
@@ -287,11 +285,11 @@ func addChild_Artist(dst *amp.PinnedCell[*appCtx], artist spotify.FullArtist) {
 	cell.spotifyID = artist.ID
 	cell.AddTo(dst, cell)
 
-	cell.info = arc.CellLabels{
+	cell.text = arc.CellText{
 		Title:    artist.Name,
 		Subtitle: fmt.Sprintf("%d followers", artist.Followers.Count),
-		Link:     chooseBestLink(artist.ExternalURLs),
 	}
+	cell.hdr.Link = chooseBestLink(artist.ExternalURLs)
 	cell.setGlyphs(artist.Images)
 }
 
@@ -300,11 +298,11 @@ func addChild_Album(dst *amp.PinnedCell[*appCtx], album spotify.SimpleAlbum) {
 	cell.spotifyID = album.ID
 	cell.AddTo(dst, cell)
 
-	cell.info = arc.CellLabels{
+	cell.text = arc.CellText{
 		Title:    album.Name,
 		Subtitle: formArtistDesc(album.Artists),
-		Link:     chooseBestLink(album.ExternalURLs),
 	}
+	cell.hdr.Link = chooseBestLink(album.ExternalURLs)
 	cell.setGlyphs(album.Images)
 }
 
@@ -318,12 +316,12 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 
 	artistDesc := formArtistDesc(track.Artists)
 
-	cell.info = arc.CellLabels{
+	cell.text = arc.CellText{
 		Title:    track.Name,
 		Subtitle: artistDesc,
 		About:    track.Album.Name,
-		Link:     chooseBestLink(track.ExternalURLs),
 	}
+	cell.hdr.Link = chooseBestLink(track.ExternalURLs)
 	cell.setGlyphs(track.Album.Images)
 
 	cell.MediaInfo = amp.MediaInfo{
@@ -333,7 +331,7 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 		Collection:  track.Album.Name,
 		ItemNumber:  int32(track.TrackNumber),
 		Duration16:  int64(arc.ConvertMsToUTC(int64(track.Duration))),
-		CoverArt:    cell.glyphs.Icon.URI,
+		CoverArt:    cell.hdr.Icon.URI,
 		Popularity:  .01 * float32(track.Popularity), // 0..100 => 0..1
 		ReleaseTime: track.Album.ReleaseDateTime().Unix(),
 	}
@@ -344,9 +342,9 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
  */
 
 func (cell *spotifyCell) setGlyphs(images []spotify.Image) {
-	if chooseBestImage(images, 200, &cell.glyphs.Icon) {
+	if chooseBestImage(images, 200, &cell.hdr.Icon) {
 		if len(images) > 1 {
-			chooseBestImage(images, 800, &cell.glyphs.Res720)
+			chooseBestImage(images, 800, &cell.hdr.Icon720)
 		}
 	}
 }

@@ -282,7 +282,7 @@ type plSess struct {
 // This can be thought of as the controller for one or more active cell pins.
 // *** implements arc.PinnedCell ***
 type plCell struct {
-	arc.CellInfo
+	arc.CellID
 	pl      *plSess       // parent planet
 	ctx     task.Context  // arc.PinnedCell ctx
 	newTxns chan *arc.Msg // txns to merge
@@ -590,8 +590,8 @@ func decodeSI(raw uint64) int64 {
 	return int64((raw >> 1) ^ (-(raw & 1)))
 }
 
-func (cell *plCell) Info() arc.CellInfo {
-	return cell.CellInfo
+func (cell *plCell) Info() arc.CellID {
+	return cell.CellID
 }
 
 func (cell *plCell) PinCell(req arc.PinReq) (arc.PinnedCell, error) {

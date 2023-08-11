@@ -63,8 +63,8 @@ func (parent *PinnedCell[AppT]) GetCell(target arc.CellID) *CellBase[AppT] {
 	}
 }
 
-func (cell *CellBase[AppT]) Info() arc.CellInfo {
-	return cell.CellInfo
+func (cell *CellBase[AppT]) Info() arc.CellID {
+	return cell.CellID
 }
 
 func (cell *CellBase[AppT]) OnPinned(parent Cell[AppT]) error {

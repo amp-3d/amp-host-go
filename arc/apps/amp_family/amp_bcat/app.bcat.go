@@ -144,22 +144,22 @@ func (app *appCtx) reloadCategories() error {
 			catID: entry.Id,
 		}
 
-		cat.labels = arc.CellLabels{
+		cat.text = arc.CellText{
 			Title: entry.Title,
 			About: entry.Description,
 		}
-		cat.glyphs = arc.CellGlyphs{
+		cat.hdr = arc.CellHeader{
 			Icon: &arc.AssetRef{
 				URI:    entry.Image,
 				Scheme: arc.URIScheme_File,
 			},
 		}
-				
+
 		if created, err := time.Parse(time.RFC3339, entry.TimestampCreated); err == nil {
-			cat.labels.Created = int64(arc.ConvertToUTC(created))
+			cat.hdr.Created = int64(arc.ConvertToUTC(created))
 		}
 		if modified, err := time.Parse(time.RFC3339, entry.TimestampModified); err == nil {
-			cat.labels.Modified = int64(arc.ConvertToUTC(modified))
+			cat.hdr.Modified = int64(arc.ConvertToUTC(modified))
 		}
 		app.cats = append(app.cats, cat)
 	}
@@ -174,7 +174,7 @@ func (app *appCtx) reloadCategories() error {
 }
 
 type categoryInfo struct {
-	labels arc.CellLabels
-	glyphs arc.CellGlyphs
+	text  arc.CellText
+	hdr   arc.CellHeader
 	catID uint32
 }

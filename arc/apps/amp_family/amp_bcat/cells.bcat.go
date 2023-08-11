@@ -11,10 +11,10 @@ type categories struct {
 }
 
 func (cats *categories) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellLabelsAttr, 0, &arc.CellLabels{
+	dst.Marshal(app.CellTextAttr, 0, &arc.CellText{
 		Title: "Internet Radio",
 	})
-	dst.Marshal(app.CellLabelsAttr, 0, &arc.CellGlyphs{
+	dst.Marshal(app.CellHeaderAttr, 0, &arc.CellHeader{
 		Icon: amp.DirGlyph,
 	})
 	return nil
@@ -69,7 +69,7 @@ func (cat *category) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 			links: entry.Url,
 		}
 		sta.CellBase.ResetState(dst.App.IssueCellID(), sta)
-		sta.CellBase.AddAttr(dst.App, "", &arc.CellLabels{
+		sta.CellBase.AddAttr(dst.App, "", &arc.CellText{
 			Title:    entry.Title,
 			Subtitle: entry.Summary,
 			About:    entry.Description,

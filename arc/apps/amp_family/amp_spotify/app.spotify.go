@@ -229,10 +229,8 @@ func (app *appCtx) newRootCell() *spotifyCell {
 	cell.CellID = app.IssueCellID()
 	cell.Self = cell
 
-	cell.info = arc.CellLabels{
+	cell.text = arc.CellText{
 		Title: "Spotify Home",
-		// Glyph: &arc.AssetRef{
-		// },
 	}
 	cell.pinner = pin_appHome
 	return cell
