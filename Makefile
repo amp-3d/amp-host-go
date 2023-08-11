@@ -115,10 +115,10 @@ generate:
 	    --proto_path=. \
 		ski/api.ski.proto
 	
-	capnp compile -I${CAPNP_INCLUDE} -ogo     arc/apps/amp_family/amp/amp.capnp
-	cd arc/apps/amp_family/amp \
-		&& capnp compile -I${CAPNP_INCLUDE} -ocsharp amp.capnp \
-		&& mv amp.capnp.cs ${ARC_UNITY_PATH}/Arc/Apps/amp/Amp.capnp.cs
+#	capnp compile -I${CAPNP_INCLUDE} -ogo     arc/apps/amp_family/amp/amp.capnp
+#	cd arc/apps/amp_family/amp \
+#		&& capnp compile -I${CAPNP_INCLUDE} -ocsharp amp.capnp \
+#		&& mv amp.capnp.cs ${ARC_UNITY_PATH}/Arc/Apps/amp/Amp.capnp.cs
 		
 
 

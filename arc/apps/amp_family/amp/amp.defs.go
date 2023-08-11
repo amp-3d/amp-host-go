@@ -14,6 +14,9 @@ const (
 	MimeType_Dir      = "application/x-directory"
 	MimeType_Album    = "application/x-album"
 	MimeType_Playlist = "application/x-playlist"
+
+	ListItemSeparator     = " · "
+	PlayableAssetAttrSpec = "AssetRef:playable"
 )
 
 var (
@@ -46,7 +49,7 @@ type Cell[AppT arc.AppContext] interface {
 }
 
 type CellBase[AppT arc.AppContext] struct {
-	arc.CellInfo
+	arc.CellID
 	Self Cell[AppT]
 }
 
