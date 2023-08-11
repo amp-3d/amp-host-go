@@ -18,16 +18,16 @@ go 1.18
 require (
 	capnproto.org/go/capnp/v3 v3.0.0-alpha-29
 	github.com/alecthomas/participle/v2 v2.0.0
-	github.com/arcspace/go-arc-sdk v0.0.0-20230719204915-b33fb10f99f2
-	github.com/arcspace/go-librespot v0.0.0-20230715225509-ef2b77e5ed3c
-	github.com/dgraph-io/badger/v4 v4.1.0
+	github.com/arcspace/go-arc-sdk v0.0.0-20230811172934-db6c05cc94b2
+	github.com/arcspace/go-librespot v0.0.0-20230811173922-2e901b172fbe
+	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/h2non/filetype v1.1.3
 	github.com/pkg/errors v0.9.1
 	github.com/zmb3/spotify/v2 v2.3.1
-	golang.org/x/crypto v0.11.0
-	golang.org/x/oauth2 v0.10.0
-	google.golang.org/grpc v1.56.2
+	golang.org/x/crypto v0.12.0
+	golang.org/x/oauth2 v0.11.0
+	google.golang.org/grpc v1.57.0
 )
 
 require (
@@ -35,7 +35,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/golang/glog v1.1.1 // indirect
+	github.com/golang/glog v1.1.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
@@ -45,12 +45,12 @@ require (
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/rs/cors v1.9.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/net v0.12.0 // indirect
+	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.10.0 // indirect
-	golang.org/x/text v0.11.0 // indirect
+	golang.org/x/sys v0.11.0 // indirect
+	golang.org/x/text v0.12.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230717213848-3f92550aa753 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230807174057-1744710a1577 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	zenhack.net/go/util v0.0.0-20230607025951-8b02fee814ae // indirect
 )
