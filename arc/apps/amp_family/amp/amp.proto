@@ -37,6 +37,15 @@ message LoginInfo {
 }
 
 
+// Sharepoint specifies a local file system path root to shore (serve) 
+message Sharepoint {
+
+    // LocalRoot is the local file system path root to share (serve)
+    string              LocalRoot         = 1;
+    bool                AllowUpload       = 2;
+    
+}
+
 // message PlayableInfo {
 //     string              Title        = 1;
 //     string              Subtitle     = 2;
