@@ -22,6 +22,8 @@ func UID() arc.UID {
 }
 
 func RegisterApp(reg arc.Registry) {
+	reg.RegisterElemType(&amp.MediaPlaylist{})
+
 	reg.RegisterApp(&arc.AppModule{
 		AppID:   AppID,
 		UID:     UID(),
@@ -35,6 +37,14 @@ func RegisterApp(reg arc.Registry) {
 
 type appCtx struct {
 	amp.AppBase
+}
+
+func (app *appCtx) OnNew(ctx arc.AppContext) (err error) {
+	err = app.AppBase.OnNew(ctx)
+	if err != nil {
+		return
+	}
+	return nil
 }
 
 func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCell, error) {

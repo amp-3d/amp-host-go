@@ -14,16 +14,16 @@ import (
 type fsItem struct {
 	amp.CellBase[*appCtx]
 
-	basename  string // base file name
-	pathname  string // non-nil when pinned (could be alternative OS handle)
-	isHidden  bool
-	mode      os.FileMode
-	size      int64
-	isDir     bool
-	modTime   time.Time
+	basename string // base file name
+	pathname string // non-nil when pinned (could be alternative OS handle)
+	isHidden bool
+	mode     os.FileMode
+	size     int64
+	isDir    bool
+	modTime  time.Time
 
-	labels     arc.CellLabels
-	glyphs     arc.CellGlyphs
+	hdr        arc.CellHeader
+	text       arc.CellText
 	mediaFlags amp.MediaFlags
 }
 
@@ -70,34 +70,38 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 		mediaType, extLen = assets.GetMediaTypeForExt(item.basename)
 	}
 
-	//////////////////  CellLabels
+	//////////////////  CellHeader
 	{
-		labels := arc.CellLabels{
+		hdr := arc.CellHeader{
 			Modified: int64(arc.ConvertToUTC(item.modTime)),
 		}
-
-		base := item.basename[:len(item.basename)-extLen]
-		splitAt := strings.LastIndex(base, " - ")
-		if splitAt > 0 {
-			labels.Title = base[splitAt+3:]
-			labels.Subtitle = base[:splitAt]
-		} else {
-			labels.Title = base
-		}
-
 		if item.isDir {
-			item.glyphs.Icon = amp.DirGlyph
+			hdr.Icon = amp.DirGlyph
 		} else {
-			item.glyphs.Icon = &arc.AssetRef{
+			hdr.Icon = &arc.AssetRef{
 				MediaType: mediaType,
 			}
-			labels.Link = &arc.AssetRef{
+			hdr.Link = &arc.AssetRef{
 				MediaType: mediaType,
 				URI:       item.pathname,
 				Scheme:    arc.URIScheme_File,
 			}
 		}
-		item.labels = labels
+		item.hdr = hdr
+	}
+
+	//////////////////  CellText
+	{
+		text := arc.CellText{}
+		base := item.basename[:len(item.basename)-extLen]
+		splitAt := strings.LastIndex(base, " - ")
+		if splitAt > 0 {
+			text.Title = base[splitAt+3:]
+			text.Subtitle = base[:splitAt]
+		} else {
+			text.Title = base
+		}
+		item.text = text
 	}
 
 	//////////////////  MediaInfo
@@ -116,8 +120,8 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 }
 
 func (item *fsItem) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellLabelsAttr, 0, &item.labels)
-	dst.Marshal(app.CellLabelsAttr, 0, &item.glyphs)
+	dst.Marshal(app.CellHeaderAttr, 0, &item.hdr)
+	dst.Marshal(app.CellTextAttr, 0, &item.text)
 	return nil
 }
 
@@ -138,8 +142,8 @@ func (item *fsFile) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
 	if item.mediaFlags != 0 {
 		media := &amp.MediaInfo{
 			Flags:      item.mediaFlags,
-			Title:      item.labels.Title,
-			Collection: item.labels.Subtitle,
+			Title:      item.text.Title,
+			Collection: item.text.Subtitle,
 		}
 		dst.Marshal(app.MediaInfoAttr, 0, media)
 	}
@@ -169,65 +173,64 @@ type fsDir struct {
 	fsItem
 }
 
-
 // reads the fsDir's catalog and issues new items as needed.
 func (dir *fsDir) PinInto(dst *amp.PinnedCell[*appCtx]) error {
-/*
+	/*
 
-	{
-		//dir.subs = make(map[arc.CellID]os.DirEntry)
-		f, err := os.Open(dir.pathname)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-
-		lookup := make(map[string]*fsItem, len(dir.itemsByID))
-		for _, sub := range dir.itemsByID {
-			lookup[sub.basename] = sub
-		}
-
-		dirItems, err := f.Readdir(-1)
-		f.Close()
-		if err != nil {
-			return nil
-		}
-
-		N := len(dirItems)
-		dir.itemsByID = make(map[arc.CellID]*fsItem, N)
-		dir.items = dir.items[:0]
-
-		var tmp *fsItem
-		for _, fi := range dirItems {
-			sub := tmp
-			if sub == nil {
-				sub = &fsItem{}
+		{
+			//dir.subs = make(map[arc.CellID]os.DirEntry)
+			f, err := os.Open(dir.pathname)
+			if err != nil {
+				return err
 			}
-			sub.setFrom(fi)
-			if sub.isHidden {
-				continue
+			defer f.Close()
+
+			lookup := make(map[string]*fsItem, len(dir.itemsByID))
+			for _, sub := range dir.itemsByID {
+				lookup[sub.basename] = sub
 			}
 
-			// preserve items that have not changed
-			old := lookup[sub.basename]
-			if old == nil || old.Compare(sub) != 0 {
-				sub.CellID = dir.app.IssueCellID()
-				tmp = nil
-			} else {
-				sub = old
+			dirItems, err := f.Readdir(-1)
+			f.Close()
+			if err != nil {
+				return nil
 			}
 
-			dir.itemsByID[sub.CellID] = sub
-			dir.items = append(dir.items, sub.CellID)
-		}
+			N := len(dirItems)
+			dir.itemsByID = make(map[arc.CellID]*fsItem, N)
+			dir.items = dir.items[:0]
 
-		items := dir.items
-		sort.Slice(items, func(i, j int) bool {
-			ii := dir.itemsByID[items[i]]
-			jj := dir.itemsByID[items[j]]
-			return ii.Compare(jj) < 0
-		})
+			var tmp *fsItem
+			for _, fi := range dirItems {
+				sub := tmp
+				if sub == nil {
+					sub = &fsItem{}
+				}
+				sub.setFrom(fi)
+				if sub.isHidden {
+					continue
+				}
 
-		}*/
+				// preserve items that have not changed
+				old := lookup[sub.basename]
+				if old == nil || old.Compare(sub) != 0 {
+					sub.CellID = dir.app.IssueCellID()
+					tmp = nil
+				} else {
+					sub = old
+				}
+
+				dir.itemsByID[sub.CellID] = sub
+				dir.items = append(dir.items, sub.CellID)
+			}
+
+			items := dir.items
+			sort.Slice(items, func(i, j int) bool {
+				ii := dir.itemsByID[items[i]]
+				jj := dir.itemsByID[items[j]]
+				return ii.Compare(jj) < 0
+			})
+
+			}*/
 	return nil
 }
