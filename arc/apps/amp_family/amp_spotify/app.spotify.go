@@ -151,6 +151,11 @@ func (app *appCtx) tryConnect() error {
 		return err
 	}
 
+	// Unclear on why we need to guard on this
+	if app.auth == nil {
+		return arc.ErrShuttingDown
+	}
+
 	// At this point we have a token -- TODO it may be expired
 	if token := app.auth.CurrentToken(); token != nil {
 		if app.respot == nil {
