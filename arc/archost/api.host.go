@@ -12,7 +12,7 @@ import (
 packages
 
 	arc
-	    Arcspace interfaces and support utils
+	   ArcXR interfaces and support utils
 	arc/host
 	    an implementation of arc.Host & arc.HostSession
 	arc/grpc_service

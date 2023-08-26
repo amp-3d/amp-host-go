@@ -5,8 +5,8 @@ BUILD_PATH  := $(patsubst %/,%,$(abspath $(dir $(lastword $(MAKEFILE_LIST)))))
 PARENT_PATH := $(patsubst %/,%,$(dir $(BUILD_PATH)))
 UNITY_PROJ := ${PARENT_PATH}/arcspace.unity-app
 UNITY_PATH := $(shell python3 ${UNITY_PROJ}/arc-utils.py UNITY_PATH "${UNITY_PROJ}")
-ARC_LIBS = ${UNITY_PROJ}/Assets/Plugins/Arcspace/Plugins
-ARC_UNITY_PATH = ${UNITY_PROJ}/Assets/Arcspace
+ARC_LIBS = ${UNITY_PROJ}/Assets/Plugins/ArcXR/Plugins
+ARC_UNITY_PATH = ${UNITY_PROJ}/Assets/ArcXR
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
 LIB_PROJ := ${BUILD_PATH}/cmd/libarchost
 
@@ -106,7 +106,7 @@ generate:
 	protoc \
 	    -I"${PARENT_PATH}/go-arc-sdk/apis" \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
-	    --csharp_out "${ARC_UNITY_PATH}/Arc/Apps/amp" \
+	    --csharp_out "${ARC_UNITY_PATH}/Arc.Apps/Amp" \
 	    --proto_path=. \
 		arc/apps/amp_family/amp/amp.proto
 	

@@ -1,6 +1,6 @@
 # go-archost
 ---
-### Arcspace UI framework and runtime for Go
+### ArcXR and OS ("arcOS") backend runtime for Go
 
 
 ## Upcoming worklist

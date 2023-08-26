@@ -1,7 +1,7 @@
 syntax = "proto3";
 package amp;
 
-option csharp_namespace = "Arcspace";
+option csharp_namespace = "ArcXR";
 
 //import "arc/arc.proto";
 
