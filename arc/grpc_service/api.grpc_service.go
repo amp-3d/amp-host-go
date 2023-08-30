@@ -1,3 +1,4 @@
+// Implements a grpc server that attaches to a arc.Host instance as a transport layer.
 package grpc_service
 
 import (
