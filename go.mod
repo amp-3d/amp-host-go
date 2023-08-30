@@ -16,9 +16,8 @@ go 1.18
 // replace github.com/arcspace/go-librespot => ../go-librespot
 
 require (
-	capnproto.org/go/capnp/v3 v3.0.0-alpha-29
 	github.com/alecthomas/participle/v2 v2.0.0
-	github.com/arcspace/go-arc-sdk v0.0.0-20230811172934-db6c05cc94b2
+	github.com/arcspace/go-arc-sdk v0.0.0-20230830054222-445601860af4
 	github.com/arcspace/go-librespot v0.0.0-20230811173922-2e901b172fbe
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/gogo/protobuf v1.3.2
@@ -40,7 +39,7 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v23.5.26+incompatible // indirect
-	github.com/google/uuid v1.3.0 // indirect
+	github.com/google/uuid v1.3.1 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
 	github.com/rs/cors v1.9.0 // indirect
@@ -50,7 +49,6 @@ require (
 	golang.org/x/sys v0.11.0 // indirect
 	golang.org/x/text v0.12.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230807174057-1744710a1577 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
-	zenhack.net/go/util v0.0.0-20230607025951-8b02fee814ae // indirect
 )
