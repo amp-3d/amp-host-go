@@ -1,20 +1,36 @@
 # go-archost
 ---
-### ArcXR and OS ("arcOS") backend runtime for Go
+### ArcXR / OS backend runtime for Go
 
 
-## Upcoming worklist
+```
+
+	archost task.Context tree:
+	
+0001  arc.Host
+0002     ┣ AssetServer [::]:5193
+0003     ┣ grpc.HostService [::]:5192
+0013     ┃    ┣ grpc <- HostSession(12)
+0014     ┃    ┗ grpc -> HostSession(12)
+0012     ┗ HostSession
+0015          ┣ app: planet.sys.arcspace.systems
+0016          ┃    ┗ planet: aomeara
+0018          ┃         ┗ cell: 22e0000022f
+0017          ┗ app: spotify.amp.arcspace.systems
+0021               ┣ cell: Spotify Home
+0022               ┃    ┗ req 1003: arc://spotify/home
+0023               ┣ cell: Followed Playlists
+0024               ┃    ┗ req 1005
+0028               ┗ cell: Followed Artists
+0029                    ┗ req 1008
+```
+
+## Worklist
   - iterate `arc` SI model for string keys that use `SuperTrie` on the client 
-  - what thread should PinCell() be running from so that it doesn't block processing of other host msgs. Should be in planet cell's OnRun loop.
   - add 'make backup' -- removes binaries and creates zip of the src
-  - add pre buuild step that, for each crate, enables it only for the platform it is for.
-  - Adopt capnp -- use struct ID as DataModelD and use string annotgation to tag each filed with one or more pin schema descs: "always", "when-child", "when-pinned", "as-playable"
-      - maybe just one string with comma or space separated tag idents? 
-    
-    // FUTURE: make attrs in the client use SuperTrie (LSM) where the default SI is the empty string.
-    //     - makes keying more flexible, more suited to application
-    //     - memory efficient 
-    // string              SI              = 17;
+  - add pre build step that, for each crate, enables it only for the platform it is for.
+  - have 'make generate' find all the .proto files and generate the .pb..go file for them
+  - finalize TxID scheme, allowing removal TargetCell (CellID) from CellTx.-- 16 SeriesIndex values?
     
 
 ---

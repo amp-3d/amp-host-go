@@ -108,7 +108,7 @@ generate:
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
 	    --csharp_out "${ARC_UNITY_PATH}/Arc.Apps/Amp" \
 	    --proto_path=. \
-		arc/apps/amp_family/amp/amp.proto
+		arc/apps/amp/amp.proto
 	
 	protoc \
 	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
