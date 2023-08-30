@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net/url"
-	"os"
 	"path"
 	"sync"
 	"time"
@@ -184,13 +183,14 @@ func (app *appCtx) mountPlanet(
 	dbPath := path.Join(app.LocalDataPath(), dbName)
 
 	// The db should already exist if opening and vice versa
-	_, err := os.Stat(dbPath)
-	if err == nil {
-		return nil, arc.ErrCode_PlanetFailure.Error("planet db already exists")
-	}
+	// _, err := os.Stat(dbPath)
+	// if genesis != nil && err == nil {
+	// 	return nil, arc.ErrCode_PlanetFailure.Error("planet db already exists")
+	// }
 
 	// Limit ValueLogFileSize to ~134mb since badger does a mmap size test on init, causing iOS 13 to error out.
 	// Also, massive value file sizes aren't appropriate for mobile.  TODO: make configurable.
+	var err error
 	dbOpts := badger.DefaultOptions(dbPath)
 	dbOpts.Logger = nil
 	dbOpts.ValueLogFileSize = 1 << 27
