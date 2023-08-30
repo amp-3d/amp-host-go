@@ -8,7 +8,7 @@ import (
 	"log"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/arc/archost"
+	"github.com/arcspace/go-archost/arc/host"
 	"github.com/arcspace/go-archost/arc/lib_service"
 )
 
@@ -24,10 +24,10 @@ func Call_SessionBegin(userDataPath, sharedCachePath string) int64 {
 	}
 
 	// Copy the param strings since they will be invalid after exits
-	hostOpts := archost.DefaultOpts(0, false)
+	hostOpts := host.DefaultOpts(0, false)
 	hostOpts.CachePath = string(append([]byte{}, sharedCachePath...))
 	hostOpts.StatePath = string(append([]byte{}, userDataPath...))
-	host, err := archost.StartNewHost(hostOpts)
+	host, err := host.StartNewHost(hostOpts)
 	if err != nil {
 		log.Fatalf("failed to start new host: %v", err)
 		return 0

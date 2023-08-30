@@ -9,8 +9,8 @@ import (
 	"github.com/arcspace/go-arc-sdk/stdlib/log"
 	"github.com/arcspace/go-arc-sdk/stdlib/task"
 	"github.com/arcspace/go-arc-sdk/stdlib/utils"
-	"github.com/arcspace/go-archost/arc/archost"
 	"github.com/arcspace/go-archost/arc/grpc_service"
+	"github.com/arcspace/go-archost/arc/host"
 )
 
 func main() {
@@ -37,9 +37,9 @@ func main() {
 
 	flag.Parse()
 
-	hostOpts := archost.DefaultOpts(*assetPort, *debugMode)
+	hostOpts := host.DefaultOpts(*assetPort, *debugMode)
 	hostOpts.StatePath = *dataPath
-	host, err := archost.StartNewHost(hostOpts)
+	host, err := host.StartNewHost(hostOpts)
 	if err != nil {
 		log.Fatalf("failed to start new host: %v", err)
 	}
