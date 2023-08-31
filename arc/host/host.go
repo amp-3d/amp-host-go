@@ -180,13 +180,14 @@ type hostSess struct {
 type appReq struct {
 	task.Context
 	arc.PinReqParams
-	sess    *hostSess
-	appCtx  *appContext
-	pinned  arc.PinnedCell
-	parent  arc.PinnedCell
-	cancel  chan struct{}
-	pinning chan struct{} // closed once the cell is pinned
-	closed  atomic.Int32
+	sess      *hostSess
+	appCtx    *appContext
+	pinned    arc.PinnedCell
+	parent    arc.PinnedCell
+	cancel    chan struct{}
+	pinning   chan struct{} // closed once the cell is pinned
+	closed    atomic.Int32
+	attrCache map[string]uint32
 }
 
 func (req *appReq) App() arc.AppContext {
@@ -195,12 +196,25 @@ func (req *appReq) App() arc.AppContext {
 
 func (req *appReq) GetLogLabel() string {
 	var strBuf [128]byte
-
 	str := fmt.Appendf(strBuf[:0], "req %d", req.ReqID)
 	if req.URL != nil {
 		str = fmt.Append(str, ": ", req.URL.String())
 	}
 	return string(str)
+}
+
+func (req *appReq) GetAttrID(attrSpec string) uint32 {
+	if attrID, resolved := req.attrCache[attrSpec]; resolved {
+		return attrID
+	}
+
+	spec, err := req.sess.ResolveAttrSpec(attrSpec, false)
+	attrID := spec.DefID
+	if err != nil {
+		attrID = 0
+	}
+	req.attrCache[attrSpec] = attrID
+	return attrID
 }
 
 func (req *appReq) PushUpdate(msg *arc.Msg) error {
@@ -416,7 +430,7 @@ func (sess *hostSess) handleMetaAttr(reqID uint64, attr *arc.AttrElemPb) (keepOp
 	case arc.ConstSymbol_PinRequest:
 		{
 			var req *appReq
-			req, err = sess.getReq(reqID, insertReq)
+			req, err = sess.getReq(reqID, clientReq)
 			if err != nil {
 				return
 			}
@@ -465,7 +479,7 @@ func (sess *hostSess) handleMetaAttr(reqID uint64, attr *arc.AttrElemPb) (keepOp
 type pinVerb int32
 
 const (
-	insertReq pinVerb = iota
+	clientReq pinVerb = iota
 	removeReq
 	getReq
 )
@@ -483,6 +497,17 @@ func (sess *hostSess) closeAllReqs() {
 	}
 }
 
+func (sess *hostSess) newAppReq(reqID uint64) *appReq {
+	req := &appReq{
+		cancel:    make(chan struct{}),
+		pinning:   make(chan struct{}),
+		attrCache: make(map[string]uint32),
+		sess:      sess,
+	}
+	req.ReqID = reqID
+	return req
+}
+
 // onReq performs the given pinVerb on given reqID and returns its appReq
 func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *appReq, err error) {
 
@@ -493,18 +518,13 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *appReq, err error
 			switch verb {
 			case removeReq:
 				delete(sess.openReqs, reqID)
-			case insertReq:
+			case clientReq:
 				err = arc.ErrCode_InvalidReq.Error("ReqID already in use")
 			}
 		} else {
 			switch verb {
-			case insertReq:
-				req = &appReq{
-					cancel:  make(chan struct{}),
-					pinning: make(chan struct{}),
-					sess:    sess,
-				}
-				req.ReqID = reqID
+			case clientReq:
+				req = sess.newAppReq(reqID)
 				req.Outlet = sess.msgsOut
 				sess.openReqs[reqID] = req
 			}
@@ -516,11 +536,7 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *appReq, err error
 }
 
 func (sess *hostSess) PinCell(pinReq arc.PinReq) (arc.PinContext, error) {
-	req := &appReq{
-		cancel:  make(chan struct{}),
-		pinning: make(chan struct{}),
-		sess:    sess,
-	}
+	req := sess.newAppReq(0)
 	req.PinReqParams = *pinReq.Params()
 
 	if err := sess.pinCell(req); err != nil {
@@ -700,7 +716,7 @@ type appContext struct {
 
 	appInst arc.AppInstance
 	sess    *hostSess
-	module  *arc.AppModule
+	module  *arc.App
 	appReqs chan *appReq // incoming requests for the app
 }
 
@@ -787,11 +803,8 @@ func (ctx *appContext) PutAppCellAttr(attrSpec string, src arc.ElemVal) error {
 		return err
 	}
 
-	//cellTx.CellID = pinCtx.pinned.Info().CellID
-
-	// TODO: make this better
+	// TODO: make this better / handle err
 	pinCtx.pinned.MergeUpdate(msg)
-	// err = pinCtx.PushUpdate(msg)
 	// if err != nil {
 	// 	return err
 	// }

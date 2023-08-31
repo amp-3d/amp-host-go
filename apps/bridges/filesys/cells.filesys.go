@@ -119,9 +119,9 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 	}
 }
 
-func (item *fsItem) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellHeaderAttr, 0, &item.hdr)
-	dst.Marshal(app.CellTextAttr, 0, &item.text)
+func (item *fsItem) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
+	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &item.hdr)
+	dst.Marshal(ctx.GetAttrID(arc.CellTextAttrSpec), 0, &item.text)
 	return nil
 }
 
@@ -136,8 +136,8 @@ type fsFile struct {
 	pinnedURL string
 }
 
-func (item *fsFile) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	item.fsItem.MarshalAttrs(app, dst)
+func (item *fsFile) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
+	item.fsItem.MarshalAttrs(dst, ctx)
 
 	if item.mediaFlags != 0 {
 		media := &amp.MediaInfo{
@@ -145,11 +145,11 @@ func (item *fsFile) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
 			Title:      item.text.Title,
 			Collection: item.text.Subtitle,
 		}
-		dst.Marshal(app.MediaInfoAttr, 0, media)
+		dst.Marshal(ctx.GetAttrID(amp.MediaInfoAttrSpec), 0, media)
 	}
 
 	if item.pinnedURL != "" {
-		dst.Marshal(app.PlayableAssetAttr, 0, &arc.AssetRef{
+		dst.Marshal(ctx.GetAttrID(amp.PlayableAssetAttrSpec), 0, &arc.AssetRef{
 			URI: item.pinnedURL,
 		})
 	}

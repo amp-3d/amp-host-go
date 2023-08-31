@@ -15,8 +15,7 @@ const (
 	MimeType_Album    = "application/x-album"
 	MimeType_Playlist = "application/x-playlist"
 
-	ListItemSeparator     = " · "
-	PlayableAssetAttrSpec = "AssetRef:playable"
+	ListItemSeparator = " · "
 )
 
 var (
@@ -27,12 +26,13 @@ var (
 
 type AppBase struct {
 	arc.AppBase
-
-	// attr specs
-	MediaInfoAttr     uint32
-	MediaPlaylistAttr uint32
-	PlayableAssetAttr uint32
 }
+
+const (
+	MediaInfoAttrSpec     = "MediaInfo"
+	MediaPlaylistAttrSpec = "MediaPlaylist"
+	PlayableAssetAttrSpec = "AssetRef:playable"
+)
 
 type Cell[AppT arc.AppContext] interface {
 	arc.Cell
@@ -40,7 +40,7 @@ type Cell[AppT arc.AppContext] interface {
 	// Returns a human-readable label for this cell useful for debugging and logging.
 	GetLogLabel() string
 
-	MarshalAttrs(app AppT, dst *arc.CellTx) error
+	MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error
 
 	// Called when this cell is pinned from a parent (vs an absolute URL)
 	OnPinned(parent Cell[AppT]) error

@@ -47,24 +47,22 @@ func (cell *spotifyCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 	return cell.pinner(dst, cell)
 }
 
-func (cell *spotifyCell) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellHeaderAttr, 0, &cell.hdr)
-	dst.Marshal(app.CellTextAttr, 0, &cell.text)
+func (cell *spotifyCell) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
+	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &cell.hdr)
+	dst.Marshal(ctx.GetAttrID(arc.CellTextAttrSpec), 0, &cell.text)
 	return nil
 }
 
-func (cell *playlistCell) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	cell.spotifyCell.MarshalAttrs(app, dst)
-	dst.Marshal(app.MediaPlaylistAttr, 0, &cell.MediaPlaylist)
+func (cell *playlistCell) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
+	cell.spotifyCell.MarshalAttrs(dst, ctx)
+	dst.Marshal(ctx.GetAttrID(amp.MediaPlaylistAttrSpec), 0, &cell.MediaPlaylist)
 	return nil
 }
 
-func (cell *trackCell) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	cell.spotifyCell.MarshalAttrs(app, dst)
-	dst.Marshal(app.MediaInfoAttr, 0, &cell.MediaInfo)
-	if cell.playable != nil {
-		dst.Marshal(app.PlayableAssetAttr, 0, cell.playable)
-	}
+func (cell *trackCell) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
+	cell.spotifyCell.MarshalAttrs(dst, ctx)
+	dst.Marshal(ctx.GetAttrID(amp.MediaInfoAttrSpec), 0, &cell.MediaInfo)
+	dst.Marshal(ctx.GetAttrID(amp.PlayableAssetAttrSpec), 0, cell.playable)
 	return nil
 }
 

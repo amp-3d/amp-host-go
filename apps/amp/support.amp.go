@@ -10,16 +10,6 @@ func (app *AppBase) OnNew(ctx arc.AppContext) (err error) {
 	if err != nil {
 		return
 	}
-
-	if app.MediaInfoAttr, err = app.ResolveAppAttr((&MediaInfo{}).TypeName()); err != nil {
-		return
-	}
-	if app.MediaPlaylistAttr, err = app.ResolveAppAttr((&MediaPlaylist{}).TypeName()); err != nil {
-		return
-	}
-	if app.PlayableAssetAttr, err = app.ResolveAppAttr(PlayableAssetAttrSpec); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -110,14 +100,13 @@ func (parent *PinnedCell[AppT]) GetChildCell(target arc.CellID) (cell *CellBase[
 }
 
 func (parent *PinnedCell[AppT]) PinCell(req arc.PinReq) (arc.PinnedCell, error) {
-	params := req.Params()
-
+	reqParams := req.Params()
 	parentID := parent.CellID
-	if params.Target == parentID {
+	if reqParams.Target == parentID {
 		return parent, nil
 	}
 
-	child := parent.GetChildCell(params.Target)
+	child := parent.GetChildCell(reqParams.Target)
 	if child == nil {
 		return nil, arc.ErrCellNotFound
 	}
@@ -142,7 +131,7 @@ func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
 		if tx.TargetCell == 0 {
 			return arc.ErrBadCellTx
 		}
-		err := target.Self.MarshalAttrs(parent.App, &tx)
+		err := target.Self.MarshalAttrs(&tx, ctx)
 		if err != nil {
 			return err
 		}

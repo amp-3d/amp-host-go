@@ -10,11 +10,11 @@ type categories struct {
 	//items []*
 }
 
-func (cats *categories) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
-	dst.Marshal(app.CellTextAttr, 0, &arc.CellText{
+func (cats *categories) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
+	dst.Marshal(ctx.GetAttrID(arc.CellTextAttrSpec), 0, &arc.CellText{
 		Title: "Internet Radio",
 	})
-	dst.Marshal(app.CellHeaderAttr, 0, &arc.CellHeader{
+	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &arc.CellHeader{
 		Glyph240: amp.DirGlyph,
 	})
 	return nil
