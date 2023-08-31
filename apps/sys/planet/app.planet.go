@@ -25,7 +25,7 @@ const (
 var AppUID = arc.FormUID(0xda1949fbe7a642de, 0xaa4dba7a3f939f27)
 
 func RegisterApp(reg arc.Registry) {
-	reg.RegisterApp(&arc.AppModule{
+	reg.RegisterApp(&arc.App{
 		AppID:   AppID,
 		UID:     AppUID,
 		Desc:    "cell storage & sync",

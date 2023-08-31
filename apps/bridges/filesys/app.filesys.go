@@ -25,7 +25,7 @@ func UID() arc.UID {
 func RegisterApp(reg arc.Registry) {
 	reg.RegisterElemType(&amp.MediaPlaylist{})
 
-	reg.RegisterApp(&arc.AppModule{
+	reg.RegisterApp(&arc.App{
 		AppID:   AppID,
 		UID:     UID(),
 		Desc:    "local file system service",

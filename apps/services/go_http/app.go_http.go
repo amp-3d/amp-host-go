@@ -14,7 +14,7 @@ func UID() arc.UID {
 }
 
 func RegisterApp(reg arc.Registry) {
-	reg.RegisterApp(&arc.AppModule{
+	reg.RegisterApp(&arc.App{
 		AppID:   AppID,
 		UID:     UID(),
 		Desc:    "Go's http server",
