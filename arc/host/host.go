@@ -550,15 +550,14 @@ func (sess *hostSess) PinCell(pinReq arc.PinReq) (arc.PinContext, error) {
 func (sess *hostSess) pinCell(req *appReq) error {
 	var err error
 
-	req.Target = arc.CellID(req.PinReq.PinCellID)
-
 	pinReq := &req.PinReq
+	req.PinCell = pinReq.CellID()
 
 	// Parse and process the pin request (PinReq)
 	if len(pinReq.PinURL) > 0 {
 		req.URL, err = url.Parse(pinReq.PinURL)
 		if err != nil {
-			err = arc.ErrCode_InvalidReq.Errorf("failed to parse PinURI: %v", err)
+			err = arc.ErrCode_InvalidReq.Errorf("failed to parse PinURL: %v", err)
 			return err
 		}
 	}
@@ -657,6 +656,7 @@ func (sess *hostSess) appContextForUID(appID arc.UID, autoCreate bool) (*appCont
 		}
 
 		app = &appContext{
+			//rng:     rand.New(rand.NewSource(time.Now().UnixNano())),
 			appInst: appModule.NewAppInstance(),
 			sess:    sess,
 			module:  appModule,
@@ -714,15 +714,37 @@ func (sess *hostSess) appCtxForInvocation(invocation string, autoCreate bool) (*
 type appContext struct {
 	task.Context
 
+	//rng     *rand.Rand
 	appInst arc.AppInstance
 	sess    *hostSess
 	module  *arc.App
 	appReqs chan *appReq // incoming requests for the app
 }
 
-func (ctx *appContext) IssueCellID() arc.CellID {
-	return arc.CellID(ctx.sess.nextID.Add(1) + 100)
+func (ctx *appContext) IssueCellID() (id arc.CellID) {
+	id.AssignFromU64(ctx.sess.nextID.Add(1)+100, 0)
+	return
+	///return arc.IssueCellID(ctx.rng)
 }
+
+/*
+func (reg *sessRegistry) IssueTimeID() arc.TimeID {
+	now := int64(arc.ConvertToUTC16(time.Now()))
+	if !reg.timeMu.CompareAndSwap(0, 1) { // spin lock
+		runtime.Gosched()
+	}
+	issued := reg.timeID
+	if issued < now {
+		issued = now
+	} else {
+		issued += 1
+	}
+	reg.timeID = issued
+	reg.timeMu.Store(0) // spin unlock
+
+	return arc.TimeID(issued)
+}
+*/
 
 func (ctx *appContext) Session() arc.HostSession {
 	return ctx.sess
@@ -862,75 +884,3 @@ func (app *appContext) handleAppReq(req *appReq) error {
 
 	return err
 }
-
-/*
-// implements arc.PinContext in order to read a planet cell as a "one-shot" read
-type fauxClient struct {
-	task.Context // stays nil since this never spins up as a real PinContext
-	arc.SessionRegistry
-	invoker arc.AppContext
-	match   arc.AttrSpec
-	val     arc.ElemVal
-	err     error
-}
-
-func (ctx *fauxClient) App() arc.AppContext {
-	return ctx.invoker
-}
-
-func (ctx *fauxClient) MaintainSync() bool {
-	return false
-}
-
-func (ctx *fauxClient) UsingNativeSymbols() bool {
-	return true
-}
-
-func (ctx *fauxClient) PushUpdate(msg *arc.Msg) bool {
-	var err error
-	if msg.AttrID == ctx.match.DefID {
-		err = ctx.val.Unmarshal(msg.ValBuf)
-		ctx.err = err
-		return false
-	}
-	msg.Reclaim()
-	return true
-}
-*/
-/*
-func (ctx *appContext) GetSchemaForType(typ reflect.Type) (*arc.AttrSchema, error) {
-
-	// TODO: skip if already registered
-	{
-	}
-
-	schema, err := arc.MakeSchemaForType(typ)
-	if err != nil {
-		return nil, err
-	}
-
-	schema.SchemaID = ctx.nextSchemaID.Add(-1) // negative IDs reserved for host-side schemas
-	defs := arc.Defs{
-		Schemas: []*arc.AttrSchema{schema},
-	}
-	err = ctx.Session().RegisterDefs(&defs)
-	if err != nil {
-		return nil, err
-	}
-
-	return schema, nil
-}
-
-func (ctx *appContext) getValStoreSchema() (schema *arc.AttrSchema, err error) {
-	if ctx.valStoreSchemaID == 0 {
-		schema, err = ctx.GetSchemaForType(reflect.TypeOf(valStore{}))
-		if err != nil {
-			return
-		}
-		ctx.valStoreSchemaID = schema.SchemaID
-	} else {
-		schema, err = ctx.Session().GetSchemaByID(ctx.valStoreSchemaID)
-	}
-	return
-}
-*/

@@ -16,7 +16,6 @@ import (
 	"github.com/dgraph-io/badger/v4"
 )
 
-// King Jesus, our Lord's Christ, is a servant, our advocate!
 const (
 	AppID           = "planet" + sys.AppFamilyDomain
 	HomePlanetAlias = "~" // hard-wired alias for the the current user's home planet
@@ -122,7 +121,7 @@ func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCel
 		}
 	}
 
-	// TODO: security risk to allow symbols to be made
+	// TODO: security risk to allow symbols to be made -- ask session to issue symbols (and error out past threshold
 	scopeID := pl.GetSymbolID([]byte(urlParts[1]), true)
 	cellID := pl.GetSymbolID([]byte(urlParts[2]), true)
 
@@ -298,8 +297,8 @@ type plCell struct {
 
 
     // ValType_AttrSet            = 4; // .ValInt is a AttrSet CellID
-    // ValType_NameSet            = 5; // CellID+AttrID+NameID     => Msg.(Type)          Values only 
-    // ValType_CellSet            = 6; // CellID+AttrID+CellID     => Cell_NID            AttrSet NIDs only 
+    // ValType_NameSet            = 5; // CellID+AttrID+NameID     => Msg.(Type)          Values only
+    // ValType_CellSet            = 6; // CellID+AttrID+CellID     => Cell_NID            AttrSet NIDs only
     // ValType_Series             = 8; // CellID+AttrID+TSI+FromID => Msg.(Type)          Values only
     // ValType_CellRef            = 20; // .FromID and .SI together identify a cell
     // ValType_CellSetID          = 21; // .ValInt is a CellSet ID (used for SetValType_CellSet)
@@ -374,8 +373,9 @@ func (pl *plSess) getCell(scopeID, nodeID uint32) (cell *plCell, err error) {
 	pl.cellsMu.Lock()
 	defer pl.cellsMu.Unlock()
 
-	cellID := arc.CellID(uint64(scopeID)<<32 | uint64(nodeID))
-
+	// TODO: this will change when we support child cells
+	cellID := arc.CellIDFromU64(uint64(scopeID)<<32 | uint64(nodeID), 0)
+	
 	// If the cell is already open, make sure it doesn't auto-close while we are handling it.
 	cell = pl.cells[cellID]
 	if cell != nil && cell.ctx.PreventIdleClose(time.Second) {
@@ -670,10 +670,10 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 
 			if cellTx == nil {
 				cellTx = &arc.CellTxPb{
-					Op:         arc.CellTxOp_UpsertCell,
-					TargetCell: int64(cell.CellID),
-					Elems:      make([]*arc.AttrElemPb, 0, 4),
+					Op:    arc.CellTxOp_UpsertCell,
+					Elems: make([]*arc.AttrElemPb, 0, 4),
 				}
+				cellTx.CellID_0, cellTx.CellID_1 = cell.CellID.ExportAsU64()
 			}
 			cellTx.Elems = append(cellTx.Elems, elem)
 		}
@@ -705,11 +705,13 @@ func (cell *plCell) mergeUpdate(tx *arc.Msg) error {
 	var keyBuf [512]byte
 	key := keyBuf[:0]
 
+	var target arc.CellID
 	for _, cellTx := range tx.CellTxs {
 
 		// TODO: handle child cells
-		if cellTx.TargetCell != 0 && arc.CellID(cellTx.TargetCell) != cell.CellID {
-			cell.ctx.Warnf("unsupported child cell merge %d", cellTx.TargetCell)
+		target.AssignFromU64(cellTx.CellID_0, cellTx.CellID_1)
+		if !target.IsNil() && target != cell.CellID {
+			cell.ctx.Warnf("unsupported child cell merge %d", target)
 			continue
 		}
 
@@ -759,19 +761,8 @@ func (cell *plCell) pushToSubs(src *arc.Msg) {
 
 				msg := arc.NewMsg()
 				msg.Status = src.Status
-				if cap(msg.CellTxs) < len(src.CellTxs) {
-					msg.CellTxs = make([]*arc.CellTxPb, len(src.CellTxs))
-				} else {
-					msg.CellTxs = msg.CellTxs[:len(src.CellTxs)]
-				}
-
-				for j, srcTx := range src.CellTxs {
-					msg.CellTxs[j] = &arc.CellTxPb{
-						Op:         srcTx.Op,
-						TargetCell: int64(srcTx.TargetCell),
-						Elems:      srcTx.Elems,
-					}
-				}
+				msg.CellTxs = append(msg.CellTxs[:0], src.CellTxs...)
+				
 				err := subCtx.PushUpdate(msg)
 				if err != nil {
 					subCtx.Warn("failed to push update: ", err)

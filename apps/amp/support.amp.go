@@ -1,6 +1,8 @@
 package amp
 
 import (
+	"time"
+
 	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-arc-sdk/stdlib/task"
 )
@@ -14,7 +16,7 @@ func (app *AppBase) OnNew(ctx arc.AppContext) (err error) {
 }
 
 func NewPinnedCell[AppT arc.AppContext](app AppT, cell *CellBase[AppT]) (arc.PinnedCell, error) {
-	if cell.CellID == 0 {
+	if cell.CellID.IsNil() {
 		cell.CellID = app.IssueCellID()
 	}
 	pinned := &PinnedCell[AppT]{
@@ -29,7 +31,8 @@ func NewPinnedCell[AppT arc.AppContext](app AppT, cell *CellBase[AppT]) (arc.Pin
 
 	// Like most apps, pinned items are started as direct child contexts of the app context\
 	pinned.cellCtx, err = app.StartChild(&task.Task{
-		Label: "cell: " + cell.Self.GetLogLabel(),
+		Label:     "cell: " + cell.Self.GetLogLabel(),
+		IdleClose: time.Nanosecond,
 	})
 	if err != nil {
 		return nil, err
@@ -70,8 +73,7 @@ func (parent *PinnedCell[AppT]) MergeUpdate(tx *arc.Msg) error {
 }
 
 func (parent *PinnedCell[AppT]) GetChildCell(target arc.CellID) (cell *CellBase[AppT]) {
-	parentID := parent.CellID
-	if target == parentID {
+	if target == parent.CellID {
 		cell = parent.CellBase
 	} else {
 		// build a child lookup map on-demand
@@ -101,12 +103,11 @@ func (parent *PinnedCell[AppT]) GetChildCell(target arc.CellID) (cell *CellBase[
 
 func (parent *PinnedCell[AppT]) PinCell(req arc.PinReq) (arc.PinnedCell, error) {
 	reqParams := req.Params()
-	parentID := parent.CellID
-	if reqParams.Target == parentID {
+	if reqParams.PinCell == parent.CellID {
 		return parent, nil
 	}
 
-	child := parent.GetChildCell(reqParams.Target)
+	child := parent.GetChildCell(reqParams.PinCell)
 	if child == nil {
 		return nil, arc.ErrCellNotFound
 	}
@@ -128,7 +129,7 @@ func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
 		var tx arc.CellTx
 		tx.Clear(arc.CellTxOp_UpsertCell)
 		tx.TargetCell = target.CellID
-		if tx.TargetCell == 0 {
+		if tx.TargetCell.IsNil() {
 			return arc.ErrBadCellTx
 		}
 		err := target.Self.MarshalAttrs(&tx, ctx)
@@ -136,10 +137,10 @@ func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
 			return err
 		}
 		pb := &arc.CellTxPb{
-			Op:         tx.Op,
-			TargetCell: int64(tx.TargetCell),
-			Elems:      tx.ElemsPb,
+			Op:    tx.Op,
+			Elems: tx.ElemsPb,
 		}
+		pb.CellID_0, pb.CellID_1 = tx.TargetCell.ExportAsU64()
 		tx.ElemsPb = nil
 		*dst = pb
 		return err
