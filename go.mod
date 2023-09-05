@@ -11,7 +11,7 @@ go 1.18
 // Go Modules Reference:
 //    https://www.practical-go-lessons.com/chap-17-go-modules
 
-// replace github.com/arcspace/go-arc-sdk => ../go-arc-sdk
+replace github.com/arcspace/go-arc-sdk => ../go-arc-sdk
 
 // replace github.com/arcspace/go-librespot => ../go-librespot
 

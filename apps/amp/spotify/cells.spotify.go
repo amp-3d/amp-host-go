@@ -331,9 +331,11 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 		Collection:  track.Album.Name,
 		ItemNumber:  int32(track.TrackNumber),
 		Duration16:  int64(arc.ConvertMsToUTC(int64(track.Duration))),
-		CoverArt:    cell.hdr.Glyph240.URI,
 		Popularity:  .01 * float32(track.Popularity), // 0..100 => 0..1
 		ReleaseTime: track.Album.ReleaseDateTime().Unix(),
+	}
+	if cell.hdr.Glyph240 != nil {
+		cell.MediaInfo.CoverArt = cell.hdr.Glyph240.URI
 	}
 }
 
