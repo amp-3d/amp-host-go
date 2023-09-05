@@ -25,7 +25,7 @@ type HttpServerOpts struct {
 // DefaultHttpServerOpts returns the default options for a AssetServer
 func DefaultHttpServerOpts(listenPort int) HttpServerOpts {
 	return HttpServerOpts{
-		IdleExpire: time.Minute,
+		IdleExpire: 20 * time.Second,
 		ListenAddr: fmt.Sprintf(":%v", listenPort),
 	}
 }
