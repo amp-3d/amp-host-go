@@ -73,7 +73,7 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 	//////////////////  CellHeader
 	{
 		hdr := arc.CellHeader{
-			Modified: int64(arc.ConvertToUTC(item.modTime)),
+			Modified: int64(arc.ConvertToUTC16(item.modTime)),
 		}
 		if item.isDir {
 			hdr.Glyph240 = amp.DirGlyph
