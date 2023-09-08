@@ -3,6 +3,7 @@ package filesys
 import (
 	"os"
 	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,13 +15,13 @@ import (
 type fsItem struct {
 	amp.CellBase[*appCtx]
 
-	basename string // base file name
-	pathname string // non-nil when pinned (could be alternative OS handle)
-	isHidden bool
-	mode     os.FileMode
-	size     int64
-	isDir    bool
-	modTime  time.Time
+	basename  string // base file name
+	pathname  string // non-nil when pinned (could be alternative OS handle)
+	mode      os.FileMode
+	size      int64
+	isDir     bool
+	modTime   time.Time
+	mediaType string
 
 	hdr        arc.CellHeader
 	text       arc.CellText
@@ -58,16 +59,12 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 	item.basename = fi.Name()
 	item.mode = fi.Mode()
 	item.modTime = fi.ModTime()
-	item.isHidden = strings.HasPrefix(item.basename, ".")
 	item.isDir = fi.IsDir()
 
-	mediaType := ""
 	extLen := 0
-	if item.isDir {
-
-	} else {
+	if !item.isDir {
 		item.size = fi.Size()
-		mediaType, extLen = assets.GetMediaTypeForExt(item.basename)
+		item.mediaType, extLen = assets.GetMediaTypeForExt(item.basename)
 	}
 
 	//////////////////  CellHeader
@@ -79,10 +76,10 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 			hdr.Glyph240 = amp.DirGlyph
 		} else {
 			hdr.Glyph240 = &arc.AssetRef{
-				MediaType: mediaType,
+				MediaType: item.mediaType,
 			}
 			hdr.Link = &arc.AssetRef{
-				MediaType: mediaType,
+				MediaType: item.mediaType,
 				URI:       item.pathname,
 				Scheme:    arc.URIScheme_File,
 			}
@@ -110,9 +107,9 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 
 		// TODO: make smarter
 		switch {
-		case strings.HasPrefix(mediaType, "audio/"):
+		case strings.HasPrefix(item.mediaType, "audio/"):
 			item.mediaFlags |= amp.HasAudio
-		case strings.HasPrefix(mediaType, "video/"):
+		case strings.HasPrefix(item.mediaType, "video/"):
 			item.mediaFlags |= amp.HasVideo
 		}
 		item.mediaFlags |= amp.IsSeekable
@@ -150,7 +147,8 @@ func (item *fsFile) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 
 	if item.pinnedURL != "" {
 		dst.Marshal(ctx.GetAttrID(amp.PlayableAssetAttrSpec), 0, &arc.AssetRef{
-			URI: item.pinnedURL,
+			MediaType: item.mediaType,
+			URI:       item.pinnedURL,
 		})
 	}
 
@@ -175,62 +173,44 @@ type fsDir struct {
 
 // reads the fsDir's catalog and issues new items as needed.
 func (dir *fsDir) PinInto(dst *amp.PinnedCell[*appCtx]) error {
-	/*
 
-		{
-			//dir.subs = make(map[arc.CellID]os.DirEntry)
-			f, err := os.Open(dir.pathname)
-			if err != nil {
-				return err
+	{
+		//dir.subs = make(map[arc.CellID]os.DirEntry)
+		openDir, err := os.Open(dir.pathname)
+		if err != nil {
+			return err
+		}
+
+		dirItems, err := openDir.Readdir(-1)
+		openDir.Close()
+		if err != nil {
+			return nil
+		}
+
+		sort.Slice(dirItems, func(i, j int) bool {
+			ii := dirItems[i]
+			jj := dirItems[j]
+			if ii.IsDir() != jj.IsDir() { // return directories first
+				return ii.IsDir()
 			}
-			defer f.Close()
+			return ii.Name() < jj.Name() // then sort by name
+		})
 
-			lookup := make(map[string]*fsItem, len(dir.itemsByID))
-			for _, sub := range dir.itemsByID {
-				lookup[sub.basename] = sub
+		for _, fsInfo := range dirItems {
+			if strings.HasPrefix(fsInfo.Name(), ".") {
+				continue
 			}
-
-			dirItems, err := f.Readdir(-1)
-			f.Close()
-			if err != nil {
-				return nil
+			if fsInfo.IsDir() {
+				dir := &fsDir{}
+				dir.setFrom(fsInfo)
+				dir.AddTo(dst, dir)
+			} else {
+				file := &fsFile{}
+				file.setFrom(fsInfo)
+				file.AddTo(dst, file)
 			}
+		}
 
-			N := len(dirItems)
-			dir.itemsByID = make(map[arc.CellID]*fsItem, N)
-			dir.items = dir.items[:0]
-
-			var tmp *fsItem
-			for _, fi := range dirItems {
-				sub := tmp
-				if sub == nil {
-					sub = &fsItem{}
-				}
-				sub.setFrom(fi)
-				if sub.isHidden {
-					continue
-				}
-
-				// preserve items that have not changed
-				old := lookup[sub.basename]
-				if old == nil || old.Compare(sub) != 0 {
-					sub.CellID = dir.app.IssueCellID()
-					tmp = nil
-				} else {
-					sub = old
-				}
-
-				dir.itemsByID[sub.CellID] = sub
-				dir.items = append(dir.items, sub.CellID)
-			}
-
-			items := dir.items
-			sort.Slice(items, func(i, j int) bool {
-				ii := dir.itemsByID[items[i]]
-				jj := dir.itemsByID[items[j]]
-				return ii.Compare(jj) < 0
-			})
-
-			}*/
+	}
 	return nil
 }

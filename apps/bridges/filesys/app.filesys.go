@@ -16,6 +16,9 @@ func init() {
 
 const (
 	AppID = "filesys" + bridges.AppFamilyDomain
+
+	// PinURL param to pin the given absolute path
+	URLParam_PinPath = "path"
 )
 
 func UID() arc.UID {
@@ -49,39 +52,36 @@ func (app *appCtx) OnNew(ctx arc.AppContext) (err error) {
 }
 
 func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCell, error) {
-	var pathname string
-	if url := req.Params().URL; url != nil {
-		pathname = url.Path
-		pathname = path.Clean(pathname)
-		cell, err := app.newCellForPath(pathname)
-		if err != nil {
-			return nil, err
-		}
-		return amp.NewPinnedCell(app, cell)
-	}
-
 	if parent != nil {
 		return parent.PinCell(req)
 	}
 
-	return nil, arc.ErrCode_CellNotFound.Error("missing cell ID / URL")
+	var path string
+	if url := req.Params().URL; url != nil {
+		query := url.Query()
+		paths := query[URLParam_PinPath]
+		if len(paths) == 0 {
+			return nil, arc.ErrCode_CellNotFound.Error("missing URL argument 'path'")
+		}
+		path = paths[0]
+	}
+
+	return app.pinnedCellForPath(path)
 }
 
-func (app *appCtx) newCellForPath(pathname string) (*amp.CellBase[*appCtx], error) {
+func (app *appCtx) pinnedCellForPath(pathname string) (arc.PinnedCell, error) {
+	pathname = path.Clean(pathname)
 	if pathname == "" {
 		return nil, arc.ErrCode_CellNotFound.Error("missing cell ID / URL")
 	}
-	if len(pathname) > 0 && pathname[0] == '/' {
-		pathname = pathname[1:]
-	}
-	fi, err := os.Stat(pathname)
+
+	fsInfo, err := os.Stat(pathname)
 	if err != nil {
-		return nil, arc.ErrCode_CellNotFound.Errorf("local pathname not found: %q", pathname)
+		return nil, arc.ErrCode_CellNotFound.Errorf("path not found: %q", pathname)
 	}
 
 	var item *fsItem
-	isDir := fi.IsDir()
-	if isDir {
+	if fsInfo.IsDir() {
 		dir := &fsDir{}
 		dir.Self = dir
 		item = &dir.fsItem
@@ -91,46 +91,7 @@ func (app *appCtx) newCellForPath(pathname string) (*amp.CellBase[*appCtx], erro
 		item = &file.fsItem
 	}
 	item.pathname = pathname
-	item.setFrom(fi)
-	item.CellID = app.IssueCellID()
+	item.setFrom(fsInfo)
 
-	return &item.CellBase, nil
+	return amp.NewPinnedCell(app, &item.CellBase)
 }
-
-// func (app *appCtx) pinByPath(pathname string, req arc.PinReq) (arc.PinnedCell, error) {
-// 	if pathname == "" {
-// 		if url := req.URL(); url != nil {
-// 			pathname = url.Path
-// 		}
-// 		pathname = path.Clean(pathname)
-// 	}
-// 	// if pathname == "" {
-// 	// 	return nil, arc.ErrCode_CellNotFound.Error("missing cell ID / URL")
-// 	// }
-// 	// if len(pathname) > 0 && pathname[0] == '/' {
-// 	// 	pathname = pathname[1:]
-// 	// }
-// 	// fi, err := os.Stat(pathname)
-// 	// if err != nil {
-// 	// 	return nil, arc.ErrCode_CellNotFound.Errorf("local pathname not found: %q", pathname)
-// 	// }
-
-// 	var fsCell *fsItem
-// 	isDir := fi.IsDir()
-// 	if isDir {
-// 		//fsCell = (&fsDir{}).
-// 	} else {
-// 		fsCell = &fsFile{}
-// 	}
-// 	fsCell.pathname = pathname
-// 	fsCell.setFrom(fi)
-// 	fsCell.CellID = app.IssueCellID()
-// 	//fsCell.CellSpec =
-
-// 	pinned, err := fsCell.SpawnAsPinnedCell(app, pathname)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return pinned, nil
-// }
