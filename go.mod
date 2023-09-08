@@ -11,22 +11,22 @@ go 1.18
 // Go Modules Reference:
 //    https://www.practical-go-lessons.com/chap-17-go-modules
 
-replace github.com/arcspace/go-arc-sdk => ../go-arc-sdk
+// replace github.com/arcspace/go-arc-sdk => ../go-arc-sdk
 
 // replace github.com/arcspace/go-librespot => ../go-librespot
 
 require (
 	github.com/alecthomas/participle/v2 v2.0.0
-	github.com/arcspace/go-arc-sdk v0.0.0-20230830054222-445601860af4
+	github.com/arcspace/go-arc-sdk v0.0.0-20230908205216-e547d3e9e879
 	github.com/arcspace/go-librespot v0.0.0-20230830142655-eabdb255be0f
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/h2non/filetype v1.1.3
 	github.com/pkg/errors v0.9.1
 	github.com/zmb3/spotify/v2 v2.3.1
-	golang.org/x/crypto v0.12.0
-	golang.org/x/oauth2 v0.11.0
-	google.golang.org/grpc v1.57.0
+	golang.org/x/crypto v0.13.0
+	golang.org/x/oauth2 v0.12.0
+	google.golang.org/grpc v1.58.0
 )
 
 require (
@@ -42,13 +42,13 @@ require (
 	github.com/google/uuid v1.3.1 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8 // indirect
-	github.com/rs/cors v1.9.0 // indirect
+	github.com/rs/cors v1.10.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/net v0.14.0 // indirect
+	golang.org/x/net v0.15.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.11.0 // indirect
-	golang.org/x/text v0.12.0 // indirect
-	google.golang.org/appengine v1.6.7 // indirect
+	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
+	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 )
