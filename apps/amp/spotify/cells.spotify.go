@@ -14,6 +14,7 @@ type Pinner func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error
 
 type spotifyCell struct {
 	amp.CellBase[*appCtx]
+
 	spotifyID spotify.ID
 	pinner    Pinner
 	hdr       arc.CellHeader
@@ -62,7 +63,7 @@ func (cell *playlistCell) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) erro
 func (cell *trackCell) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 	cell.spotifyCell.MarshalAttrs(dst, ctx)
 	dst.Marshal(ctx.GetAttrID(amp.MediaInfoAttrSpec), 0, &cell.MediaInfo)
-	if (cell.playable != nil) {
+	if cell.playable != nil {
 		dst.Marshal(ctx.GetAttrID(amp.PlayableAssetAttrSpec), 0, cell.playable)
 	}
 	return nil

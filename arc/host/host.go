@@ -196,9 +196,9 @@ func (req *appReq) App() arc.AppContext {
 
 func (req *appReq) GetLogLabel() string {
 	var strBuf [128]byte
-	str := fmt.Appendf(strBuf[:0], "req %d", req.ReqID)
+	str := fmt.Appendf(strBuf[:0], "[req %d] ", req.ReqID)
 	if req.URL != nil {
-		str = fmt.Append(str, ": ", req.URL.String())
+		str = fmt.Append(str, " ", req.URL.String())
 	}
 	return string(str)
 }

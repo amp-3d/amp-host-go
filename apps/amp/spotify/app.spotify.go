@@ -145,7 +145,7 @@ func (app *appCtx) tryConnect() error {
 	app.me, err = app.client.CurrentUser(app)
 	if err != nil {
 		app.client = nil
-		err = arc.ErrCode_ProviderErr.Error("failed to get current user")
+		err = arc.ErrCode_ProviderErr.Errorf("failed to get current user: %v", err)
 	}
 	if err != nil {
 		return err

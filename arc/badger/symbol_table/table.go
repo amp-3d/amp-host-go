@@ -39,7 +39,9 @@ func (st *symbolTable) close() error {
 	return err
 }
 
-// symbolTable implements symbol.Table
+// symbolTable implements symbol.Table using badger (a LSM db) as the backing store.
+//
+// All methods are concurrency-safe.
 type symbolTable struct {
 	opts     TableOpts
 	refCount atomic.Int32
