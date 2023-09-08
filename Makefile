@@ -5,7 +5,7 @@ BUILD_PATH  := $(patsubst %/,%,$(abspath $(dir $(lastword $(MAKEFILE_LIST)))))
 PARENT_PATH := $(patsubst %/,%,$(dir $(BUILD_PATH)))
 UNITY_PROJ := ${PARENT_PATH}/arcspace.unity-app
 UNITY_PATH := $(shell python3 ${UNITY_PROJ}/arc-utils.py UNITY_PATH "${UNITY_PROJ}")
-ARC_LIBS = ${UNITY_PROJ}/Assets/Plugins/ArcXR/Plugins
+UNITY_ARC_LIBS = ${UNITY_PROJ}/Assets/Plugins/ArcXR/Plugins
 ARC_UNITY_PATH = ${UNITY_PROJ}/Assets/ArcXR
 grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
 LIB_PROJ := ${BUILD_PATH}/cmd/libarchost
@@ -17,21 +17,19 @@ ANDROID_CC := ${ANDROID_NDK}/toolchains/llvm/prebuilt/darwin-x86_64/bin
 ARC_SDK_PKG := "github.com/arcspace/go-arc-sdk"  
 ARC_SDK_PATH := $(shell go list -f '{{.Dir}}' $(ARC_SDK_PKG)) # errors until sdk has official version assigned
 ARC_SDK_PATH := "${PARENT_PATH}/go-arc-sdk"
-CAPNP_INCLUDE := "${ARC_SDK_PATH}/apis/capnp/include"
 
-## display this help message
+## prints this message
 help:
 	@echo -e "\033[32m"
 	@echo "go-archost"
 	@echo "  PARENT_PATH:     ${PARENT_PATH}"
+	@echo "  ARC_SDK_PATH:    ${ARC_SDK_PATH}"
 	@echo "  BUILD_PATH:      ${BUILD_PATH}"
 	@echo "  UNITY_PROJ:      ${UNITY_PROJ}"
+	@echo "  UNITY_ARC_LIBS:  ${UNITY_ARC_LIBS}"
 	@echo "  UNITY_PATH:      ${UNITY_PATH}"
-	@echo "  ARC_LIBS:        ${ARC_LIBS}"
 	@echo "  ANDROID_NDK:     ${ANDROID_NDK}"
 	@echo "  ANDROID_CC:      ${ANDROID_CC}"
-	@echo "  ARC_SDK_PATH:    ${ARC_SDK_PATH}"
-	@echo "  CAPNP_INCLUDE:   ${CAPNP_INCLUDE}"
 	@echo
 	@awk '/^##.*$$/,/[a-zA-Z_-]+:/' $(MAKEFILE_LIST) | awk '!(NR%2){print $$0p}{p=$$0}' | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-32s\033[0m %s\n", $$1, $$2}' | sort
 
@@ -42,7 +40,7 @@ GOFILES = $(shell find . -type f -name '*.go')
 	
 .PHONY: build generate tools
 
-## build archost and libarchost
+## builds both archost & libarchost
 build:  archost libarchost
 
 
@@ -53,7 +51,7 @@ build:  archost libarchost
 #
 
 
-## build archost.dylib for OSX (build on x86_64 mac)
+## builds libarchost for OSX -- build on x86_64 mac for now
 libarchost-osx:
 # Beware of a Unity bug where *not* selecting "Any CPU" causes the app builder to not add the .dylib to the app bundle!
 # Also note that a .dylib is identical to the binary in an OS X .bundle.  Also: https://stackoverflow.com/questions/2339679/what-are-the-differences-between-so-and-dylib-on-macos 
@@ -62,32 +60,32 @@ libarchost-osx:
 	OUT_DIR="${ARC_LIBS}"           CC="${LIB_PROJ}/clangwrap.sh" \
 	PLATFORM=OSX                    GOARCH=amd64        "${LIB_PROJ}/build.sh"
 
-## build archost.a for iOS (build on x86_64 mac)
+## builds libarchost for iOS -- build on x86_64 mac for now
 libarchost-ios:
 	OUT_DIR="${ARC_LIBS}"           CC="${LIB_PROJ}/clangwrap.sh" \
 	PLATFORM=iOS                    GOARCH=arm64        "${LIB_PROJ}/build.sh"
 
-## build libarchost for arm64-v8a
+## builds libarchost for arm64-v8a
 libarchost-android-arm64-v8a:
 	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/aarch64-linux-android27-clang" \
 	PLATFORM=Android/arm64-v8a      GOARCH=arm64        "${LIB_PROJ}/build.sh"
 
-## build libarchost for armeabi-v7a 
+## builds libarchost for armeabi-v7a 
 libarchost-android-armeabi-v7a:
 	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/armv7a-linux-androideabi27-clang" \
 	PLATFORM=Android/armeabi-v7a    GOARCH=arm          "${LIB_PROJ}/build.sh"
 
-## build libarchost for armeabi-x86_64
+## builds libarchost for armeabi-x86_64
 libarchost-android-x86_64_:
 	OUT_DIR="${ARC_LIBS}"           CC="${ANDROID_CC}/x86_64-linux-android27-clang" \
 	PLATFORM=Android/x86_64         GOARCH=amd64        "${LIB_PROJ}/build.sh"
 
 
-## build archost.dylib/so/.a for all platforms
+## builds libarchost for all platforms for embeddeding in a Unity or Unreal project
 libarchost:  libarchost-osx libarchost-ios libarchost-android-arm64-v8a libarchost-android-armeabi-v7a libarchost-android-x86_64_
 
 
-## build archost "headless" daemon
+## builds archost "headless" executable
 archost:
 	cd cmd/archost && touch main.go \
 	&& go build -trimpath .
@@ -95,7 +93,7 @@ archost:
 
 
 
-## generate .cs and .go files from .proto & .capnp
+## generate .cs and .go files from .proto
 generate:
 #   GrpcTools (2.49.1)
 #   Install protoc & grpc_csharp_plugin:
@@ -122,7 +120,7 @@ generate:
 		
 
 
-## build fmod play toy
+## builds fmod playback toy (experiment)
 play:
 #   https://stackoverflow.com/questions/75666660/how-can-i-specify-a-relative-dylib-path-in-cgo-on-macos
 	cd cmd/play && touch main.go \
