@@ -9,8 +9,8 @@ import (
 	"github.com/arcspace/go-arc-sdk/stdlib/log"
 	"github.com/arcspace/go-arc-sdk/stdlib/task"
 	"github.com/arcspace/go-arc-sdk/stdlib/utils"
-	"github.com/arcspace/go-archost/arc/grpc_service"
 	"github.com/arcspace/go-archost/arc/host"
+	"github.com/arcspace/go-archost/arc/host/grpc_service"
 )
 
 func main() {

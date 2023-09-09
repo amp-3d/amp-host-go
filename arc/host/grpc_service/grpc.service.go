@@ -16,7 +16,7 @@ import (
 	"github.com/arcspace/go-arc-sdk/stdlib/task"
 )
 
-// grpcServer is the GRPC implementation of repo.proto
+// grpcServer implements arc.HostService and makes calls to arc.Host.StartNewSession() when a grpc client connects.
 type grpcServer struct {
 	task.Context
 	server *grpc.Server

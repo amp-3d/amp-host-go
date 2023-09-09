@@ -9,7 +9,7 @@ import (
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/arc/host"
-	"github.com/arcspace/go-archost/arc/lib_service"
+	"github.com/arcspace/go-archost/arc/host/lib_service"
 )
 
 var (
