@@ -29,10 +29,10 @@ type AppBase struct {
 	arc.AppBase
 }
 
-const (
-	MediaInfoAttrSpec     = "MediaInfo"
-	MediaPlaylistAttrSpec = "MediaPlaylist"
-	PlayableAssetAttrSpec = "AssetRef:playable"
+var (
+	MediaInfoAttrID     = arc.GenAttrUID(((*MediaInfo)(nil)).ElemTypeName())
+	MediaPlaylistAttrID = arc.GenAttrUID("MediaPlaylist")
+	PlayableAssetAttrID = arc.GenAttrUID("AssetRef:playable")
 )
 
 type Cell[AppT arc.AppContext] interface {
@@ -41,7 +41,8 @@ type Cell[AppT arc.AppContext] interface {
 	// Returns a human-readable label for this cell useful for debugging and logging.
 	GetLogLabel() string
 
-	MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error
+	// Marshals attributes of this Cell to the given tx.
+	MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error
 
 	// Called when this cell is pinned from a parent (vs an absolute URL)
 	OnPinned(parent Cell[AppT]) error

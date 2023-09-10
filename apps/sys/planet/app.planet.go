@@ -244,7 +244,7 @@ func (app *appCtx) onPlanetClosed(pl *plSess) {
 
 // Db key format:
 //
-//	AppSID + NodeSID + AttrNamedTypeSID [+ SI] => ElemVal
+//	AppSID + NodeSID + AttrNamedTypeSID [+ SI] => AttrElemVal
 const (
 	kScopeOfs = 0 // byte offset of AppID
 	kNodeOfs  = 4 // byte offset of NodeID
@@ -269,9 +269,9 @@ type plSess struct {
 // *** implements arc.PinnedCell ***
 type plCell struct {
 	arc.CellID
-	pl      *plSess       // parent planet
-	ctx     task.Context  // arc.PinnedCell ctx
-	newTxns chan *arc.Msg // txns to merge
+	pl      *plSess           // parent planet
+	ctx     task.Context      // arc.PinnedCell ctx
+	newTxns chan *arc.TxMsg // txns to merge
 	dbKey   [kAttrOfs]byte
 	// newSubs  chan *plReq        // new requests waiting for state
 	// subsHead *plReq             // single linked list of open reqs on this cell
@@ -297,9 +297,9 @@ type plCell struct {
 
 
     // ValType_AttrSet            = 4; // .ValInt is a AttrSet CellID
-    // ValType_NameSet            = 5; // CellID+AttrID+NameID     => Msg.(Type)          Values only
+    // ValType_NameSet            = 5; // CellID+AttrID+NameID     => TxMsg.(Type)          Values only
     // ValType_CellSet            = 6; // CellID+AttrID+CellID     => Cell_NID            AttrSet NIDs only
-    // ValType_Series             = 8; // CellID+AttrID+TSI+FromID => Msg.(Type)          Values only
+    // ValType_Series             = 8; // CellID+AttrID+TSI+FromID => TxMsg.(Type)          Values only
     // ValType_CellRef            = 20; // .FromID and .SI together identify a cell
     // ValType_CellSetID          = 21; // .ValInt is a CellSet ID (used for SetValType_CellSet)
 
@@ -374,8 +374,8 @@ func (pl *plSess) getCell(scopeID, nodeID uint32) (cell *plCell, err error) {
 	defer pl.cellsMu.Unlock()
 
 	// TODO: this will change when we support child cells
-	cellID := arc.CellIDFromU64(uint64(scopeID)<<32 | uint64(nodeID), 0)
-	
+	cellID := arc.CellIDFromU64(uint64(scopeID)<<32|uint64(nodeID), 0)
+
 	// If the cell is already open, make sure it doesn't auto-close while we are handling it.
 	cell = pl.cells[cellID]
 	if cell != nil && cell.ctx.PreventIdleClose(time.Second) {
@@ -384,7 +384,7 @@ func (pl *plSess) getCell(scopeID, nodeID uint32) (cell *plCell, err error) {
 
 	cell = &plCell{
 		pl:      pl,
-		newTxns: make(chan *arc.Msg),
+		newTxns: make(chan *arc.TxMsg),
 	}
 	cell.CellID = cellID
 
@@ -684,10 +684,10 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 	if cellTx != nil {
 		msg.CellTxs = append(msg.CellTxs, cellTx)
 	}
-	return ctx.PushUpdate(msg)
+	return ctx.PushTx(msg)
 }
 
-func (cell *plCell) MergeUpdate(tx *arc.Msg) error {
+func (cell *plCell) MergeTx(tx *arc.TxMsg) error {
 	select {
 	case cell.newTxns <- tx:
 		return nil // IDEA: maybe we just block until the txn is merged?  this lets us report errors
@@ -697,7 +697,7 @@ func (cell *plCell) MergeUpdate(tx *arc.Msg) error {
 }
 
 // TODO: handle SIs and children!
-func (cell *plCell) mergeUpdate(tx *arc.Msg) error {
+func (cell *plCell) mergeUpdate(tx *arc.TxMsg) error {
 	dbTx := cell.pl.db.NewTransaction(true)
 	defer dbTx.Discard()
 
@@ -743,12 +743,12 @@ func (cell *plCell) mergeUpdate(tx *arc.Msg) error {
 	return nil
 }
 
-func (cell *plCell) pushToSubs(src *arc.Msg) {
+func (cell *plCell) pushToSubs(srcTx *arc.TxMsg) {
 	var childBuf [8]task.Context
 	subs := cell.ctx.GetChildren(childBuf[:0])
 
 	// TODO: lock sub while it's being pushed to?
-	//   Maybe each sub maintains a queue of Msg channels that push to it?
+	//   Maybe each sub maintains a queue of TxMsg channels that push to it?
 	//   - when the queue closes, it moves on to the next
 	//   - this would ensure a sub doesn't get 2+ msg batches at once
 	//   - see related comments for appReq
@@ -760,10 +760,10 @@ func (cell *plCell) pushToSubs(src *arc.Msg) {
 				}
 
 				msg := arc.NewMsg()
-				msg.Status = src.Status
+				msg.Status = srcTx.Status
 				msg.CellTxs = append(msg.CellTxs[:0], src.CellTxs...)
-				
-				err := subCtx.PushUpdate(msg)
+
+				err := subCtx.PushTx(msg)
 				if err != nil {
 					subCtx.Warn("failed to push update: ", err)
 				}
@@ -820,7 +820,7 @@ func (pl *planetSess) getUser(req arc.Login, autoCreate bool) (seat arc.UserSeat
 
 // WIP -- placeholder hack until cell+attr support is added to the db
 // Full replacement of all attrs is not how this will work in the future -- this is just a placeholder
-func (pl *planetSess) ReadCell(cellKey []byte, schema *arc.AttrSchema, msgs func(msg *arc.Msg)) error {
+func (pl *planetSess) ReadCell(cellKey []byte, schema *arc.AttrSchema, msgs func(msg *arc.TxMsg)) error {
 	cellSymID := pl.symTable.GetSymbolID(cellKey, false)
 	if cellSymID == 0 {
 		return arc.ErrCode_CellNotFound.Error("cell not found")
@@ -865,9 +865,9 @@ func (csess *cellInst) ServeState(req *nodeReq) error {
 	defer dbTx.Discard()
 
 	// A node maps to current state where each db itr step corresponds to an attr ID:
-	//    cellID+AttrID           => Msg
+	//    cellID+AttrID           => TxMsg
 	// An attr declared as a series has keys of the form:
-	//    cellID+AttrID+SI+FromID => Msg  (future: SI+FromID is replaced by SI+CollisionSortByte)
+	//    cellID+AttrID+SI+FromID => TxMsg  (future: SI+FromID is replaced by SI+CollisionSortByte)
 	//
 	// This means:
 	//    - future machinery can be added to perform multi-node locking txns (that update the state node and push to subs)
@@ -893,7 +893,7 @@ func (csess *cellInst) ServeState(req *nodeReq) error {
 	msg := arc.NewMsg()
 	msg.Op = arc.MsgOp_AnnounceNode
 	msg.SetValue(&req.target)
-	err := req.PushUpdate(msg)
+	err := req.PushTx(msg)
 	if err == nil {
 		return err
 	}
@@ -957,7 +957,7 @@ func (csess *cellInst) ServeState(req *nodeReq) error {
 	// Send break when done
 	msg = arc.NewMsg()
 	msg.Op = arc.MsgOp_NodeUpdated
-	err = req.PushUpdate(msg)
+	err = req.PushTx(msg)
 	if err != nil {
 		return err
 	}

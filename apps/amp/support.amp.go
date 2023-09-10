@@ -47,6 +47,14 @@ func (cell *CellBase[AppT]) AddTo(dst *PinnedCell[AppT], self Cell[AppT]) {
 	dst.AddChild(cell)
 }
 
+func (cell *CellBase[AppT]) FormAttrUpsert() arc.CellOp {
+	return arc.CellOp{
+		OpCode: arc.CellOpCode_UpsertAttr,
+		CellID: cell.CellID,
+	}
+}
+
+
 func (parent *PinnedCell[AppT]) GetCell(target arc.CellID) *CellBase[AppT] {
 	parentID := parent.CellID
 	if target == parentID {
@@ -68,7 +76,7 @@ func (parent *PinnedCell[AppT]) AddChild(child *CellBase[AppT]) {
 	parent.children = append(parent.children, child)
 }
 
-func (parent *PinnedCell[AppT]) MergeUpdate(tx *arc.Msg) error {
+func (parent *PinnedCell[AppT]) MergeTx(tx *arc.TxMsg) error {
 	return arc.ErrUnimplemented
 }
 
@@ -124,77 +132,61 @@ func (parent *PinnedCell[AppT]) Context() task.Context {
 }
 
 func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
-
-	marshalToTx := func(dst **arc.CellTxPb, target *CellBase[AppT]) error {
-		var tx arc.CellTx
-		tx.Clear(arc.CellTxOp_UpsertCell)
-		tx.TargetCell = target.CellID
-		if tx.TargetCell.IsNil() {
-			return arc.ErrBadCellTx
-		}
-		err := target.Self.MarshalAttrs(&tx, ctx)
-		if err != nil {
-			return err
-		}
-		pb := &arc.CellTxPb{
-			Op:    tx.Op,
-			Elems: tx.ElemsPb,
-		}
-		pb.CellID_0, pb.CellID_1 = tx.TargetCell.ExportAsU64()
-		tx.ElemsPb = nil
-		*dst = pb
-		return err
+	tx := arc.NewTxMsg()
+	
+	if parent.CellID.IsNil() {
+		panic("parent.CellID")
 	}
 
-	txs := make([]*arc.CellTxPb, 1+len(parent.children))
-
-	if err := marshalToTx(&txs[0], parent.CellBase); err != nil {
+	if err := parent.Self.MarshalAttrs(tx, ctx); err != nil {
 		return err
 	}
-	for ci, child := range parent.children {
-		if err := marshalToTx(&txs[1+ci], child); err != nil {
+	
+	for _, child := range parent.children {
+		if child.CellID.IsNil() {
+			child.CellID = parent.App.IssueCellID()
+		}
+		if err := child.Self.MarshalAttrs(tx, ctx); err != nil {
 			return err
 		}
 	}
 
-	msg := arc.NewMsg()
-	msg.CellTxs = txs
-	msg.Status = arc.ReqStatus_Synced
-	return ctx.PushUpdate(msg)
+	tx.Status = arc.ReqStatus_Synced
+	return ctx.PushTx(tx)
 }
 
-func (v *LoginInfo) MarshalToBuf(dst *[]byte) error {
-	return arc.MarshalPbValueToBuf(v, dst)
+func (v *LoginInfo) MarshalToStore(dst []byte) ([]byte, error) {
+	return arc.MarshalPbToStore(v, dst)
 }
 
-func (v *LoginInfo) TypeName() string {
+func (v *LoginInfo) ElemTypeName() string {
 	return "LoginInfo"
 }
 
-func (v *LoginInfo) New() arc.ElemVal {
+func (v *LoginInfo) New() arc.AttrElemVal {
 	return &LoginInfo{}
 }
 
-func (v *MediaInfo) MarshalToBuf(dst *[]byte) error {
-	return arc.MarshalPbValueToBuf(v, dst)
+func (v *MediaInfo) MarshalToStore(dst []byte) ([]byte, error) {
+	return arc.MarshalPbToStore(v, dst)
 }
 
-func (v *MediaInfo) TypeName() string {
+func (v *MediaInfo) ElemTypeName() string {
 	return "MediaInfo"
 }
 
-func (v *MediaInfo) New() arc.ElemVal {
+func (v *MediaInfo) New() arc.AttrElemVal {
 	return &MediaInfo{}
 }
 
-func (v *MediaPlaylist) MarshalToBuf(dst *[]byte) error {
-	return arc.MarshalPbValueToBuf(v, dst)
+func (v *MediaPlaylist) MarshalToStore(dst []byte) ([]byte, error) {
+	return arc.MarshalPbToStore(v, dst)
 }
 
-func (v *MediaPlaylist) TypeName() string {
+func (v *MediaPlaylist) ElemTypeName() string {
 	return "MediaPlaylist"
 }
 
-func (v *MediaPlaylist) New() arc.ElemVal {
+func (v *MediaPlaylist) New() arc.AttrElemVal {
 	return &MediaPlaylist{}
 }
