@@ -9,7 +9,7 @@ import (
 )
 
 type elemDef struct {
-	prototype arc.ElemVal
+	prototype arc.AttrElemVal
 }
 
 type sessRegistry struct {
@@ -49,7 +49,7 @@ func (reg *sessRegistry) NativeToClientID(nativeID uint32) (uint32, bool) {
 	return clientID, ok
 }
 
-func (reg *sessRegistry) NewAttrElem(attrID uint32, native bool) (arc.ElemVal, error) {
+func (reg *sessRegistry) NewAttrElem(attrID uint32, native bool) (arc.AttrElemVal, error) {
 	if !native {
 		clientID := attrID
 		attrID = reg.clientToNativeID[clientID]
@@ -73,7 +73,7 @@ func (reg *sessRegistry) NewAttrElem(attrID uint32, native bool) (arc.ElemVal, e
 	return elemDef.prototype.New(), nil
 }
 
-func (reg *sessRegistry) RegisterElemType(proto arc.ElemVal) error {
+func (reg *sessRegistry) RegisterElemType(proto arc.AttrElemVal) error {
 
 	// If the client symbol for this type is not present, defer registration of this prototype
 	elemType := proto.TypeName()
@@ -239,32 +239,32 @@ func (reg *sessRegistry) resolveSymbol(sym *Symbol, autoIssue bool) error {
 }
 
 
-func (reg *sessRegistry) FormAttr(attrName string, val ElemVal) (AttrElem, error) {
+func (reg *sessRegistry) FormAttr(attrName string, val AttrElemVal) (AttrElemVal, error) {
 	spec := AttrSpec{
 		AttrName: attrName,
 		ElemType: val.TypeName(),
 	}
 	if err := reg.ResolveAttr(&spec, false); err != nil {
-		return AttrElem{}, err
+		return AttrElemVal{}, err
 	}
 
-	return AttrElem{
+	return AttrElemVal{
 		Value:  val,
 		AttrID: spec.AttrID,
 	}, nil
 }
 
 
-func (reg *sessRegistry) NewAttrForID(attrID uint32) (AttrElem, error) {
+func (reg *sessRegistry) NewAttrForID(attrID uint32) (AttrElemVal, error) {
 	reg.typesMu.RLock()
 	typ, found := reg.types[attrID]
 	reg.typesMu.RUnlock()
 	if found {
-		return AttrElem{}, arc.ErrCode_BadSchema.Errorf("unknown attr ID %v", attrID)
+		return AttrElemVal{}, arc.ErrCode_BadSchema.Errorf("unknown attr ID %v", attrID)
 	}
 
-	return AttrElem{
-		Value:  typ.elemVal.New(),
+	return AttrElemVal{
+		Value:  typ.AttrElemVal.New(),
 		AttrID: attrID,
 	}, nil
 }
@@ -338,7 +338,7 @@ func (reg *sessRegistry) ResolveAttr(spec *AttrSpec, autoIssue bool) error {
 	return nil
 }
 
-func (reg *sessRegistry) RegisterAttrType(attrName string, prototype ElemVal) error {
+func (reg *sessRegistry) RegisterAttrType(attrName string, prototype AttrElemVal) error {
 	spec := AttrSpec{
 		AttrName: attrName,
 		ElemType: prototype.TypeName(),
@@ -351,7 +351,7 @@ func (reg *sessRegistry) RegisterAttrType(attrName string, prototype ElemVal) er
 	reg.typesMu.Lock()
 	reg.types[spec.AttrID] = attrType{
 		//attrName: attrName,
-		elemVal: prototype,
+		AttrElemVal: prototype,
 	}
 	reg.typesMu.Unlock()
 
@@ -569,8 +569,8 @@ func ReadCell(ctx AppContext, subKey string, schema *AttrSchema, dstStruct any) 
 	var keyBuf [128]byte
 	cellKey := append(append(keyBuf[:0], []byte(ctx.StateScope())...), []byte(subKey)...)
 
-	msgs := make([]*Msg, 0, len(schema.Attrs))
-	err := ctx.User().HomePlanet().ReadCell(cellKey, schema, func(msg *Msg) {
+	msgs := make([]*TxMsg, 0, len(schema.Attrs))
+	err := ctx.User().HomePlanet().ReadCell(cellKey, schema, func(msg *TxMsg) {
 		switch msg.Op {
 		case MsgOp_PushAttr:
 			msgs = append(msgs, msg)
@@ -675,7 +675,7 @@ func (req *CellReq) PushBeginPin(target CellID) {
 	m := NewMsg()
 	m.CellID = target.U64()
 	m.Op = MsgOp_PinCell
-	req.PushUpdate(m)
+	req.PushTx(m)
 }
 
 func (req *CellReq) PushInsertCell(target CellID, schema *AttrSchema) {
@@ -685,7 +685,7 @@ func (req *CellReq) PushInsertCell(target CellID, schema *AttrSchema) {
 		m.Op = MsgOp_InsertChildCell
 		m.ValType = int32(ValType_SchemaID)
 		m.ValInt = int64(schema.SchemaID)
-		req.PushUpdate(m)
+		req.PushTx(m)
 	}
 }
 
@@ -707,7 +707,7 @@ func (req *CellReq) PushAttr(target CellID, schema *AttrSchema, attrURI string, 
 	if attr.ValTypeID != 0 { // what is this for!?
 		m.ValType = int32(attr.ValTypeID)
 	}
-	req.PushUpdate(m)
+	req.PushTx(m)
 }
 
 func (req *CellReq) PushCheckpoint(err error) {
@@ -717,7 +717,7 @@ func (req *CellReq) PushCheckpoint(err error) {
 	if err != nil {
 		m.setVal(err)
 	}
-	req.PushUpdate(m)
+	req.PushTx(m)
 }
 
 */
@@ -732,7 +732,7 @@ func (req *CellReq) PushCheckpoint(err error) {
 // }
 
 // type ElemValType[V Serializable] interface {
-// 	New() V // Returns a new default instance of this ElemVal type
+// 	New() V // Returns a new default instance of this AttrElemVal type
 // 	TypeName() string
 // 	//MarshalToBuf(src V, dst *[]byte) error
 // 	//UnmarshalBuf(src []byte, dst V) error
