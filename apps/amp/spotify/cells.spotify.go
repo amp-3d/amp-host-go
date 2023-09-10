@@ -12,6 +12,10 @@ import (
 
 type Pinner func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error
 
+var (
+	
+)
+
 type spotifyCell struct {
 	amp.CellBase[*appCtx]
 
@@ -48,9 +52,15 @@ func (cell *spotifyCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 	return cell.pinner(dst, cell)
 }
 
-func (cell *spotifyCell) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
-	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &cell.hdr)
-	dst.Marshal(ctx.GetAttrID(arc.CellTextAttrSpec), 0, &cell.text)
+func (cell *spotifyCell) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
+	op := cell.FormAttrUpsert()
+	
+	op.AttrID = arc.CellHeaderAttrID
+	ctx.MarshalCellOp(dst, op, &cell.hdr)
+	
+	op.AttrID = arc.CellTextAttrID
+	ctx.MarshalCellOp(dst, op, &cell.text)
+	
 	return nil
 }
 
