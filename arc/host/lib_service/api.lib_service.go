@@ -20,7 +20,7 @@ type LibService interface {
 }
 
 type LibSession interface {
-	Close()
+	Close() error
 
 	Realloc(buf *[]byte, newLen int64)
 

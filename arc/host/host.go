@@ -96,7 +96,7 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 	//   - If the arc.Transport errors out, initiate hostSess.Close()
 	//   - If sess.Close() is called elsewhere, and when once complete, <-sessDone will signal and close the arc.Transport.
 	from.StartChild(&task.Task{
-		Label:     fmt.Sprint(via.Desc(), " <- ", sessDesc),
+		Label:     fmt.Sprint(via.Label(), " <- ", sessDesc),
 		IdleClose: time.Nanosecond,
 		OnRun: func(ctx task.Context) {
 			sessDone := sess.Done()
@@ -124,7 +124,7 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 	})
 
 	from.StartChild(&task.Task{
-		Label:     fmt.Sprint(via.Desc(), " -> ", sessDesc),
+		Label:     fmt.Sprint(via.Label(), " -> ", sessDesc),
 		IdleClose: time.Nanosecond,
 		OnRun: func(ctx task.Context) {
 			sessDone := sess.Done()

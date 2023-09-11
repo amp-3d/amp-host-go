@@ -64,7 +64,6 @@ func (srv *libService) NewLibSession() (LibSession, error) {
 
 func (srv *libService) GracefulStop() {
 	if srv.Context != nil {
-		srv.Info(0, "GracefulStop")
 		srv.Context.Close()
 	}
 }
@@ -90,14 +89,15 @@ type libSession struct {
 	// bufFree atomic.Value
 }
 
-func (sess *libSession) Desc() string {
+func (sess *libSession) Label() string {
 	return sess.srv.ServiceURI()
 }
 
-func (sess *libSession) Close() {
+func (sess *libSession) Close() error {
 	if atomic.CompareAndSwapInt32(&sess.closed, 0, 1) {
 		close(sess.closing)
 	}
+	return nil
 }
 
 // Resizes the given buffer to the requested length.

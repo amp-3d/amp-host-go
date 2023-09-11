@@ -74,7 +74,6 @@ func (srv *grpcServer) StartService(on arc.Host) error {
 
 func (srv *grpcServer) GracefulStop() {
 	if srv.server != nil {
-		srv.Info(0, "GracefulStop")
 		srv.server.GracefulStop()
 	}
 }
@@ -110,14 +109,15 @@ type grpcSess struct {
 	hostSess arc.HostSession
 }
 
-func (sess *grpcSess) Desc() string {
+func (sess *grpcSess) Label() string {
 	return sess.srv.ServiceURI()
 }
 
-func (sess *grpcSess) Close() {
+func (sess *grpcSess) Close() error {
 	if atomic.CompareAndSwapInt32(&sess.closed, 0, 1) {
 		close(sess.closing)
 	}
+	return nil
 }
 
 func (sess *grpcSess) SendMsg(msg *arc.Msg) error {
