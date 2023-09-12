@@ -1,7 +1,6 @@
 package lib_service
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,15 +14,6 @@ type libService struct {
 	task.Context
 	host arc.Host
 	opts LibServiceOpts
-	//sess   *LibSession
-}
-
-func (srv *libService) ServiceURI() string {
-	return srv.opts.ServiceURI
-}
-
-func (srv *libService) Host() arc.Host {
-	return srv.host
 }
 
 func (srv *libService) StartService(on arc.Host) error {
@@ -34,7 +24,7 @@ func (srv *libService) StartService(on arc.Host) error {
 
 	var err error
 	srv.Context, err = srv.host.StartChild(&task.Task{
-		Label:     fmt.Sprint(srv.ServiceURI(), ".HostService"),
+		Label:     "lib.HostService",
 		IdleClose: time.Nanosecond,
 	})
 	if err != nil {
@@ -64,7 +54,6 @@ func (srv *libService) NewLibSession() (LibSession, error) {
 
 func (srv *libService) GracefulStop() {
 	if srv.Context != nil {
-		srv.Info(0, "GracefulStop")
 		srv.Context.Close()
 	}
 }
@@ -90,14 +79,15 @@ type libSession struct {
 	// bufFree atomic.Value
 }
 
-func (sess *libSession) Desc() string {
-	return sess.srv.ServiceURI()
+func (sess *libSession) Label() string {
+	return "lib.Session"
 }
 
-func (sess *libSession) Close() {
+func (sess *libSession) Close() error {
 	if atomic.CompareAndSwapInt32(&sess.closed, 0, 1) {
 		close(sess.closing)
 	}
+	return nil
 }
 
 // Resizes the given buffer to the requested length.

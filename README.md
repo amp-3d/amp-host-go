@@ -1,5 +1,5 @@
 # go-archost
-This repo implements `arc.Host` as defined in the [ArcXR SDK](https://github.com/arcspace/go-arc-sdk).  It can be compiled into a binary that either embeds into a Unity or Unreal project, or runs as a standalone "headless" server.  In either case, any `arc.App` can be plugged in, offering many possibilities as to how developers can drive and leverage the ArcXR 3D-based UI/UX.
+This repo implements `arc.Host` as defined in the [ArcXR SDK](https://github.com/arcspace/go-arc-sdk).  It can be compiled into a binary that either embeds into a Unity or Unreal project, or runs as a standalone "headless" server.  In either case, any `arc.App` can be plugged in, offering many possibilities as to how a developers can drive the ArcXR UI.
 
 ## Building
 
@@ -34,25 +34,24 @@ go-archost
 
 ```
 [arc.Host]  task.Context tree:
-
 0001  arc.Host
 0002     ┣ AssetServer [::]:5193
-0026     ┃    ┗ /Users/aomeara/Movies/Downloads/Alan Watts | Thought and Things.mp4
-0003     ┣ grpc.HostService [::]:5192
-0015     ┃    ┣ grpc <- HostSession(14)
-0016     ┃    ┗ grpc -> HostSession(14)
-0014     ┗ HostSession
-0017          ┣ app: planet.sys.arcspace.systems
-0018          ┃    ┗ planet: aomeara
-0019          ┗ app: filesys.bridges.arcspace.systems
-0020               ┣ cell: aomeara/
-0021               ┃    ┗ [req 1003] arc://filesys?path=/Users/aomeara
-0022               ┣ cell: Movies/
-0023               ┃    ┗ [req 1004]
-0024               ┣ cell: Downloads/
-0025               ┃    ┗ [req 1005]
-0027               ┗ cell: Alan Watts | Thought and Things.mp4
-0028                    ┗ [req 1006]
+0016     ┃    ┗ /Users/aomeara/Movies/Downloads/Alan Watts Lectures | On Pain.mp4
+0003     ┣ tcp.HostService [::]:5192
+0005     ┃    ┣ tcp 127.0.0.1:63945 <- arc.HostSession(4)
+0006     ┃    ┗ tcp 127.0.0.1:63945 -> arc.HostSession(4)
+0004     ┗ arc.HostSession
+0007          ┣ app: planet.sys.arcspace.systems
+0008          ┃    ┗ planet: aomeara
+0009          ┗ app: filesys.bridges.arcspace.systems
+0010               ┣ cell: aomeara/
+0011               ┃    ┗ [req 1003]  arc://filesys?path=/Users/aomeara
+0012               ┣ cell: Movies/
+0013               ┃    ┗ [req 1004] 
+0014               ┣ cell: Downloads/
+0015               ┃    ┗ [req 1005] 
+0017               ┗ cell: Alan Watts Lectures | On Pain.mp4
+0018                    ┗ [req 1006] 
 ```
 
 

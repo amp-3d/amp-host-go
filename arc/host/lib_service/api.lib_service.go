@@ -4,12 +4,10 @@ import "github.com/arcspace/go-arc-sdk/apis/arc"
 
 // LibServiceOpts exposes options and settings
 type LibServiceOpts struct {
-	ServiceURI string
 }
 
 func DefaultLibServiceOpts() LibServiceOpts {
 	return LibServiceOpts{
-		ServiceURI: "lib",
 	}
 }
 
@@ -20,7 +18,7 @@ type LibService interface {
 }
 
 type LibSession interface {
-	Close()
+	Close() error
 
 	Realloc(buf *[]byte, newLen int64)
 
