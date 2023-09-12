@@ -6,6 +6,7 @@
         "filesys",
         "pinnable",
         "seekable",
+        "sess",
         "upsert"
     ]
 }
