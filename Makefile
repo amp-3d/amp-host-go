@@ -7,7 +7,6 @@ UNITY_PROJ := ${PARENT_PATH}/arcspace.unity-app
 UNITY_PATH := $(shell python3 ${UNITY_PROJ}/arc-utils.py UNITY_PATH "${UNITY_PROJ}")
 UNITY_ARC_LIBS = ${UNITY_PROJ}/Assets/Plugins/ArcXR/Plugins
 ARC_UNITY_PATH = ${UNITY_PROJ}/Assets/ArcXR
-grpc_csharp_exe="${GOPATH}/bin/grpc_csharp_plugin"
 LIB_PROJ := ${BUILD_PATH}/cmd/libarchost
 
 
@@ -95,29 +94,20 @@ archost:
 
 ## generate .cs and .go files from .proto
 generate:
-#   GrpcTools (2.49.1)
-#   Install protoc & grpc_csharp_plugin:
-#      - Download latest Grpc.Tools from https://nuget.org/packages/Grpc.Tools
-#      - Extract .nupkg as .zip, move protoc and grpc_csharp_plugin to ${GOPATH}/bin 
-#   Or, just protoc: https://github.com/protocolbuffers/protobuf/releases
-#   Links: https://grpc.io/docs/languages/csharp/quickstart/
+#   download protoc: https://github.com/protocolbuffers/protobuf/releases
 	protoc \
 	    -I"${PARENT_PATH}/go-arc-sdk/apis" \
-	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
+	    --gogoslick_out=plugins:. --gogoslick_opt=paths=source_relative \
 	    --csharp_out "${ARC_UNITY_PATH}/Arc.Apps/Amp" \
 	    --proto_path=. \
 		arc/apps/amp/amp.proto
 	
 	protoc \
-	    --gogoslick_out=plugins=grpc:. --gogoslick_opt=paths=source_relative \
+	    --gogoslick_out=plugins:. --gogoslick_opt=paths=source_relative \
 	    --proto_path=. \
 		ski/api.ski.proto
 	
-#	capnp compile -I${CAPNP_INCLUDE} -ogo     arc/apps/amp_family/amp/amp.capnp
-#	cd arc/apps/amp_family/amp \
-#		&& capnp compile -I${CAPNP_INCLUDE} -ocsharp amp.capnp \
-#		&& mv amp.capnp.cs ${ARC_UNITY_PATH}/Arc/Apps/amp/Amp.capnp.cs
-		
+
 
 
 ## builds fmod playback toy (experiment)

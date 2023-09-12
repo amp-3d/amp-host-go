@@ -34,25 +34,24 @@ go-archost
 
 ```
 [arc.Host]  task.Context tree:
-
 0001  arc.Host
 0002     ┣ AssetServer [::]:5193
-0026     ┃    ┗ /Users/aomeara/Movies/Downloads/Alan Watts | Thought and Things.mp4
-0003     ┣ grpc.HostService [::]:5192
-0015     ┃    ┣ grpc <- HostSession(14)
-0016     ┃    ┗ grpc -> HostSession(14)
-0014     ┗ HostSession
-0017          ┣ app: planet.sys.arcspace.systems
-0018          ┃    ┗ planet: aomeara
-0019          ┗ app: filesys.bridges.arcspace.systems
-0020               ┣ cell: aomeara/
-0021               ┃    ┗ [req 1003] arc://filesys?path=/Users/aomeara
-0022               ┣ cell: Movies/
-0023               ┃    ┗ [req 1004]
-0024               ┣ cell: Downloads/
-0025               ┃    ┗ [req 1005]
-0027               ┗ cell: Alan Watts | Thought and Things.mp4
-0028                    ┗ [req 1006]
+0016     ┃    ┗ /Users/aomeara/Movies/Downloads/Alan Watts | The Silent Mind.mp4
+0003     ┣ tcp.service.HostService [::]:5192
+0005     ┃    ┣ tcp 127.0.0.1:62192 <- HostSession(4)
+0006     ┃    ┗ tcp 127.0.0.1:62192 -> HostSession(4)
+0004     ┗ HostSession
+0007          ┣ app: planet.sys.arcspace.systems
+0008          ┃    ┗ planet: aomeara
+0009          ┗ app: filesys.bridges.arcspace.systems
+0010               ┣ cell: aomeara/
+0011               ┃    ┗ [req 1003]  arc://filesys?path=/Users/aomeara
+0012               ┣ cell: Movies/
+0013               ┃    ┗ [req 1004] 
+0014               ┣ cell: Downloads/
+0015               ┃    ┗ [req 1005] 
+0017               ┗ cell: Alan Watts | The Silent Mind.mp4
+0018                    ┗ [req 1006] 
 ```
 
 
