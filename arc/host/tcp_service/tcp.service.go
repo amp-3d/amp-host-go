@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -16,14 +17,14 @@ import (
 // tcpServer implements arc.HostService and makes calls to arc.Host.StartNewSession() when a tcp client connects.
 type tcpServer struct {
 	task.Context
-	host arc.Host
-	opts TcpServerOpts
-	lis  net.Listener
+	host    arc.Host
+	opts    TcpServerOpts
+	lis     net.Listener
+	stopped atomic.Bool
 
 	mu       sync.Mutex            // guards following
 	muCond   *sync.Cond            // signaled when connections close for GracefulStop
 	sessions map[*tcpSess]struct{} // contains all active client sessions
-	stopping bool
 }
 
 func (srv *tcpServer) StartService(on arc.Host) error {
@@ -59,7 +60,7 @@ func (srv *tcpServer) StartService(on arc.Host) error {
 
 func (srv *tcpServer) Serve() {
 
-	var errDelay time.Duration // how long to sleep on accept failure
+	var errDelay time.Duration // how long to sleep on Accept failure
 	for {
 		conn, err := srv.lis.Accept()
 		if err != nil {
@@ -100,9 +101,7 @@ func (srv *tcpServer) Stop() {
 		return
 	}
 
-	if !srv.stopping {
-		srv.stopping = true
-
+	if srv.stopped.CompareAndSwap(false, true) {
 		srv.mu.Lock()
 		for sess := range srv.sessions {
 			srv.tryCloseSess(sess, false)
@@ -117,19 +116,18 @@ func (srv *tcpServer) Stop() {
 			srv.lis.Close()
 		}
 	}
-
 }
 
 func (srv *tcpServer) addClient(conn net.Conn) {
 	sess := &tcpSess{
-		srv:   srv,
 		label: fmt.Sprint("tcp ", conn.RemoteAddr().String()),
+		srv:   srv,
 		conn:  conn,
 	}
 
 	srv.mu.Lock()
 	{
-		if srv.stopping {
+		if srv.stopped.Load() {
 			conn.Close()
 			return
 		}
@@ -155,7 +153,7 @@ func (srv *tcpServer) tryCloseSess(sess *tcpSess, needsLock bool) {
 	if _, ok := srv.sessions[sess]; ok {
 		delete(srv.sessions, sess)
 		sess.conn.Close()
-		if srv.stopping && len(srv.sessions) == 0 {
+		if len(srv.sessions) == 0 && srv.stopped.Load() {
 			srv.muCond.Broadcast()
 		}
 	}
@@ -185,7 +183,7 @@ func (sess *tcpSess) Close() error {
 
 func (sess *tcpSess) SendMsg(tx *arc.Msg) error {
 
-	// This all gets less gross when we roll our own TxMsg serialization
+	// This gets less gross when we roll our own TxMsg serialization
 	hdrSz := int(arc.TxHeader_Size)
 	txLen := hdrSz + tx.Size()
 	txBuf := make([]byte, txLen)
