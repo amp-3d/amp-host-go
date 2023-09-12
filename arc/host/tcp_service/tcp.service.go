@@ -26,14 +26,6 @@ type tcpServer struct {
 	stopping bool
 }
 
-func (srv *tcpServer) ServiceURI() string {
-	return srv.opts.ServiceURI
-}
-
-func (srv *tcpServer) Host() arc.Host {
-	return srv.host
-}
-
 func (srv *tcpServer) StartService(on arc.Host) error {
 	if srv.host != nil || srv.lis != nil || srv.Context != nil {
 		panic("already started")
@@ -47,7 +39,7 @@ func (srv *tcpServer) StartService(on arc.Host) error {
 	}
 
 	srv.Context, err = srv.host.StartChild(&task.Task{
-		Label:     fmt.Sprintf("%s.HostService %v", srv.ServiceURI(), srv.lis.Addr().String()),
+		Label:     fmt.Sprint("tcp.HostService ", srv.lis.Addr().String()),
 		IdleClose: time.Nanosecond,
 		OnRun: func(ctx task.Context) {
 			srv.Infof(0, "Serving on \x1b[1;32m%v %v\x1b[0m", srv.opts.ListenNetwork, srv.opts.ListenAddr)
@@ -247,7 +239,6 @@ func (sess *tcpSess) RecvMsg() (*arc.Msg, error) {
 			return tx, err
 		}
 	}
-
 }
 
 func filterErr(err error) error {

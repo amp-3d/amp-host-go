@@ -72,7 +72,7 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 
 	var err error
 	sess.Context, err = host.StartChild(&task.Task{
-		Label:     "HostSession",
+		Label:     "arc.HostSession",
 		IdleClose: time.Nanosecond,
 		OnRun: func(ctx task.Context) {
 			if err := sess.handleLogin(); err != nil {

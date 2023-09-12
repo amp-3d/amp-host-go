@@ -10,7 +10,6 @@ import (
 
 // TcpServerOpts exposes tcp server options and params
 type TcpServerOpts struct {
-	ServiceURI    string
 	ListenNetwork string
 	ListenAddr    string
 }
@@ -20,7 +19,6 @@ type TcpServerOpts struct {
 // Until then, we want to need to accept incoming outside connections, go by default 0.0.0.0 will accept all incoming connections.
 func DefaultTcpServerOpts(listenPort int) TcpServerOpts {
 	return TcpServerOpts{
-		ServiceURI:    "tcp.service",
 		ListenNetwork: "tcp",
 		ListenAddr:    fmt.Sprintf("0.0.0.0:%v", listenPort),
 	}

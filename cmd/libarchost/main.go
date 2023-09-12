@@ -15,6 +15,7 @@ import (
 var (
 	gLibSession lib_service.LibSession
 	gLibService lib_service.LibService
+	gHost       arc.Host
 )
 
 //export Call_SessionBegin
@@ -27,7 +28,9 @@ func Call_SessionBegin(userDataPath, sharedCachePath string) int64 {
 	hostOpts := host.DefaultOpts(0, false)
 	hostOpts.CachePath = string(append([]byte{}, sharedCachePath...))
 	hostOpts.StatePath = string(append([]byte{}, userDataPath...))
-	host, err := host.StartNewHost(hostOpts)
+
+	var err error
+	gHost, err = host.StartNewHost(hostOpts)
 	if err != nil {
 		log.Fatalf("failed to start new host: %v", err)
 		return 0
@@ -35,15 +38,15 @@ func Call_SessionBegin(userDataPath, sharedCachePath string) int64 {
 
 	opts := lib_service.DefaultLibServiceOpts()
 	gLibService = opts.NewLibService()
-	err = gLibService.StartService(host)
+	err = gLibService.StartService(gHost)
 	if err == nil {
 		gLibSession, err = gLibService.NewLibSession()
 	}
 
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to start LibService: %v", err)
-		host.Error(errMsg)
-		host.Close()
+		gHost.Error(errMsg)
+		gHost.Close()
 		return 0
 	}
 
@@ -72,8 +75,8 @@ func Call_Shutdown() {
 	gLibSession = nil
 
 	// Closing the host will cause the lib server to detach
-	srv.Host().Close()
-	<-srv.Done()
+	gHost.Close()
+	<-gHost.Done()
 }
 
 //export Call_PushMsg

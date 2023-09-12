@@ -1,7 +1,6 @@
 package lib_service
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,15 +14,6 @@ type libService struct {
 	task.Context
 	host arc.Host
 	opts LibServiceOpts
-	//sess   *LibSession
-}
-
-func (srv *libService) ServiceURI() string {
-	return srv.opts.ServiceURI
-}
-
-func (srv *libService) Host() arc.Host {
-	return srv.host
 }
 
 func (srv *libService) StartService(on arc.Host) error {
@@ -34,7 +24,7 @@ func (srv *libService) StartService(on arc.Host) error {
 
 	var err error
 	srv.Context, err = srv.host.StartChild(&task.Task{
-		Label:     fmt.Sprint(srv.ServiceURI(), ".HostService"),
+		Label:     "lib.HostService",
 		IdleClose: time.Nanosecond,
 	})
 	if err != nil {
@@ -90,7 +80,7 @@ type libSession struct {
 }
 
 func (sess *libSession) Label() string {
-	return sess.srv.ServiceURI()
+	return "lib.Session"
 }
 
 func (sess *libSession) Close() error {

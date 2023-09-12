@@ -8,7 +8,7 @@ import (
 	"github.com/arcspace/go-arc-sdk/stdlib/task"
 )
 
-// Consumed by client wishing to post an data asset
+// Consumed by an arc.App wishing to post an data asset for steaming (e.g. audio, video).
 type AssetServer interface {
 	task.Context
 	arc.AssetPublisher

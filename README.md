@@ -36,11 +36,11 @@ go-archost
 [arc.Host]  task.Context tree:
 0001  arc.Host
 0002     ┣ AssetServer [::]:5193
-0016     ┃    ┗ /Users/aomeara/Movies/Downloads/Alan Watts | The Silent Mind.mp4
-0003     ┣ tcp.service.HostService [::]:5192
-0005     ┃    ┣ tcp 127.0.0.1:62192 <- HostSession(4)
-0006     ┃    ┗ tcp 127.0.0.1:62192 -> HostSession(4)
-0004     ┗ HostSession
+0016     ┃    ┗ /Users/aomeara/Movies/Downloads/Alan Watts Lectures | On Pain.mp4
+0003     ┣ tcp.HostService [::]:5192
+0005     ┃    ┣ tcp 127.0.0.1:63945 <- arc.HostSession(4)
+0006     ┃    ┗ tcp 127.0.0.1:63945 -> arc.HostSession(4)
+0004     ┗ arc.HostSession
 0007          ┣ app: planet.sys.arcspace.systems
 0008          ┃    ┗ planet: aomeara
 0009          ┗ app: filesys.bridges.arcspace.systems
@@ -50,7 +50,7 @@ go-archost
 0013               ┃    ┗ [req 1004] 
 0014               ┣ cell: Downloads/
 0015               ┃    ┗ [req 1005] 
-0017               ┗ cell: Alan Watts | The Silent Mind.mp4
+0017               ┗ cell: Alan Watts Lectures | On Pain.mp4
 0018                    ┗ [req 1006] 
 ```
 
