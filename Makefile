@@ -13,9 +13,8 @@ LIB_PROJ := ${BUILD_PATH}/cmd/libarchost
 ANDROID_NDK := ${UNITY_PATH}/PlaybackEngines/AndroidPlayer/NDK
 ANDROID_CC := ${ANDROID_NDK}/toolchains/llvm/prebuilt/darwin-x86_64/bin
 
-ARC_SDK_PKG := "github.com/arcspace/go-arc-sdk"  
-ARC_SDK_PATH := $(shell go list -f '{{.Dir}}' $(ARC_SDK_PKG)) # errors until sdk has official version assigned
-ARC_SDK_PATH := "${PARENT_PATH}/go-arc-sdk"
+ARC_SDK_PKG  :=github.com/arcspace/go-arc-sdk
+ARC_SDK_PATH :=$(shell go list -m -f '{{.Dir}}' $(ARC_SDK_PKG))
 
 ## prints this message
 help:
@@ -96,7 +95,7 @@ archost:
 generate:
 #   download protoc: https://github.com/protocolbuffers/protobuf/releases
 	protoc \
-	    -I"${PARENT_PATH}/go-arc-sdk/apis" \
+	    -I"${ARC_SDK_PATH}/apis" \
 	    --gogoslick_out=plugins:. --gogoslick_opt=paths=source_relative \
 	    --csharp_out "${ARC_UNITY_PATH}/Arc.Apps/Amp" \
 	    --proto_path=. \
