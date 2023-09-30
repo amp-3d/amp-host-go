@@ -12,6 +12,7 @@ import (
 
 func init() {
 	filetype.AddType("jpeg", "image/jpeg")
+	filetype.AddType("json", "text/x-json")
 }
 
 const (

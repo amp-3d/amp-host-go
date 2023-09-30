@@ -24,7 +24,6 @@ type fsItem struct {
 	mediaType string
 
 	hdr        arc.CellHeader
-	text       arc.CellText
 	mediaFlags amp.MediaFlags
 }
 
@@ -67,39 +66,7 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 		item.mediaType, extLen = assets.GetMediaTypeForExt(item.basename)
 	}
 
-	//////////////////  CellHeader
-	{
-		hdr := arc.CellHeader{
-			Modified: int64(arc.ConvertToUTC16(item.modTime)),
-		}
-		if item.isDir {
-			hdr.Glyph240 = amp.DirGlyph
-		} else {
-			hdr.Glyph240 = &arc.AssetRef{
-				MediaType: item.mediaType,
-			}
-			hdr.Link = &arc.AssetRef{
-				MediaType: item.mediaType,
-				URI:       item.pathname,
-				Scheme:    arc.URIScheme_File,
-			}
-		}
-		item.hdr = hdr
-	}
-
-	//////////////////  CellText
-	{
-		text := arc.CellText{}
-		base := item.basename[:len(item.basename)-extLen]
-		splitAt := strings.LastIndex(base, " - ")
-		if splitAt > 0 {
-			text.Title = base[splitAt+3:]
-			text.Subtitle = base[:splitAt]
-		} else {
-			text.Title = base
-		}
-		item.text = text
-	}
+	stripExt := false
 
 	//////////////////  MediaInfo
 	item.mediaFlags = 0
@@ -109,16 +76,48 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 		switch {
 		case strings.HasPrefix(item.mediaType, "audio/"):
 			item.mediaFlags |= amp.HasAudio
+			stripExt = true
 		case strings.HasPrefix(item.mediaType, "video/"):
 			item.mediaFlags |= amp.HasVideo
+			stripExt = true
 		}
 		item.mediaFlags |= amp.IsSeekable
 	}
+
+	//////////////////  CellHeader
+	{
+		hdr := arc.CellHeader{
+			Modified: int64(arc.ConvertToUTC16(item.modTime)),
+		}
+		if item.isDir {
+			hdr.Glyphs = []*arc.AssetRef{
+				amp.DirGlyph,
+			}
+		} else {
+			hdr.ExternalLink = &arc.AssetRef{
+				MediaType: item.mediaType,
+				URI:       item.pathname,
+				Scheme:    arc.AssetScheme_FilePath,
+			}
+		}
+		base := item.basename
+		if stripExt {
+			base = item.basename[:len(base)-extLen]
+		}
+		splitAt := strings.LastIndex(base, " - ")
+		if splitAt > 0 {
+			hdr.Title = base[splitAt+3:]
+			hdr.Subtitle = base[:splitAt]
+		} else {
+			hdr.Title = base
+		}
+		item.hdr = hdr
+	}
+
 }
 
 func (item *fsItem) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &item.hdr)
-	dst.Marshal(ctx.GetAttrID(arc.CellTextAttrSpec), 0, &item.text)
 	return nil
 }
 
@@ -139,8 +138,8 @@ func (item *fsFile) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 	if item.mediaFlags != 0 {
 		media := &amp.MediaInfo{
 			Flags:      item.mediaFlags,
-			Title:      item.text.Title,
-			Collection: item.text.Subtitle,
+			Title:      item.hdr.Title,
+			Collection: item.hdr.Subtitle,
 		}
 		dst.Marshal(ctx.GetAttrID(amp.MediaInfoAttrSpec), 0, media)
 	}

@@ -144,14 +144,15 @@ func (app *appCtx) reloadCategories() error {
 			catID: entry.Id,
 		}
 
-		cat.text = arc.CellText{
+		cat.hdr = arc.CellHeader{
 			Title: entry.Title,
 			About: entry.Description,
-		}
-		cat.hdr = arc.CellHeader{
-			Glyph240: &arc.AssetRef{
-				URI:    entry.Image,
-				Scheme: arc.URIScheme_File,
+			Glyphs: []*arc.AssetRef{
+				{
+					URI:    entry.Image,
+					Tags:   arc.AssetTags_IsImageMedia,
+					Scheme: arc.AssetScheme_FilePath,
+				},
 			},
 		}
 
@@ -174,7 +175,6 @@ func (app *appCtx) reloadCategories() error {
 }
 
 type categoryInfo struct {
-	text  arc.CellText
 	hdr   arc.CellHeader
 	catID uint32
 }
