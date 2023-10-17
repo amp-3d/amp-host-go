@@ -18,7 +18,6 @@ type spotifyCell struct {
 	spotifyID spotify.ID
 	pinner    Pinner
 	hdr       arc.CellHeader
-	text      arc.CellText
 }
 
 type playlistCell struct {
@@ -41,7 +40,7 @@ type trackCell struct {
 }
 
 func (cell *spotifyCell) GetLogLabel() string {
-	return cell.text.Title
+	return cell.hdr.Title
 }
 
 func (cell *spotifyCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
@@ -50,7 +49,6 @@ func (cell *spotifyCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 
 func (cell *spotifyCell) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &cell.hdr)
-	dst.Marshal(ctx.GetAttrID(arc.CellTextAttrSpec), 0, &cell.text)
 	return nil
 }
 
@@ -92,11 +90,7 @@ func (cell *trackCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 
 	{
-		child := addChild_dir(dst, "Followed Playlists")
-		child.hdr.Glyph240 = &arc.AssetRef{
-			URI:    "/icons/ui/providers/playlists.png",
-			Scheme: arc.URIScheme_File,
-		}
+		child := addChild_dir(dst, "Followed Playlists", "/icons/ui/providers/playlists.png")
 		child.pinner = func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 			resp, err := dst.App.client.CurrentUsersPlaylists(dst.App)
 			if err != nil {
@@ -110,11 +104,7 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 	}
 
 	{
-		child := addChild_dir(dst, "Followed Artists")
-		child.hdr.Glyph240 = &arc.AssetRef{
-			URI:    "/icons/ui/providers/artists.png",
-			Scheme: arc.URIScheme_File,
-		}
+		child := addChild_dir(dst, "Followed Artists", "/icons/ui/providers/artists.png")
 		child.pinner = func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 			resp, err := dst.App.client.CurrentUsersFollowedArtists(dst.App)
 			if err != nil {
@@ -128,11 +118,7 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 	}
 
 	{
-		child := addChild_dir(dst, "Recently Played")
-		child.hdr.Glyph240 = &arc.AssetRef{
-			URI:    "/icons/ui/providers/tracks.png",
-			Scheme: arc.URIScheme_File,
-		}
+		child := addChild_dir(dst, "Recently Played", "/icons/ui/providers/tracks.png")
 		child.pinner = func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 			resp, err := dst.App.client.CurrentUsersTopTracks(dst.App)
 			if err != nil {
@@ -146,11 +132,7 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 	}
 
 	{
-		child := addChild_dir(dst, "Recently Played Artists")
-		child.hdr.Glyph240 = &arc.AssetRef{
-			URI:    "/icons/ui/providers/artists.png",
-			Scheme: arc.URIScheme_File,
-		}
+		child := addChild_dir(dst, "Recently Played Artists", "/icons/ui/providers/artists.png")
 		child.pinner = func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 			resp, err := dst.App.client.CurrentUsersTopArtists(dst.App)
 			if err != nil {
@@ -164,11 +146,7 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 	}
 
 	{
-		child := addChild_dir(dst, "Saved Albums")
-		child.hdr.Glyph240 = &arc.AssetRef{
-			URI:    "/icons/ui/providers/albums.png",
-			Scheme: arc.URIScheme_File,
-		}
+		child := addChild_dir(dst, "Saved Albums", "/icons/ui/providers/albums.png")
 		child.pinner = func(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 			resp, err := dst.App.client.CurrentUsersAlbums(dst.App)
 			if err != nil {
@@ -187,12 +165,19 @@ func pin_appHome(dst *amp.PinnedCell[*appCtx], cell *spotifyCell) error {
 	return nil
 }
 
-func addChild_dir(dst *amp.PinnedCell[*appCtx], title string) *spotifyCell {
+func addChild_dir(dst *amp.PinnedCell[*appCtx], title string, iconURI string) *spotifyCell {
 	cell := &spotifyCell{}
-	cell.AddTo(dst, cell)
-	cell.text = arc.CellText{
+	cell.hdr = arc.CellHeader{
 		Title: title,
+		Glyphs: []*arc.AssetRef{
+			{
+				Scheme: arc.AssetScheme_FilePath,
+				Tags:   arc.AssetTags_IsImageMedia,
+				URI:    iconURI,
+			},
+		},
 	}
+	cell.AddTo(dst, cell)
 	return cell
 }
 
@@ -226,18 +211,18 @@ var allAlbumTypes = []spotify.AlbumType{
 func addChild_Playlist(dst *amp.PinnedCell[*appCtx], playlist spotify.SimplePlaylist) {
 	cell := &playlistCell{}
 	cell.spotifyID = playlist.ID
-	cell.AddTo(dst, cell)
-
-	cell.text = arc.CellText{
-		Title:    playlist.Name,
-		Subtitle: playlist.Description,
+	cell.hdr = arc.CellHeader{
+		Title:        playlist.Name,
+		Subtitle:     playlist.Description,
+		ExternalLink: chooseBestLink(playlist.ExternalURLs),
 	}
-	cell.hdr.Link = chooseBestLink(playlist.ExternalURLs)
-	cell.setGlyphs(playlist.Images)
+	addGlyphs(&cell.hdr, playlist.Images, addAll)
 
 	cell.MediaPlaylist = amp.MediaPlaylist{
 		TotalItems: int32(playlist.Tracks.Total),
 	}
+
+	cell.AddTo(dst, cell)
 }
 
 func (cell *playlistCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
@@ -284,46 +269,47 @@ func (cell *albumCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 func addChild_Artist(dst *amp.PinnedCell[*appCtx], artist spotify.FullArtist) {
 	cell := &artistCell{}
 	cell.spotifyID = artist.ID
-	cell.AddTo(dst, cell)
-
-	cell.text = arc.CellText{
-		Title:    artist.Name,
-		Subtitle: fmt.Sprintf("%d followers", artist.Followers.Count),
+	cell.hdr = arc.CellHeader{
+		Title:        artist.Name,
+		Subtitle:     fmt.Sprintf("%d followers", artist.Followers.Count),
+		ExternalLink: chooseBestLink(artist.ExternalURLs),
 	}
-	cell.hdr.Link = chooseBestLink(artist.ExternalURLs)
-	cell.setGlyphs(artist.Images)
+	addGlyphs(&cell.hdr, artist.Images, addAll)
+
+	cell.AddTo(dst, cell)
 }
 
 func addChild_Album(dst *amp.PinnedCell[*appCtx], album spotify.SimpleAlbum) {
 	cell := &albumCell{}
 	cell.spotifyID = album.ID
-	cell.AddTo(dst, cell)
-
-	cell.text = arc.CellText{
-		Title:    album.Name,
-		Subtitle: formArtistDesc(album.Artists),
+	cell.hdr = arc.CellHeader{
+		Title:        album.Name,
+		Subtitle:     formArtistDesc(album.Artists),
+		ExternalLink: chooseBestLink(album.ExternalURLs),
+		Created:      album.ReleaseDateTime().Unix() << 16,
 	}
-	cell.hdr.Link = chooseBestLink(album.ExternalURLs)
-	cell.setGlyphs(album.Images)
+	addGlyphs(&cell.hdr, album.Images, addAll)
+
+	cell.AddTo(dst, cell)
 }
 
 func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 	if track.IsPlayable != nil && !*track.IsPlayable {
 		return
 	}
+	artistDesc := formArtistDesc(track.Artists)
+	releaseDate := track.Album.ReleaseDateTime().Unix()
+
 	cell := &trackCell{}
 	cell.spotifyID = track.ID
-	cell.AddTo(dst, cell)
-
-	artistDesc := formArtistDesc(track.Artists)
-
-	cell.text = arc.CellText{
-		Title:    track.Name,
-		Subtitle: artistDesc,
-		About:    track.Album.Name,
+	cell.hdr = arc.CellHeader{
+		Title:        track.Name,
+		Subtitle:     artistDesc,
+		About:        track.Album.Name,
+		ExternalLink: chooseBestLink(track.ExternalURLs),
+		Created:      releaseDate << 16,
 	}
-	cell.hdr.Link = chooseBestLink(track.ExternalURLs)
-	cell.setGlyphs(track.Album.Images)
+	addGlyphs(&cell.hdr, track.Album.Images, addAll)
 
 	cell.MediaInfo = amp.MediaInfo{
 		Flags:       amp.HasAudio | amp.IsSeekable | amp.NeedsNetwork,
@@ -333,58 +319,126 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 		ItemNumber:  int32(track.TrackNumber),
 		Duration16:  int64(arc.ConvertMsToUTC(int64(track.Duration))),
 		Popularity:  .01 * float32(track.Popularity), // 0..100 => 0..1
-		ReleaseTime: track.Album.ReleaseDateTime().Unix(),
+		ReleaseDate: releaseDate,
+		CoverArt:    chooseBestImageURL(cell.hdr.Glyphs, 800),
 	}
-	if cell.hdr.Glyph240 != nil {
-		cell.MediaInfo.CoverArt = cell.hdr.Glyph240.URI
-	}
+	cell.AddTo(dst, cell)
 }
 
 /**********************************************************
  *  Helpers
  */
 
-func (cell *spotifyCell) setGlyphs(images []spotify.Image) {
-	if chooseBestImage(images, 200, &cell.hdr.Glyph240) {
-		if len(images) > 1 {
-			chooseBestImage(images, 800, &cell.hdr.Glyph720)
+type imageSelector int
+
+const (
+	bestThumbnail imageSelector = iota
+	bestCoverArt
+	addAll
+)
+
+func addGlyphs(dst *arc.CellHeader, images []spotify.Image, selector imageSelector) {
+
+	switch selector {
+	case addAll:
+		for _, img := range images {
+			addImage(dst, img)
 		}
+		/*
+			case bestCoverArt:
+				for _, img := range images {
+					szTag := sizeTagForImage(img)
+
+					for _, sizePass := range []arc.AssetTag{
+						arc.AssetTag_Res720,
+						arc.AssetTag_Res1080,
+					} {
+						if szTag == sizePass {
+							addImage(dst, img, szTag)
+							return
+						}
+					}
+				}
+			case bestThumbnail:
+				for _, img := range images {
+					szTag := sizeTagForImage(img)
+
+					for _, sizePass := range []arc.AssetTag{
+						arc.AssetTag_Res240,
+						arc.AssetTag_Res720,
+						arc.AssetTag_Res1080,
+					} {
+						if szTag == sizePass {
+							addImage(dst, img, szTag)
+							return
+						}
+					}
+				}
+		*/
 	}
+
 }
 
-func chooseBestImage(images []spotify.Image, closestSize int, out **arc.AssetRef) bool {
-	bestImg := -1
-	bestDiff := 0x7fffffff
+/*
+func sizeTagForImage(img spotify.Image) (szTag arc.AssetTags) {
+	switch {
+	case img.Height > 0 && img.Height < 400:
+		szTag = arc.AssetTags_Res240
+	case img.Height < 800:
+		szTag = arc.AssetTags_Res720
+	default:
+		szTag = arc.AssetTags_Res1080
+	}
+	return
+}
+*/
 
-	for i, img := range images {
-		diff := img.Width - closestSize
+func addImage(dst *arc.CellHeader, img spotify.Image) {
+	dst.Glyphs = append(dst.Glyphs, &arc.AssetRef{
+		Tags:        arc.AssetTags_IsImageMedia,
+		Scheme:      arc.AssetScheme_HttpURL,
+		URI:         img.URL,
+		PixelHeight: int32(img.Height),
+		PixelWidth:  int32(img.Width),
+	})
+}
+
+func chooseBestImageURL(assets []*arc.AssetRef, closestHeight int32) string {
+	img := chooseBestImage(assets, closestHeight)
+	if img == nil {
+		return ""
+	}
+	return img.URI
+}
+
+func chooseBestImage(assets []*arc.AssetRef, closestHeight int32) *arc.AssetRef {
+	var best *arc.AssetRef
+	bestDiff := int32(0x7fffffff)
+
+	for _, img := range assets {
+		if img.Tags&arc.AssetTags_IsImageMedia == 0 {
+			continue
+		}
 
 		// If the image is smaller than what we're looking for, make differences matter more
+		diff := img.PixelHeight - closestHeight
 		if diff < 0 {
 			diff *= -2
 		}
 
 		if diff < bestDiff {
-			bestImg = i
+			best = img
 			bestDiff = diff
 		}
 	}
-	if bestImg < 0 {
-		return false
-	}
-	*out = &arc.AssetRef{
-		MediaType: "image/x-spotify",
-		URI:       images[bestImg].URL,
-		PixWidth:  int32(images[bestImg].Width),
-		PixHeight: int32(images[bestImg].Height),
-	}
-	return true
+	return best
 }
 
 func chooseBestLink(links map[string]string) *arc.AssetRef {
 	if url, ok := links["spotify"]; ok {
 		return &arc.AssetRef{
-			URI: url,
+			Scheme: arc.AssetScheme_HttpURL,
+			URI:    url,
 		}
 	}
 	return nil

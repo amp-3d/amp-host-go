@@ -11,11 +11,11 @@ type categories struct {
 }
 
 func (cats *categories) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
-	dst.Marshal(ctx.GetAttrID(arc.CellTextAttrSpec), 0, &arc.CellText{
-		Title: "Internet Radio",
-	})
 	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &arc.CellHeader{
-		Glyph240: amp.DirGlyph,
+		Title: "Internet Radio",
+		Glyphs: []*arc.AssetRef{
+			amp.DirGlyph,
+		},
 	})
 	return nil
 }
