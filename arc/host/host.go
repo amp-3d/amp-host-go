@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,8 +65,8 @@ func (host *host) Registry() arc.Registry {
 func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.HostSession, error) {
 	sess := &hostSess{
 		host:     host,
-		txIn:   make(chan *arc.TxMsg),
-		txOut:  make(chan *arc.TxMsg, 4),
+		txIn:     make(chan *arc.TxMsg),
+		txOut:    make(chan *arc.TxMsg, 4),
 		openReqs: make(map[uint64]*appReq),
 		openApps: make(map[arc.UID]*appContext),
 	}
@@ -161,8 +162,8 @@ type hostSess struct {
 
 	nextID     atomic.Uint64      // next CellID to be issued
 	host       *host              // parent host
-	txIn       chan *arc.TxMsg      // tx inbound to this hostSess
-	txOut      chan *arc.TxMsg     // tx outbound from this hostSess
+	txIn       chan *arc.TxMsg    // tx inbound to this hostSess
+	txOut      chan *arc.TxMsg    // tx outbound from this hostSess
 	openReqs   map[uint64]*appReq // ReqID maps to an open request.
 	openReqsMu sync.Mutex         // protects openReqs
 
@@ -180,14 +181,13 @@ type hostSess struct {
 type appReq struct {
 	task.Context
 	arc.PinReqParams
-	sess      *hostSess
-	appCtx    *appContext
-	pinned    arc.PinnedCell
-	parent    arc.PinnedCell
-	cancel    chan struct{}
-	pinning   chan struct{} // closed once the cell is pinned
-	closed    atomic.Int32
-	attrCache map[string]uint32
+	sess    *hostSess
+	appCtx  *appContext
+	pinned  arc.PinnedCell
+	parent  arc.PinnedCell
+	cancel  chan struct{}
+	pinning chan struct{} // closed once the cell is pinned
+	closed  atomic.Int32
 }
 
 func (req *appReq) App() arc.AppContext {
@@ -203,23 +203,20 @@ func (req *appReq) GetLogLabel() string {
 	return string(str)
 }
 
-func (req *appReq) MarshalCellOp(dst *TxMsg, op CellOp, val AttrElemVal) {
+func (req *appReq) MarshalCellOp(dst *arc.TxMsg, op arc.CellOp, val arc.AttrElemVal) {
 	if op.CellID.IsNil() {
-		req.Logger.Warnf("MarshalCellOp: CellOp has no CellID")
+		req.Warnf("MarshalCellOp: CellOp has no CellID")
 		return
 	}
 
-	if attrID, resolved := req.attrCache[attrSpec]; resolved {
-		return attrID
-	}
-
-	spec, err := req.sess.ResolveAttrSpec(attrSpec, false)
-	attrID := spec.DefID
+	var err error
+	op.DataOfs = int64(len(dst.DataStore))
+	dst.DataStore, err = val.MarshalToStore(dst.DataStore)
 	if err != nil {
-		attrID = 0
+		req.Error(err)
+		return
 	}
-	req.attrCache[attrSpec] = attrID
-	return attrID
+	op.DataLen = int64(len(dst.DataStore))
 }
 
 /*
@@ -308,21 +305,28 @@ func (sess *hostSess) closeReq(reqID uint64, sendClose bool, err error) {
 	}
 
 	if sendClose {
-		msg := arc.NewMsg()
-		msg.ReqID = reqID
-		msg.Status = arc.ReqStatus_Closed
+		tx := arc.NewTxMsg()
+		tx.ReqID = reqID
+		tx.Status = arc.ReqStatus_Closed
 
 		if err != nil {
+			op := arc.CellOp{
+				OpCode: arc.CellOpCode_MetaAttr,
+			}
+
+			val := arc.ErrorToValue(err)
+			op.AttrID = arc.GenAttrUID(val.ElemTypeName())
+
 			elem := &arc.AttrElemPb{
 				AttrID: uint64(arc.ConstSymbol_Err.Ord()),
 			}
 			arc.ErrorToValue(err).MarshalToBuf(&elem.ValBuf)
-			msg.CellTxs = append(msg.CellTxs, &arc.CellTxPb{
+			tx.CellOps = append(tx.CellOps, arc.CellOp{
 				Op:    arc.CellTxOp_MetaAttr,
 				Elems: []*arc.AttrElemPb{elem},
 			})
 		}
-		sess.SendTx(msg)
+		sess.SendTx(tx)
 	}
 
 	if req != nil {
@@ -466,40 +470,30 @@ func (sess *hostSess) InitSessionRegistry(symTable symbol.Table) {
 	}
 }
 
-func (sess *hostSess) handleMetaAttr(reqID uint64, attr *arc.AttrElemPb) (keepOpen bool, err error) {
+func (sess *hostSess) handleMetaAttr(reqID uint64, val arc.AttrElemVal) (keepOpen bool, err error) {
 
-	switch arc.ConstSymbol(attr.AttrID) {
-	case arc.ConstSymbol_PinRequest:
+	switch v := val.(type) {
+	case *arc.PinRequest:
 		{
 			var req *appReq
 			req, err = sess.getReq(reqID, clientReq)
 			if err != nil {
 				return
 			}
-			if err = req.PinReq.Unmarshal(attr.ValBuf); err != nil {
-				return
-			}
+			req.PinReq = *v
 			keepOpen = true
 			err = sess.pinCell(req)
 			return
 		}
-	case arc.ConstSymbol_RegisterDefs:
+	case *arc.RegisterDefs:
 		{
-			var defs arc.RegisterDefs
-			if err = defs.Unmarshal(attr.ValBuf); err != nil {
-				return
-			}
-			err = sess.SessionRegistry.RegisterDefs(&defs)
+			err = sess.SessionRegistry.RegisterDefs(v)
 			return
 		}
-	case arc.ConstSymbol_HandleURI:
+	case *arc.HandleURI:
 		{
-			var req arc.HandleURI
-			if err = req.Unmarshal(attr.ValBuf); err != nil {
-				return
-			}
 			var uri *url.URL
-			uri, err = url.Parse(req.URI)
+			uri, err = url.Parse(v.URI)
 			if err != nil {
 				return
 			}
@@ -769,7 +763,7 @@ func (ctx *appContext) IssueCellID() (id arc.CellID) {
 	///return arc.IssueCellID(ctx.rng)
 }
 
-/*
+
 func (reg *sessRegistry) IssueTimeID() arc.TimeID {
 	now := int64(arc.ConvertToUTC16(time.Now()))
 	if !reg.timeMu.CompareAndSwap(0, 1) { // spin lock
@@ -786,7 +780,7 @@ func (reg *sessRegistry) IssueTimeID() arc.TimeID {
 
 	return arc.TimeID(issued)
 }
-*/
+
 
 func (ctx *appContext) Session() arc.HostSession {
 	return ctx.sess
