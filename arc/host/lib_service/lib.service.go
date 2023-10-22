@@ -151,17 +151,19 @@ func (sess *libSession) EnqueueIncoming(msg *arc.Msg) error {
 ///////////////////////// host -> client /////////////////////////
 
 // Executed on a host thread
-func (sess *libSession) SendMsg(msg *arc.Msg) error {
+func (sess *libSession) SendMsg(tx *arc.Msg) error {
 
 	// Serialize the outgoing msg into an existing buffer (or allocate a new one)
-	sz := msg.Size()
+	txLen := tx.Size() + int(arc.TxHeader_Size)
 	var msg_pb []byte
 	select {
 	case msg_pb = <-sess.free:
 	default:
 	}
-	sess.Realloc(&msg_pb, int64(sz))
-	msg.MarshalToSizedBuffer(msg_pb)
+	sess.Realloc(&msg_pb, int64(txLen))
+	if err := tx.MarshalToTxBuffer(msg_pb); err != nil {
+		return err
+	}
 
 	select {
 	case sess.toClient <- msg_pb:
@@ -190,123 +192,3 @@ func (sess *libSession) DequeueOutgoing(msg_pb *[]byte) error {
 		return arc.ErrStreamClosed
 	}
 }
-
-/*
-
-	select {
-	case sess.free <- *msg_pb:
-	default:
-
-	}
-	sess.waitingForMsg.L.Lock()
-	for sess.free == nil {
-		sess.waitingForMsg.Wait()
-	}
-	sess.free = msg_pb
-	for sess.outgoing != nil {
-		sess.waitingForMsg.Wait()
-	}
-	msg_pb = sess.outgoing
-	sess.outgoing = nil
-	sess.waitingForMsg.L.Unlock()
-	sess.waitingForMsg.Signal()
-
-	// sess.dequeueNext <- *msg_pb
-	// *msg_pb <- sess.nextOutgoing
-
-	/*
-	next := sess.bufFree.Swap(nil)
-
-	sess.bufFree.LoadAndStore()
-	sess.Realloc(next, int64(sz))
-	m.MarshalToSizedBuffer(*next)
-
-	sess.waitingForMsg.L.Lock()
-	for sess.free == nil {
-		sess.waitingForMsg.Wait()
-	}
-	next := sess.free
-	sess.Realloc(next, int64(sz))
-	m.MarshalToSizedBuffer(*next)
-	for sess.outgoing == nil {
-		sess.waitingForMsg.Wait()
-	}
-	sess.outgoing = next
-	sess.waitingForMsg.L.Unlock()
-	sess.waitingForMsg.Signal()
-
-	outgoing := next
-	sess.next =
-	sess.free = nil
-	sess.Realloc(outgoing, int64(sz))
-	m.MarshalToSizedBuffer(*outgoing)
-
-
-	sess.outgoing
-	m.MarshalToSizedBuffer(*next)
-	sess.outgoing
-
-	empty := 0
-	next := &sess.outgoing[empty]
-	sess.Realloc(next, int64(sz))
-	m.MarshalToSizedBuffer(*next)
-	empty = 1 - empty
-
-
-	// if closed
-
-
-	sess.idk.Lock()
-	if sz <= cap(sess.outgoing) {
-		sess.outgoing = sess.outgoing[:sz]
-	} else {
-		sess.outgoing = make([]byte, sz, (sz + 0x3FF) &^ 0x3FF)
-	}
-	m.MarshalToSizedBuffer(sess.outgoing)
-	sess.idk.Unlock()
-
-	select {
-	case sess.toClient <- m:
-		return nil
-	case <-sess.closing:
-		return arc.ErrStreamClosed
-	}
-
-
-func (srv *libServer) NewLibSession() (LibSession, error) {
-	sess := &libSess{
-
-	}
-
-	var err error
-	sess.hostSess, err = srv.host.StartNewSession()
-	if err != nil {
-		return nil, err
-	}
-
-	sess.Context, err = sess.hostSess.StartTransport(srv.Context, sess)
-	if err != nil {
-		return err
-	}
-
-}
-
-
-type libSess struct {
-	task.Context
-	hostSess arc.HostSession
-}
-
-func (sess *libSess) Desc() string {
-    return "lib"
-}
-
-func (sess *libSess) SendMsg(m *arc.Msg) error {
-
-}
-
-func (sess *libSess) RecvMsg(m *arc.Msg) error {
-
-}
-
-*/

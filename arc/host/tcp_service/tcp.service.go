@@ -187,15 +187,12 @@ func (sess *tcpSess) SendMsg(tx *arc.Msg) error {
 	hdrSz := int(arc.TxHeader_Size)
 	txLen := hdrSz + tx.Size()
 	txBuf := make([]byte, txLen)
-
-	n, err := tx.MarshalToSizedBuffer(txBuf[hdrSz:])
-	if err != nil {
+	if err := tx.MarshalToTxBuffer(txBuf); err != nil {
 		return err
 	}
-	arc.TxDataStore(txBuf).SetTxBodyLen(n)
 
 	for L := 0; L < txLen; {
-		n, err = sess.conn.Write(txBuf[:txLen])
+		n, err := sess.conn.Write(txBuf[:txLen])
 		if err != nil {
 			return filterErr(err)
 		}
