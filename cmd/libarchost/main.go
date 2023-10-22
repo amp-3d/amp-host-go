@@ -4,8 +4,10 @@ package main
 import "C"
 
 import (
+	"flag"
 	"fmt"
-	"log"
+
+	"github.com/arcspace/go-arc-sdk/stdlib/log"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/arc/host"
@@ -24,8 +26,18 @@ func Call_SessionBegin(userDataPath, sharedCachePath string) int64 {
 		return 0
 	}
 
+	debug := false
+	if debug {
+		fset := flag.NewFlagSet("", flag.ContinueOnError)
+		log.InitFlags(fset)
+		log.UseStockFormatter(24, false)
+		fset.Set("v", "3")
+		fset.Set("logtostderr", "false")
+		fset.Set("log_file", "/Users/aomeara/Desktop/_archost.log.txt")
+	}
+
 	// Copy the param strings since they will be invalid after exits
-	hostOpts := host.DefaultOpts(0, false)
+	hostOpts := host.DefaultOpts(0, debug)
 	hostOpts.CachePath = string(append([]byte{}, sharedCachePath...))
 	hostOpts.StatePath = string(append([]byte{}, userDataPath...))
 
@@ -87,7 +99,7 @@ func Call_PushMsg(msg_pb []byte) int64 {
 	}
 
 	msg := arc.NewMsg()
-	if err := msg.Unmarshal(msg_pb); err != nil {
+	if err := msg.Unmarshal(msg_pb[arc.TxHeader_Size:]); err != nil {
 		panic(err)
 	}
 	sess.EnqueueIncoming(msg)
