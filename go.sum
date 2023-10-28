@@ -37,10 +37,10 @@ github.com/alecthomas/assert/v2 v2.3.0 h1:mAsH2wmvjsuvyBvAmCtm7zFsBlb8mIHx5ySLVd
 github.com/alecthomas/participle/v2 v2.1.0 h1:z7dElHRrOEEq45F2TG5cbQihMtNTv8vwldytDj7Wrz4=
 github.com/alecthomas/participle/v2 v2.1.0/go.mod h1:Y1+hAs8DHPmc3YUFzqllV+eSQ9ljPTk0ZkPMtEdAx2c=
 github.com/alecthomas/repr v0.2.0 h1:HAzS41CIzNW5syS8Mf9UwXhNH1J9aix/BvDRf1Ml2Yk=
-github.com/arcspace/go-arc-sdk v0.7.2 h1:ePtwXwGfDe6G31fP8gtvArOAhY0UDeG4nw68qz4hTyc=
-github.com/arcspace/go-arc-sdk v0.7.2/go.mod h1:9MEA7xtOqUpTFgRmTyciebGW3pvIrjWXurUXyoLn2WM=
-github.com/arcspace/go-librespot v0.0.0-20231017190935-e5b4392a4089 h1:sOKEK6a+VEg2Zm1Y13DftygEAxzAP/k/wXS6+I6WxvE=
-github.com/arcspace/go-librespot v0.0.0-20231017190935-e5b4392a4089/go.mod h1:43HCdLtCjg/hOuIkMUh2cHQc5nIXJM0jkBVKMKQqB+g=
+github.com/arcspace/go-arc-sdk v0.7.3 h1:e382DQSb0ZCbRcDAe4p5h5FUINLD6XY5Zf07LpkGb8g=
+github.com/arcspace/go-arc-sdk v0.7.3/go.mod h1:9MEA7xtOqUpTFgRmTyciebGW3pvIrjWXurUXyoLn2WM=
+github.com/arcspace/go-librespot v0.0.0-20231028054047-a5b0de544442 h1:f+kv7A29i20vF0OvYfaLSu/haiGtz+vH1A/tbRHHg2g=
+github.com/arcspace/go-librespot v0.0.0-20231028054047-a5b0de544442/go.mod h1:3SyxjhEDUfRFQKfmZ4EOdl7Re+CPdQWwm/tESGtF5lw=
 github.com/brynbellomy/klog v0.0.0-20200414031930-87fbf2e555ae h1:FO8VxsnMvWNRzx3vGjBmS2kotWl9f455Yj0H+9k01zk=
 github.com/brynbellomy/klog v0.0.0-20200414031930-87fbf2e555ae/go.mod h1:ZecQZYfGLYeVNx5ooyrBwTVsXx+7mi7bpuQLgTxClfQ=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=

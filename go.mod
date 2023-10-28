@@ -17,8 +17,8 @@ go 1.18
 
 require (
 	github.com/alecthomas/participle/v2 v2.1.0
-	github.com/arcspace/go-arc-sdk v0.7.2
-	github.com/arcspace/go-librespot v0.0.0-20231017190935-e5b4392a4089
+	github.com/arcspace/go-arc-sdk v0.7.3
+	github.com/arcspace/go-librespot v0.0.0-20231028054047-a5b0de544442
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/h2non/filetype v1.1.3
