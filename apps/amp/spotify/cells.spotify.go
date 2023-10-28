@@ -82,6 +82,7 @@ func (cell *trackCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 
 	cell.playable = &arc.AssetRef{
 		MediaType: asset.MediaType(),
+		Scheme:    arc.AssetScheme_HttpURL,
 		URI:       url,
 	}
 	return nil
