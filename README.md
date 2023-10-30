@@ -1,5 +1,5 @@
 # go-archost
-This repo implements `arc.Host` as defined in the [ArcXR SDK](https://github.com/arcspace/go-arc-sdk).  It can be compiled into a binary that either embeds into a Unity or Unreal project, or runs as a server launched from command line.  In either case, any [`arc.App`](https://github.com/arcspace/go-arc-sdk/blob/main/apis/arc/api.app.go) can be plugged in, offering many possibilities as to how a developers can drive the ArcXR UI.
+This repo implements `arc.Host` as defined in the [ArcXR SDK](https://github.com/arcspace/go-arc-sdk).  It can be compiled into a binary that either embeds into a Unity or Unreal project, or runs as a server launched from the command line.  In either case, any [`arc.App`](https://github.com/arcspace/go-arc-sdk/blob/main/apis/arc/api.app.go) can be plugged in, offering many possibilities as to how developers can drive the ArcXR UI.
 
 ## Building
 
