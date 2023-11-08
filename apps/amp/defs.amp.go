@@ -20,8 +20,8 @@ const (
 
 var (
 	DirGlyph = &arc.AssetRef{
-		MediaType: MimeType_Dir,
-		Scheme:    arc.AssetScheme_UseMediaType,
+		URI:    MimeType_Dir,
+		Scheme: arc.AssetScheme_ThemedAsset,
 	}
 )
 

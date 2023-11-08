@@ -172,9 +172,9 @@ func addChild_dir(dst *amp.PinnedCell[*appCtx], title string, iconURI string) *s
 		Title: title,
 		Glyphs: []*arc.AssetRef{
 			{
-				Scheme: arc.AssetScheme_FilePath,
-				Tags:   arc.AssetTags_IsImageMedia,
-				URI:    iconURI,
+				Scheme:    arc.AssetScheme_FilePath,
+				MediaType: arc.UnspecifiedImageType,
+				URI:       iconURI,
 			},
 		},
 	}
@@ -396,7 +396,7 @@ func sizeTagForImage(img spotify.Image) (szTag arc.AssetTags) {
 
 func addImage(dst *arc.CellHeader, img spotify.Image) {
 	dst.Glyphs = append(dst.Glyphs, &arc.AssetRef{
-		Tags:        arc.AssetTags_IsImageMedia,
+		MediaType:   arc.UnspecifiedImageType,
 		Scheme:      arc.AssetScheme_HttpURL,
 		URI:         img.URL,
 		PixelHeight: int32(img.Height),
@@ -417,9 +417,6 @@ func chooseBestImage(assets []*arc.AssetRef, closestHeight int32) *arc.AssetRef 
 	bestDiff := int32(0x7fffffff)
 
 	for _, img := range assets {
-		if img.Tags&arc.AssetTags_IsImageMedia == 0 {
-			continue
-		}
 
 		// If the image is smaller than what we're looking for, make differences matter more
 		diff := img.PixelHeight - closestHeight

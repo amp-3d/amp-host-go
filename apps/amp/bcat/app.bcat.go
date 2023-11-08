@@ -149,9 +149,9 @@ func (app *appCtx) reloadCategories() error {
 			About: entry.Description,
 			Glyphs: []*arc.AssetRef{
 				{
-					URI:    entry.Image,
-					Tags:   arc.AssetTags_IsImageMedia,
-					Scheme: arc.AssetScheme_FilePath,
+					URI:       entry.Image,
+					MediaType: arc.UnspecifiedImageType,
+					Scheme:    arc.AssetScheme_FilePath,
 				},
 			},
 		}

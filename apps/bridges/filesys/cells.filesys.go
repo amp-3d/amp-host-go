@@ -148,6 +148,7 @@ func (item *fsFile) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 		dst.Marshal(ctx.GetAttrID(amp.PlayableAssetAttrSpec), 0, &arc.AssetRef{
 			MediaType: item.mediaType,
 			URI:       item.pinnedURL,
+			Scheme:    arc.AssetScheme_HttpURL,
 		})
 	}
 
