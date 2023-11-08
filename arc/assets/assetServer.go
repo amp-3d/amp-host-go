@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -135,6 +136,14 @@ func (srv *httpServer) GracefulStop() {
 
 func (srv *httpServer) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) (URL string, err error) {
 	assetID := GenerateAssetID(srv.rng, 28)
+
+	// Extract extension and put on asset name
+	{
+		mediaType := asset.MediaType()
+		if extPos := strings.LastIndexByte(mediaType, '/'); extPos > 0 {
+			assetID += "." + mediaType[extPos+1:]
+		}
+	}
 
 	assetCtx, err := srv.Context.StartChild(&task.Task{
 		Label:   asset.Label(),
