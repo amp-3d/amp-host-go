@@ -78,7 +78,7 @@ func (cat *category) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 				Scheme: arc.URIScheme_File,
 			},
 		})
-		sta.CellBase.AddAttr(dst.App, "", &amp.MediaInfo{
+		sta.CellBase.AddAttr(dst.App, "", &amp.PlayableMedia{
 			AuthorDesc: entry.Author,
 			Title:      entry.Title,
 		})

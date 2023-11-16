@@ -175,16 +175,28 @@ func (v *LoginInfo) New() arc.ElemVal {
 	return &LoginInfo{}
 }
 
-func (v *MediaInfo) MarshalToBuf(dst *[]byte) error {
+func (v *PlayableMediaItem) MarshalToBuf(dst *[]byte) error {
 	return arc.MarshalPbValueToBuf(v, dst)
 }
 
-func (v *MediaInfo) TypeName() string {
-	return "MediaInfo"
+func (v *PlayableMediaItem) TypeName() string {
+	return "PlayableMediaItem"
 }
 
-func (v *MediaInfo) New() arc.ElemVal {
-	return &MediaInfo{}
+func (v *PlayableMediaItem) New() arc.ElemVal {
+	return &PlayableMediaItem{}
+}
+
+func (v *PlayableMediaAssets) MarshalToBuf(dst *[]byte) error {
+	return arc.MarshalPbValueToBuf(v, dst)
+}
+
+func (v *PlayableMediaAssets) TypeName() string {
+	return "PlayableMediaAssets"
+}
+
+func (v *PlayableMediaAssets) New() arc.ElemVal {
+	return &PlayableMediaAssets{}
 }
 
 func (v *MediaPlaylist) MarshalToBuf(dst *[]byte) error {

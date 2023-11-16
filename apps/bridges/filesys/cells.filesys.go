@@ -68,7 +68,6 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 
 	stripExt := false
 
-	//////////////////  MediaInfo
 	item.mediaFlags = 0
 	if !item.isDir {
 
@@ -136,19 +135,21 @@ func (item *fsFile) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 	item.fsItem.MarshalAttrs(dst, ctx)
 
 	if item.mediaFlags != 0 {
-		media := &amp.MediaInfo{
+		mediaItem := &amp.PlayableMediaItem{
 			Flags:      item.mediaFlags,
 			Title:      item.hdr.Title,
 			Collection: item.hdr.Subtitle,
 		}
-		dst.Marshal(ctx.GetAttrID(amp.MediaInfoAttrSpec), 0, media)
+		dst.Marshal(ctx.GetAttrID(amp.PlayableMediaItemAttrSpec), 0, mediaItem)
 	}
 
 	if item.pinnedURL != "" {
-		dst.Marshal(ctx.GetAttrID(amp.PlayableAssetAttrSpec), 0, &arc.AssetRef{
-			MediaType: item.mediaType,
-			URI:       item.pinnedURL,
-			Scheme:    arc.AssetScheme_HttpURL,
+		dst.Marshal(ctx.GetAttrID(amp.PlayableMediaItemAttrSpec), 0, &amp.PlayableMediaAssets{
+			MainTrack: &arc.AssetRef{
+				MediaType: item.mediaType,
+				URI:       item.pinnedURL,
+				Scheme:    arc.AssetScheme_HttpURL,
+			},
 		})
 	}
 

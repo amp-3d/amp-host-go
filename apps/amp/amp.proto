@@ -3,13 +3,8 @@ package amp;
 
 option csharp_namespace = "ArcXR";
 
-//import "arc/arc.proto";
+import "arc/arc.proto";
 
-enum ValTypeAmp {
-    ValTypeAmp_ffs = 0;
-    ValTypeAmp_MediaInfo        = 9001; // .ValBuf is a MediaInfo
-    
-}
 
 
 enum MediaFlags {
@@ -84,20 +79,26 @@ message StationInfo {
 
 
 
-message MediaInfo {
-    MediaFlags Flags        = 1;
-    string     Title        = 2;  // common title
-    string     AuthorDesc   = 5;  // artist(s) / author(s) description
-    string     Collection   = 6;  // name of album / series / collection
-    string     CoverArt     = 9;  // URL or local path to cover art image 
-    int32      ItemNumber   = 10; // track or episode number (0 if n/a)
-    int64      Duration16   = 11; // duration in seconds * 2^16; 0 if n/a
-    float      Popularity   = 12; // 0.0 to 1.0
-    int64      ReleaseDate  = 14; // Unix UTC in seconds
+// Invokes an fully featured media player over a panel. 
+message PlayableMediaItem {
+    MediaFlags   Flags        = 1;
+    string       Title        = 2;  // common title
+    string       AuthorDesc   = 5;  // artist(s) / author(s) description
+    string       Collection   = 6;  // name of album / series / collection
+    string       CoverArt     = 9;  // URL or local path to cover art image 
+    int32        ItemNumber   = 10; // track or episode number (0 if n/a)
+    int64        Duration16   = 11; // duration in seconds * 2^16; 0 if n/a
+    float        Popularity   = 12; // 0.0 to 1.0
+    int64        ReleaseDate  = 14; // Unix UTC in seconds
+    // repeated Tag        Tags         = 15; // tags
 }
 
-// PlaylistInfo?
-// MediaListInfo?
+message PlayableMediaAssets {
+    arc.AssetRef     MainTrack  = 1;
+  
+}
+
+
 message MediaPlaylist {
     int32      TotalItems     = 5;
     double     TotalDuration  = 6;

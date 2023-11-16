@@ -35,8 +35,8 @@ type albumCell struct {
 
 type trackCell struct {
 	spotifyCell
-	amp.MediaInfo
-	playable *arc.AssetRef // non-nil when pinned
+	amp.PlayableMediaItem
+	assets amp.PlayableMediaAssets
 }
 
 func (cell *spotifyCell) GetLogLabel() string {
@@ -60,9 +60,9 @@ func (cell *playlistCell) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) erro
 
 func (cell *trackCell) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 	cell.spotifyCell.MarshalAttrs(dst, ctx)
-	dst.Marshal(ctx.GetAttrID(amp.MediaInfoAttrSpec), 0, &cell.MediaInfo)
-	if cell.playable != nil {
-		dst.Marshal(ctx.GetAttrID(amp.PlayableAssetAttrSpec), 0, cell.playable)
+	dst.Marshal(ctx.GetAttrID(amp.PlayableMediaItemAttrSpec), 0, &cell.PlayableMediaItem)
+	if cell.assets.MainTrack != nil {
+		dst.Marshal(ctx.GetAttrID(amp.PlayableMediaAssetsAttrSpec), 0, &cell.assets)
 	}
 	return nil
 }
@@ -80,7 +80,7 @@ func (cell *trackCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 		return err
 	}
 
-	cell.playable = &arc.AssetRef{
+	cell.assets.MainTrack = &arc.AssetRef{
 		MediaType: asset.MediaType(),
 		Scheme:    arc.AssetScheme_HttpURL,
 		URI:       url,
@@ -197,7 +197,7 @@ func addChild_dir(dst *amp.PinnedCell[*appCtx], title string, iconURI string) *s
 // 	if err != nil {
 // 		return err
 // 	}
-// 	cell.(*trackCell).MediaInfo.URI = assetRef.URI
+// 	cell.(*trackCell).PlayableMedia.URI = assetRef.URI
 // 	cell.SetAttr(dst.App, amp.Attr_Playable, assetRef)
 // 	return nil
 // }
@@ -312,7 +312,7 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 	}
 	addGlyphs(&cell.hdr, track.Album.Images, addAll)
 
-	cell.MediaInfo = amp.MediaInfo{
+	cell.PlayableMediaItem = amp.PlayableMediaItem{
 		Flags:       amp.HasAudio | amp.IsSeekable | amp.NeedsNetwork,
 		Title:       track.Name,
 		AuthorDesc:  artistDesc,

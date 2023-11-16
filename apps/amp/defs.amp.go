@@ -30,9 +30,9 @@ type AppBase struct {
 }
 
 const (
-	MediaInfoAttrSpec     = "MediaInfo"
-	MediaPlaylistAttrSpec = "MediaPlaylist"
-	PlayableAssetAttrSpec = "AssetRef:playable"
+	MediaPlaylistAttrSpec       = "MediaPlaylist"
+	PlayableMediaItemAttrSpec   = "PlayableMediaItem"
+	PlayableMediaAssetsAttrSpec = "PlayableMediaAssets:main"
 )
 
 type Cell[AppT arc.AppContext] interface {
