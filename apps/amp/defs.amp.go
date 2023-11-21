@@ -29,11 +29,15 @@ type AppBase struct {
 	arc.AppBase
 }
 
-var (
-	MediaInfoAttrID     = arc.GenAttrUID(((*MediaInfo)(nil)).ElemTypeName())
-	MediaPlaylistAttrID = arc.GenAttrUID("MediaPlaylist")
-	PlayableAssetAttrID = arc.GenAttrUID("AssetRef:playable")
+const (
+	PlayableMediaItemSpec   = arc.AttrSpec("PlayableMediaItem") 
+	PlayableMediaAssetsSpec = arc.AttrSpec("PlayableMediaAssets")
 )
+// var (
+// 	MediaInfoAttrID     = arc.FormAttrUID(((*MediaInfo)(nil)).ElemTypeName())
+// 	MediaPlaylistAttrID = arc.FormAttrUID("MediaPlaylist")
+// 	PlayableAssetAttrID = arc.FormAttrUID("AssetRef:playable")
+// )
 
 type Cell[AppT arc.AppContext] interface {
 	arc.Cell

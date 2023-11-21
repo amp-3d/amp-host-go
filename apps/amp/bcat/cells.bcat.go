@@ -10,8 +10,9 @@ type categories struct {
 	//items []*
 }
 
-func (cats *categories) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
-	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &arc.CellHeader{
+func (cats *categories) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
+	ctx.MarshalCellOp()
+	dst.MarshalUpsert(arc.CellHeaderSpec, arc.NilUID, &arc.CellHeader{
 		Title: "Internet Radio",
 		Glyphs: []*arc.AssetRef{
 			amp.DirGlyph,
@@ -69,7 +70,7 @@ func (cat *category) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 			links: entry.Url,
 		}
 		sta.CellBase.ResetState(dst.App.IssueCellID(), sta)
-		sta.CellBase.AddAttr(dst.App, "", &arc.CellText{
+		sta.CellBase.AddAttr(dst.App, "", &arc.GlyphSet{
 			Title:    entry.Title,
 			Subtitle: entry.Summary,
 			About:    entry.Description,

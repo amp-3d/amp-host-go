@@ -113,12 +113,10 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 		}
 		item.hdr = hdr
 	}
-
 }
 
-func (item *fsItem) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
-	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &item.hdr)
-	return nil
+func (item *fsItem) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {	
+	return dst.MarshalUpsert(arc.CellHeaderSpec, arc.NilUID, &item.hdr)
 }
 
 func (item *fsItem) OnPinned(parent amp.Cell[*appCtx]) error {
@@ -132,16 +130,16 @@ type fsFile struct {
 	pinnedURL string
 }
 
-func (item *fsFile) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
+func (item *fsFile) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
 	item.fsItem.MarshalAttrs(dst, ctx)
 
 	if item.mediaFlags != 0 {
-		media := &amp.MediaInfo{
+		media := &amp.PlayableMediaItem{
 			Flags:      item.mediaFlags,
 			Title:      item.hdr.Title,
 			Collection: item.hdr.Subtitle,
 		}
-		dst.Marshal(ctx.GetAttrID(amp.MediaInfoAttrSpec), 0, media)
+		dst.MarshalValue(ctx.GetAttrID(amp.MediaInfoAttrSpec), 0, media)
 	}
 
 	if item.pinnedURL != "" {

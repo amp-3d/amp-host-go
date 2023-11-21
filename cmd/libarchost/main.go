@@ -92,13 +92,13 @@ func Call_Shutdown() {
 }
 
 //export Call_PushMsg
-func Call_PushMsg(msg_pb []byte) int64 {
+func Call_PushMsg(txMsg []byte) int64 {
 	sess := gLibSession
 	if sess == nil {
 		return -1
 	}
 
-	msg := arc.NewMsg()
+	tx := arc.NewTxMsg()
 	if err := msg.Unmarshal(msg_pb[arc.TxHeader_Size:]); err != nil {
 		panic(err)
 	}
@@ -107,13 +107,13 @@ func Call_PushMsg(msg_pb []byte) int64 {
 }
 
 //export Call_WaitOnMsg
-func Call_WaitOnMsg(msg_pb *[]byte) int64 {
+func Call_WaitOnMsg(txMsg *[]byte) int64 {
 	sess := gLibSession
 	if sess == nil {
 		return -1
 	}
 
-	err := sess.DequeueOutgoing(msg_pb)
+	err := sess.DequeueOutgoing(txMsg)
 	if err == nil {
 		return 0
 	}

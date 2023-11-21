@@ -81,8 +81,6 @@ func (app *appCtx) mountHomePlanet() error {
 		return err
 	}
 
-	// TODO: this should be done by the host somehow?
-	app.Session().InitSessionRegistry(app.home.symTable)
 	return nil
 }
 
@@ -246,9 +244,9 @@ func (app *appCtx) onPlanetClosed(pl *plSess) {
 //
 //	AppSID + NodeSID + AttrNamedTypeSID [+ SI] => AttrElemVal
 const (
-	kScopeOfs = 0 // byte offset of AppID
-	kNodeOfs  = 4 // byte offset of NodeID
-	kAttrOfs  = 8 // byte offset of AttrID
+	kAppOfs  = 0  // byte offset of AppUID
+	kCellOfs = 16 // byte offset of CellUID
+	kAttrOfs = 32 // byte offset of AttrUID
 )
 
 // plSess represents a "mounted" planet (a Cell database), allowing it to be accessed, served, and updated.
@@ -269,8 +267,8 @@ type plSess struct {
 // *** implements arc.PinnedCell ***
 type plCell struct {
 	arc.CellID
-	pl      *plSess           // parent planet
-	ctx     task.Context      // arc.PinnedCell ctx
+	pl      *plSess         // parent planet
+	ctx     task.Context    // arc.PinnedCell ctx
 	newTxns chan *arc.TxMsg // txns to merge
 	dbKey   [kAttrOfs]byte
 	// newSubs  chan *plReq        // new requests waiting for state
@@ -388,7 +386,7 @@ func (pl *plSess) getCell(scopeID, nodeID uint32) (cell *plCell, err error) {
 	}
 	cell.CellID = cellID
 
-	binary.BigEndian.PutUint32(cell.dbKey[kScopeOfs:], scopeID)
+	binary.BigEndian.PutUint32(cell.dbKey[kAppOfs:], scopeID)
 	binary.BigEndian.PutUint32(cell.dbKey[kNodeOfs:], nodeID)
 
 	// Start the cell context as a child of the planet db it belongs to
@@ -620,15 +618,14 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 	defer itr.Close()
 
 	sess := cell.pl.app.Session()
-	params := ctx.Params()
-	useClientIDs := (params.PinReq.Flags & arc.PinFlags_UseNativeSymbols) == 0
+	//params := ctx.Params()
 
 	valsBuf := make([]byte, 0, 1024)
 
-	var cellTx *arc.CellTxPb
+	tx := arc.NewTxMsg()
 
-	// cellTxs := make([]*arc.CellTxPb, 0, 4)
-	// cellTxs = append(cellTxs, cellTx)
+	// Ops := make([]*arc.CellTxPb, 0, 4)
+	// Ops = append(Ops, cellTx)
 
 	// Read the Cell from the db and push enabled (current all) attrs it to the client
 	for itr.Rewind(); itr.Valid(); itr.Next() {
@@ -638,7 +635,7 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 
 		send := true
 
-		attrID := binary.BigEndian.Uint32(item.Key()[kAttrOfs:])
+		attrID := arc.UID // binary.BigEndian.Uint32(item.Key()[kAttrOfs:])
 		if useClientIDs {
 			attrID, send = sess.NativeToClientID(attrID)
 		}
@@ -679,10 +676,10 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 		}
 	}
 
-	msg := arc.NewMsg()
+	msg := arc.NewTxMsg()
 	msg.Status = arc.ReqStatus_Synced
 	if cellTx != nil {
-		msg.CellTxs = append(msg.CellTxs, cellTx)
+		msg.Ops = append(msg.Ops, cellTx)
 	}
 	return ctx.PushTx(msg)
 }
@@ -706,7 +703,7 @@ func (cell *plCell) mergeUpdate(tx *arc.TxMsg) error {
 	key := keyBuf[:0]
 
 	var target arc.CellID
-	for _, cellTx := range tx.CellTxs {
+	for _, cellTx := range tx.Ops {
 
 		// TODO: handle child cells
 		target.AssignFromU64(cellTx.CellID_0, cellTx.CellID_1)
@@ -761,7 +758,7 @@ func (cell *plCell) pushToSubs(srcTx *arc.TxMsg) {
 
 				msg := arc.NewMsg()
 				msg.Status = srcTx.Status
-				msg.CellTxs = append(msg.CellTxs[:0], src.CellTxs...)
+				msg.Ops = append(msg.Ops[:0], src.Ops...)
 
 				err := subCtx.PushTx(msg)
 				if err != nil {

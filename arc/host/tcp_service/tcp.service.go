@@ -168,6 +168,8 @@ type tcpSess struct {
 	srv      *tcpServer
 	conn     net.Conn
 	hostSess arc.HostSession
+	rxBuf    []byte
+	txBuf    []byte``
 }
 
 func (sess *tcpSess) Label() string {
@@ -181,7 +183,7 @@ func (sess *tcpSess) Close() error {
 	return nil
 }
 
-func (sess *tcpSess) SendMsg(tx *arc.Msg) error {
+func (sess *tcpSess) SendTx(tx *arc.TxMsg) error {
 
 	// This gets less gross when we roll our own TxMsg serialization
 	hdrSz := int(arc.TxHeader_Size)
@@ -202,7 +204,7 @@ func (sess *tcpSess) SendMsg(tx *arc.Msg) error {
 	return nil
 }
 
-func (sess *tcpSess) RecvMsg() (*arc.Msg, error) {
+func (sess *tcpSess) RecvTx() (*arc.TxMsg, error) {
 
 	// TODO: add guarding
 	for {
@@ -220,7 +222,7 @@ func (sess *tcpSess) RecvMsg() (*arc.Msg, error) {
 		bodyOfs := L
 		txLen := arc.TxDataStore(hdr[:]).GetTxTotalLen()
 		if txLen > L {
-			tx := arc.NewMsg()
+			tx := arc.NewTxMsg()
 			txBuf := make([]byte, txLen) // wasteful allocation -- goes away when we roll our own TxMsg serialization
 			copy(txBuf, hdr[:])
 			for L < txLen {
