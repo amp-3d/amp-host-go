@@ -23,8 +23,8 @@ type LibSession interface {
 	Realloc(buf *[]byte, newLen int64)
 
 	// Blocking calls to send/recv Msgs to the host
-	EnqueueIncoming(msg *arc.Msg) error
-	DequeueOutgoing(msg_pb *[]byte) error
+	EnqueueIncoming(txMsg *arc.TxMsg) error
+	DequeueOutgoing(txMsg *[]byte) error
 }
 
 func (opts LibServiceOpts) NewLibService() LibService {

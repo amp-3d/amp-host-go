@@ -38,7 +38,7 @@ func (srv *libService) NewLibSession() (LibSession, error) {
 	sess := &libSession{
 		srv:        srv,
 		mallocs:    make(map[*byte]struct{}),
-		fromClient: make(chan *arc.Msg),
+		fromClient: make(chan *arc.TxMsg),
 		toClient:   make(chan []byte),
 		free:       make(chan []byte, 1),
 		closing:    make(chan struct{}),
@@ -68,7 +68,7 @@ type libSession struct {
 	// TODO: reimplement below using sync.Cond
 	//xfer     sync.Cond
 	//xferMu   sync.Mutex
-	fromClient chan *arc.Msg
+	fromClient chan *arc.TxMsg
 	toClient   chan []byte
 	closing    chan struct{}
 	free       chan []byte
@@ -129,19 +129,19 @@ func (sess *libSession) Realloc(buf *[]byte, newLen int64) {
 ///////////////////////// client -> host /////////////////////////
 
 // Executed on a host thread
-func (sess *libSession) RecvMsg() (*arc.Msg, error) {
+func (sess *libSession) RecvTx() (*arc.TxMsg, error) {
 	select {
-	case msg := <-sess.fromClient:
-		return msg, nil
+	case tx := <-sess.fromClient:
+		return tx, nil
 	case <-sess.closing:
 		return nil, arc.ErrStreamClosed
 	}
 }
 
 // Executed on a client thread
-func (sess *libSession) EnqueueIncoming(msg *arc.Msg) error {
+func (sess *libSession) EnqueueIncoming(tx *arc.TxMsg) error {
 	select {
-	case sess.fromClient <- msg:
+	case sess.fromClient <- tx:
 		return nil
 	case <-sess.closing:
 		return arc.ErrStreamClosed
@@ -151,22 +151,18 @@ func (sess *libSession) EnqueueIncoming(msg *arc.Msg) error {
 ///////////////////////// host -> client /////////////////////////
 
 // Executed on a host thread
-func (sess *libSession) SendMsg(tx *arc.Msg) error {
+func (sess *libSession) SendTx(tx *arc.TxMsg) error {
 
 	// Serialize the outgoing msg into an existing buffer (or allocate a new one)
-	txLen := tx.Size() + int(arc.TxHeader_Size)
-	var msg_pb []byte
+	var txBuf []byte
 	select {
-	case msg_pb = <-sess.free:
+	case txBuf = <-sess.free:
 	default:
 	}
-	sess.Realloc(&msg_pb, int64(txLen))
-	if err := tx.MarshalToTxBuffer(msg_pb); err != nil {
-		return err
-	}
-
+	
+	txBuf = tx.MarshalTo(txBuf[:0])
 	select {
-	case sess.toClient <- msg_pb:
+	case sess.toClient <- txBuf:
 		return nil
 	case <-sess.closing:
 		return arc.ErrStreamClosed
@@ -174,19 +170,19 @@ func (sess *libSession) SendMsg(tx *arc.Msg) error {
 }
 
 // Executed on a client thread
-func (sess *libSession) DequeueOutgoing(msg_pb *[]byte) error {
+func (sess *libSession) DequeueOutgoing(txBuf *[]byte) error {
 
 	// 1) Retain the given ready (free) buffer
 	// If the free pool is full, reclaim the buffer now
 	if len(sess.free) == 0 {
-		sess.free <- *msg_pb
+		sess.free <- *txBuf
 	} else {
-		sess.Realloc(msg_pb, 0)
+		sess.Realloc(txBuf, 0)
 	}
 
 	// 2) Block until the next outgoing msg appears (or stream is closed)
 	select {
-	case *msg_pb = <-sess.toClient:
+	case *txBuf = <-sess.toClient:
 		return nil
 	case <-sess.closing:
 		return arc.ErrStreamClosed

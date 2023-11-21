@@ -50,7 +50,7 @@ func (cell *CellBase[AppT]) AddTo(dst *PinnedCell[AppT], self Cell[AppT]) {
 func (cell *CellBase[AppT]) FormAttrUpsert() arc.CellOp {
 	return arc.CellOp{
 		OpCode: arc.CellOpCode_UpsertAttr,
-		CellID: cell.CellID,
+		TargetCell: cell.CellID,
 	}
 }
 
@@ -167,16 +167,28 @@ func (v *LoginInfo) New() arc.AttrElemVal {
 	return &LoginInfo{}
 }
 
-func (v *MediaInfo) MarshalToStore(dst []byte) ([]byte, error) {
+func (v *PlayableMediaItem) MarshalToStore(dst []byte) ([]byte, error) {
 	return arc.MarshalPbToStore(v, dst)
 }
 
-func (v *MediaInfo) ElemTypeName() string {
-	return "MediaInfo"
+func (v *PlayableMediaItem) ElemTypeName() string {
+	return "PlayableMediaItem"
 }
 
-func (v *MediaInfo) New() arc.AttrElemVal {
-	return &MediaInfo{}
+func (v *PlayableMediaItem) New() arc.AttrElemVal {
+	return &PlayableMediaItem{}
+}
+
+func (v *PlayableMediaAssets) MarshalToStore(dst []byte) ([]byte, error) {
+	return arc.MarshalPbToStore(v, dst)
+}
+
+func (v *PlayableMediaAssets) ElemTypeName() string {
+	return "PlayableMediaAssets"
+}
+
+func (v *PlayableMediaAssets) New() arc.AttrElemVal {
+	return &PlayableMediaAssets{}
 }
 
 func (v *MediaPlaylist) MarshalToStore(dst []byte) ([]byte, error) {

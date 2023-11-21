@@ -57,19 +57,19 @@ func (cell *spotifyCell) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error 
 	op.AttrID = arc.CellHeaderAttrID
 	ctx.MarshalCellOp(dst, op, &cell.hdr)
 	
-	op.AttrID = arc.CellTextAttrID
+	op.AttrID = arc.GlyphSetAttrID
 	ctx.MarshalCellOp(dst, op, &cell.text)
 	
 	return nil
 }
 
-func (cell *playlistCell) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
+func (cell *playlistCell) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
 	cell.spotifyCell.MarshalAttrs(dst, ctx)
 	dst.Marshal(ctx.GetAttrID(amp.MediaPlaylistAttrSpec), 0, &cell.MediaPlaylist)
 	return nil
 }
 
-func (cell *trackCell) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
+func (cell *trackCell) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
 	cell.spotifyCell.MarshalAttrs(dst, ctx)
 	dst.Marshal(ctx.GetAttrID(amp.MediaInfoAttrSpec), 0, &cell.MediaInfo)
 	if cell.playable != nil {

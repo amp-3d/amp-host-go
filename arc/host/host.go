@@ -4,17 +4,14 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
 	"github.com/arcspace/go-arc-sdk/stdlib/task"
 	"github.com/arcspace/go-arc-sdk/stdlib/utils"
 	"github.com/arcspace/go-archost/apps/sys/planet"
-	"github.com/arcspace/go-archost/arc/host/registry"
 )
 
 type host struct {
@@ -158,7 +155,6 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 // hostSess wraps a session the parent host has with a client.
 type hostSess struct {
 	task.Context
-	arc.SessionRegistry
 
 	nextID     atomic.Uint64      // next CellID to be issued
 	host       *host              // parent host
@@ -171,6 +167,7 @@ type hostSess struct {
 	loginReqID uint64 // ReqID of the login, allowing us to send session attrs back to the client.
 	openAppsMu sync.Mutex
 	openApps   map[arc.UID]*appContext
+	//attr
 }
 
 // *** implements PinContext ***
@@ -204,19 +201,18 @@ func (req *appReq) GetLogLabel() string {
 }
 
 func (req *appReq) MarshalCellOp(dst *arc.TxMsg, op arc.CellOp, val arc.AttrElemVal) {
-	if op.CellID.IsNil() {
-		req.Warnf("MarshalCellOp: CellOp has no CellID")
+	if op.TargetCell.IsNil() {
+		req.Warnf("MarshalCellOp: TargetCell is nil")
 		return
 	}
-
 	var err error
-	op.DataOfs = int64(len(dst.DataStore))
-	dst.DataStore, err = val.MarshalToStore(dst.DataStore)
+	op.DataStoreOfs = int64(len(dst.AttrStore))
+	dst.AttrStore, err = val.MarshalToStore(dst.AttrStore)
 	if err != nil {
 		req.Error(err)
 		return
 	}
-	op.DataLen = int64(len(dst.DataStore))
+	op.DataLen = int64(len(dst.AttrStore))
 }
 
 /*
@@ -305,28 +301,8 @@ func (sess *hostSess) closeReq(reqID uint64, sendClose bool, err error) {
 	}
 
 	if sendClose {
-		tx := arc.NewTxMsg()
-		tx.ReqID = reqID
-		tx.Status = arc.ReqStatus_Closed
-
-		if err != nil {
-			op := arc.CellOp{
-				OpCode: arc.CellOpCode_MetaAttr,
-			}
-
-			val := arc.ErrorToValue(err)
-			op.AttrID = arc.GenAttrUID(val.ElemTypeName())
-
-			elem := &arc.AttrElemPb{
-				AttrID: uint64(arc.ConstSymbol_Err.Ord()),
-			}
-			arc.ErrorToValue(err).MarshalToBuf(&elem.ValBuf)
-			tx.CellOps = append(tx.CellOps, arc.CellOp{
-				Op:    arc.CellTxOp_MetaAttr,
-				Elems: []*arc.AttrElemPb{elem},
-			})
-		}
-		sess.SendTx(tx)
+		val := arc.ErrorToValue(err)
+		arc.SendClientMetaAttr(sess, reqID, val, arc.ReqStatus_Closed)
 	}
 
 	if req != nil {
@@ -372,32 +348,32 @@ func (sess *hostSess) handleLogin() error {
 	}
 
 	timer := time.NewTimer(sess.host.Opts.LoginTimeout)
-	nextMsg := func() (*arc.TxMsg, *arc.AttrElemPb, error) {
+	nextTx := func() (*arc.TxMsg, error) {
 		select {
-		case msg := <-sess.txIn:
-			attr, err := msg.GetMetaAttr()
-			return msg, attr, err
+		case tx := <-sess.txIn:
+			return tx, nil
 		case <-timer.C:
-			return nil, nil, arc.ErrTimeout
+			return nil, arc.ErrTimeout
 		case <-sess.Closing():
-			return nil, nil, arc.ErrShuttingDown
+			return nil, arc.ErrShuttingDown
 		}
 	}
 
 	// Wait for login msg
-	msg, attr, err := nextMsg()
+	tx, err := nextTx()
 	if err != nil {
 		return err
 	}
-	sess.loginReqID = msg.ReqID
+	sess.loginReqID = tx.ReqID
 	if sess.loginReqID == 0 {
 		return arc.ErrCode_LoginFailed.Error("missing Req ID")
 	}
-	if err = sess.login.Unmarshal(attr.ValBuf); err != nil {
+	
+	if err = tx.UnmarshalAttrElem(0, &sess.login); err != nil {
 		return arc.ErrCode_LoginFailed.Error("failed to unmarshal Login")
 	}
 
-	// Importantly, this boots the planet app to mount and start the home planet, which calls InitSessionRegistry()
+	// Importantly, this boots the planet app to mount and start the home planet
 	_, err = sess.GetAppInstance(planet.AppUID, true)
 	if err != nil {
 		return err
@@ -407,16 +383,16 @@ func (sess *hostSess) handleLogin() error {
 		chall := &arc.LoginChallenge{
 			// TODO
 		}
-		if err = arc.SendClientMetaAttr(sess, msg.ReqID, chall); err != nil {
+		if err = arc.SendClientMetaAttr(sess, tx.ReqID, chall, arc.ReqStatus_Closed); err != nil {
 			return err
 		}
 	}
 
-	if msg, attr, err = nextMsg(); err != nil {
+	if tx, err = nextTx(); err != nil {
 		return err
 	}
 	var loginResp arc.LoginResponse
-	if err = loginResp.Unmarshal(attr.ValBuf); err != nil {
+	if err = tx.UnmarshalAttrElem(0, &loginResp); err != nil {
 		return arc.ErrCode_LoginFailed.Error("failed to unmarshal LoginResponse")
 	}
 
@@ -424,7 +400,7 @@ func (sess *hostSess) handleLogin() error {
 	{
 	}
 
-	sess.closeReq(msg.ReqID, true, err)
+	sess.closeReq(tx.ReqID, true, err)
 	return nil
 }
 
@@ -432,26 +408,22 @@ func (sess *hostSess) consumeInbox() {
 	for running := true; running; {
 		select {
 
-		case msg := <-sess.txIn:
+		case tx := <-sess.txIn:
 			keepOpen := false
-			if msg.Status == arc.ReqStatus_Closed {
-				sess.closeReq(msg.ReqID, false, nil)
-			} else {
-				var err error
-
-				metaAttr, _ := msg.GetMetaAttr()
-				if metaAttr != nil {
-					keepOpen, err = sess.handleMetaAttr(msg.ReqID, metaAttr)
-				} else {
-					// tx := &arc.TxMsg{}
-					// err = tx.UnmarshalFrom(msg, sess.SessionRegistry, false)
-					err = arc.ErrUnimplemented // TODO: handle cell update tx
+			if tx.Status == arc.ReqStatus_Closed {
+				sess.closeReq(tx.ReqID, false, nil)
+			} else {		
+				metaAttr, err := tx.GetMetaAttr()
+				if err != nil {
+					sess.closeReq(tx.ReqID, true, err)
 				}
+				sessOp, err = sess.registry().NewAttrElem(metaAttr.AttrID)
+				keepOpen, err = sess.handleMetaAttr(tx)
 				if err != nil || !keepOpen {
-					sess.closeReq(msg.ReqID, true, err)
+					sess.closeReq(tx.ReqID, true, err)
 				}
 			}
-			msg.Reclaim()
+			tx.Reclaim()
 
 		case <-sess.Closing():
 			sess.closeAllReqs()
@@ -460,18 +432,10 @@ func (sess *hostSess) consumeInbox() {
 	}
 }
 
-func (sess *hostSess) InitSessionRegistry(symTable symbol.Table) {
-	if sess.SessionRegistry != nil {
-		panic("InitSessionRegistry() already called")
-	}
-	sess.SessionRegistry = registry.NewSessionRegistry(symTable)
-	if err := sess.registry().ExportTo(sess.SessionRegistry); err != nil {
-		panic(err)
-	}
-}
 
-func (sess *hostSess) handleMetaAttr(reqID uint64, val arc.AttrElemVal) (keepOpen bool, err error) {
+func (sess *hostSess) handleMetaAttr(tx *arc.TxMsg) (keepOpen bool, err error) {
 
+	//if tx.TryExtractElem(
 	switch v := val.(type) {
 	case *arc.PinRequest:
 		{
@@ -483,11 +447,6 @@ func (sess *hostSess) handleMetaAttr(reqID uint64, val arc.AttrElemVal) (keepOpe
 			req.PinReq = *v
 			keepOpen = true
 			err = sess.pinCell(req)
-			return
-		}
-	case *arc.RegisterDefs:
-		{
-			err = sess.SessionRegistry.RegisterDefs(v)
 			return
 		}
 	case *arc.HandleURI:
@@ -537,7 +496,7 @@ func (sess *hostSess) newAppReq(reqID uint64) *appReq {
 	req := &appReq{
 		cancel:    make(chan struct{}),
 		pinning:   make(chan struct{}),
-		attrCache: make(map[string]uint32),
+		attrCache: make(map[string]arc.AttrUID),
 		sess:      sess,
 	}
 	req.ReqID = reqID
@@ -763,7 +722,7 @@ func (ctx *appContext) IssueCellID() (id arc.CellID) {
 	///return arc.IssueCellID(ctx.rng)
 }
 
-
+/*
 func (reg *sessRegistry) IssueTimeID() arc.TimeID {
 	now := int64(arc.ConvertToUTC16(time.Now()))
 	if !reg.timeMu.CompareAndSwap(0, 1) { // spin lock
@@ -780,7 +739,7 @@ func (reg *sessRegistry) IssueTimeID() arc.TimeID {
 
 	return arc.TimeID(issued)
 }
-
+*/
 
 func (ctx *appContext) Session() arc.HostSession {
 	return ctx.sess
@@ -803,9 +762,8 @@ func (ctx *appContext) PinAppCell(flags arc.PinFlags) (*appReq, error) {
 	req := &arc.PinReqParams{
 		Outlet: make(chan *arc.TxMsg, 1),
 	}
-	req.PinReq.Flags = arc.PinFlags_UseNativeSymbols | flags
+	req.PinReq.Flags = flags
 	req.PinReq.PinURL = fmt.Sprintf("arc://planet/~/%s/.AppAttrs", ctx.module.AppID)
-
 	pinCtx, err := ctx.sess.PinCell(req)
 	if err != nil {
 		return nil, err
@@ -830,8 +788,8 @@ func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.AttrElemVal) erro
 	for {
 		select {
 		case msg := <-outlet:
-			if len(msg.CellTxs) > 0 && len(msg.CellTxs[0].Elems) > 0 {
-				first := msg.CellTxs[0].Elems[0]
+			if len(msg.Ops) > 0 && len(msg.Ops[0].Elems) > 0 {
+				first := msg.Ops[0].Elems[0]
 				if uint32(first.AttrID) == match.DefID {
 					err := dst.Unmarshal(first.ValBuf)
 					pinCtx.Close()
