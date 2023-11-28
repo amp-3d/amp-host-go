@@ -144,7 +144,7 @@ func (item *fsFile) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 	}
 
 	if item.pinnedURL != "" {
-		dst.Marshal(ctx.GetAttrID(amp.PlayableMediaItemAttrSpec), 0, &amp.PlayableMediaAssets{
+		dst.Marshal(ctx.GetAttrID(amp.PlayableMediaAssetsAttrSpec), 0, &amp.PlayableMediaAssets{
 			MainTrack: &arc.AssetRef{
 				MediaType: item.mediaType,
 				URI:       item.pinnedURL,
