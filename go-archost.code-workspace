@@ -1,0 +1,27 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../go-arc-sdk"
+		},
+		{
+			"path": "../go-librespot"
+		}
+	],
+	"settings": {
+		"cSpell.words": [
+			"archost",
+			"arcspace",
+			"elems",
+			"geobase",
+			"interoperating",
+			"pinnable",
+			"sess",
+			"threadsafe",
+			"unmarshals",
+			"upsert"
+		]
+	}
+}
