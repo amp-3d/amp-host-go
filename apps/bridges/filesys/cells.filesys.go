@@ -24,6 +24,7 @@ type fsItem struct {
 	mediaType string
 
 	hdr        arc.CellHeader
+	glyphs     arc.GlyphSet
 	mediaFlags amp.MediaFlags
 }
 
@@ -84,15 +85,12 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 		item.mediaFlags |= amp.IsSeekable
 	}
 
-	//////////////////  CellHeader
 	{
 		hdr := arc.CellHeader{
 			Modified: int64(arc.ConvertToUTC16(item.modTime)),
 		}
-		if item.isDir {
-			hdr.Glyphs = []*arc.AssetRef{
-				amp.DirGlyph,
-			}
+		if !item.isDir {
+			item.glyphs.Primary = append(item.glyphs.Primary, amp.DirGlyph)
 		} else {
 			hdr.ExternalLink = &arc.AssetRef{
 				MediaType: item.mediaType,
@@ -113,10 +111,13 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 		}
 		item.hdr = hdr
 	}
+
 }
 
-func (item *fsItem) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {	
-	return dst.MarshalUpsert(arc.CellHeaderSpec, arc.NilUID, &item.hdr)
+func (item *fsItem) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
+	op := item.FormAttrUpsert(arc.CellHeaderUID)
+	ctx.MarshalTxOp(dst, op, &item.hdr)
+	return nil
 }
 
 func (item *fsItem) OnPinned(parent amp.Cell[*appCtx]) error {
@@ -134,21 +135,22 @@ func (item *fsFile) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
 	item.fsItem.MarshalAttrs(dst, ctx)
 
 	if item.mediaFlags != 0 {
-		media := &amp.PlayableMediaItem{
+		media := amp.PlayableMediaItem{
 			Flags:      item.mediaFlags,
 			Title:      item.hdr.Title,
 			Collection: item.hdr.Subtitle,
 		}
-		dst.MarshalValue(ctx.GetAttrID(amp.MediaInfoAttrSpec), 0, media)
+		
+		if item.pinnedURL != "" {
+			media.MainTrack = &arc.AssetRef{
+				MediaType: item.mediaType,
+				URI:       item.pinnedURL,
+			}
+		}
+		
+		op := item.FormAttrUpsert(amp.PlayableMediaItemUID)
+		ctx.MarshalTxOp(dst, op, &media)
 	}
-
-	if item.pinnedURL != "" {
-		dst.Marshal(ctx.GetAttrID(amp.PlayableAssetAttrSpec), 0, &arc.AssetRef{
-			MediaType: item.mediaType,
-			URI:       item.pinnedURL,
-		})
-	}
-
 	return nil
 }
 

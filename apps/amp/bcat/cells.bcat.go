@@ -10,14 +10,19 @@ type categories struct {
 	//items []*
 }
 
-func (cats *categories) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
-	ctx.MarshalCellOp()
-	dst.MarshalUpsert(arc.CellHeaderSpec, arc.NilUID, &arc.CellHeader{
+func (cats *categories) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {    
+	op := cats.FormAttrUpsert(arc.CellHeaderUID)
+	ctx.MarshalTxOp(dst, op, &arc.CellHeader{
 		Title: "Internet Radio",
-		Glyphs: []*arc.AssetRef{
+	})
+	
+	op.AttrID = arc.GlyphSetUID
+	ctx.MarshalTxOp(dst, op, &arc.GlyphSet{
+		Primary:  []*arc.AssetRef{
 			amp.DirGlyph,
 		},
 	})
+
 	return nil
 }
 
@@ -30,6 +35,30 @@ type category struct {
 	catID uint32 //
 }
 
+/*
+
+func (cell *category) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
+	op := cell.FormAttrUpsert(arc.CellHeaderUID)
+	ctx.MarshalTxOp(dst, op, &cell.hdr)
+	
+	op.AttrID = arc.GlyphSetUID
+	ctx.MarshalTxOp(dst, op, &cell.glyphs)
+	
+	return nil
+}
+
+
+cat.glyphs = arc.GlyphSet{
+			Primary: []*arc.AssetRef{
+				{
+					URI:    entry.Image,
+					Tags:   arc.AssetTags_IsImageMedia,
+					Scheme: arc.AssetScheme_FilePath,
+				},
+			},
+		}
+		*/
+		
 /*
 
 func (cat *category) PinInto(dst *amp.PinnedCell[*appCtx]) error {

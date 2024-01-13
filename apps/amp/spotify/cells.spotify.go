@@ -22,6 +22,7 @@ type spotifyCell struct {
 	spotifyID spotify.ID
 	pinner    Pinner
 	hdr       arc.CellHeader
+	glyphs    arc.GlyphSet
 }
 
 type playlistCell struct {
@@ -39,8 +40,7 @@ type albumCell struct {
 
 type trackCell struct {
 	spotifyCell
-	amp.MediaInfo
-	playable *arc.AssetRef // non-nil when pinned
+	amp.PlayableMediaItem
 }
 
 func (cell *spotifyCell) GetLogLabel() string {
@@ -52,29 +52,28 @@ func (cell *spotifyCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 }
 
 func (cell *spotifyCell) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
-	op := cell.FormAttrUpsert()
+	op := cell.FormAttrUpsert(arc.CellHeaderUID)
+	ctx.MarshalTxOp(dst, op, &cell.hdr)
 	
-	op.AttrID = arc.CellHeaderAttrID
-	ctx.MarshalCellOp(dst, op, &cell.hdr)
-	
-	op.AttrID = arc.GlyphSetAttrID
-	ctx.MarshalCellOp(dst, op, &cell.text)
+	op.AttrID = arc.GlyphSetUID
+	ctx.MarshalTxOp(dst, op, &cell.glyphs)
 	
 	return nil
 }
 
 func (cell *playlistCell) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
 	cell.spotifyCell.MarshalAttrs(dst, ctx)
-	dst.Marshal(ctx.GetAttrID(amp.MediaPlaylistAttrSpec), 0, &cell.MediaPlaylist)
+	
+	op := cell.FormAttrUpsert(amp.MediaPlaylistUID)
+	ctx.MarshalTxOp(dst, op, &cell.MediaPlaylist)
 	return nil
 }
 
 func (cell *trackCell) MarshalAttrs(dst *arc.TxMsg, ctx arc.PinContext) error {
 	cell.spotifyCell.MarshalAttrs(dst, ctx)
-	dst.Marshal(ctx.GetAttrID(amp.MediaInfoAttrSpec), 0, &cell.MediaInfo)
-	if cell.playable != nil {
-		dst.Marshal(ctx.GetAttrID(amp.PlayableAssetAttrSpec), 0, cell.playable)
-	}
+	
+	op := cell.FormAttrUpsert(amp.PlayableMediaItemUID)
+	ctx.MarshalTxOp(dst, op, &cell.PlayableMediaItem)
 	return nil
 }
 
@@ -91,11 +90,11 @@ func (cell *trackCell) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 		return err
 	}
 
-	cell.playable = &arc.AssetRef{
-		MediaType: asset.MediaType(),
-		Scheme:    arc.AssetScheme_HttpURL,
-		URI:       url,
-	}
+	cell.PlayableMediaItem.MainTrack = &arc.AssetRef{
+			MediaType: asset.MediaType(),
+			Scheme:    arc.AssetScheme_HttpURL,
+			URI:       url,
+		}
 	return nil
 }
 
@@ -181,7 +180,10 @@ func addChild_dir(dst *amp.PinnedCell[*appCtx], title string, iconURI string) *s
 	cell := &spotifyCell{}
 	cell.hdr = arc.CellHeader{
 		Title: title,
-		Glyphs: []*arc.AssetRef{
+		
+	}
+	cell.glyphs = arc.GlyphSet{
+		Primary: []*arc.AssetRef{
 			{
 				Scheme: arc.AssetScheme_FilePath,
 				Tags:   arc.AssetTags_IsImageMedia,
@@ -228,7 +230,7 @@ func addChild_Playlist(dst *amp.PinnedCell[*appCtx], playlist spotify.SimplePlay
 		Subtitle:     playlist.Description,
 		ExternalLink: chooseBestLink(playlist.ExternalURLs),
 	}
-	addGlyphs(&cell.hdr, playlist.Images, addAll)
+	addGlyphs(&cell.glyphs, playlist.Images, addAll)
 
 	cell.MediaPlaylist = amp.MediaPlaylist{
 		TotalItems: int32(playlist.Tracks.Total),
@@ -286,7 +288,7 @@ func addChild_Artist(dst *amp.PinnedCell[*appCtx], artist spotify.FullArtist) {
 		Subtitle:     fmt.Sprintf("%d followers", artist.Followers.Count),
 		ExternalLink: chooseBestLink(artist.ExternalURLs),
 	}
-	addGlyphs(&cell.hdr, artist.Images, addAll)
+	addGlyphs(&cell.glyphs, artist.Images, addAll)
 
 	cell.AddTo(dst, cell)
 }
@@ -300,7 +302,7 @@ func addChild_Album(dst *amp.PinnedCell[*appCtx], album spotify.SimpleAlbum) {
 		ExternalLink: chooseBestLink(album.ExternalURLs),
 		Created:      album.ReleaseDateTime().Unix() << 16,
 	}
-	addGlyphs(&cell.hdr, album.Images, addAll)
+	addGlyphs(&cell.glyphs, album.Images, addAll)
 
 	cell.AddTo(dst, cell)
 }
@@ -321,9 +323,9 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 		ExternalLink: chooseBestLink(track.ExternalURLs),
 		Created:      releaseDate << 16,
 	}
-	addGlyphs(&cell.hdr, track.Album.Images, addAll)
+	addGlyphs(&cell.glyphs, track.Album.Images, addAll)
 
-	cell.MediaInfo = amp.MediaInfo{
+	cell.PlayableMediaItem = amp.PlayableMediaItem{
 		Flags:       amp.HasAudio | amp.IsSeekable | amp.NeedsNetwork,
 		Title:       track.Name,
 		AuthorDesc:  artistDesc,
@@ -332,7 +334,7 @@ func addChild_Track(dst *amp.PinnedCell[*appCtx], track spotify.FullTrack) {
 		Duration16:  int64(arc.ConvertMsToUTC(int64(track.Duration))),
 		Popularity:  .01 * float32(track.Popularity), // 0..100 => 0..1
 		ReleaseDate: releaseDate,
-		CoverArt:    chooseBestImageURL(cell.hdr.Glyphs, 800),
+		CoverArt:    chooseBestImageURL(cell.glyphs.Primary, 800),
 	}
 	cell.AddTo(dst, cell)
 }
@@ -349,7 +351,7 @@ const (
 	addAll
 )
 
-func addGlyphs(dst *arc.CellHeader, images []spotify.Image, selector imageSelector) {
+func addGlyphs(dst *arc.GlyphSet, images []spotify.Image, selector imageSelector) {
 
 	switch selector {
 	case addAll:
@@ -405,8 +407,8 @@ func sizeTagForImage(img spotify.Image) (szTag arc.AssetTags) {
 }
 */
 
-func addImage(dst *arc.CellHeader, img spotify.Image) {
-	dst.Glyphs = append(dst.Glyphs, &arc.AssetRef{
+func addImage(dst *arc.GlyphSet, img spotify.Image) {
+	dst.Primary = append(dst.Primary, &arc.AssetRef{
 		Tags:        arc.AssetTags_IsImageMedia,
 		Scheme:      arc.AssetScheme_HttpURL,
 		URI:         img.URL,

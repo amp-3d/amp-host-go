@@ -61,7 +61,7 @@ func (auth *Config) pushAuthCodeRequest() error {
 	val := &arc.HandleURI{
 		URI: auth.Config.AuthCodeURL(""),
 	}
-	return arc.SendClientMetaAttr(auth.ctx.Session(), 0, val)
+	return arc.SendClientMetaAttr(auth.ctx.Session(), 0, val, arc.ReqStatus_Synced)
 }
 
 // NewHttpClient creates a *http.Client that will use the specified access token for its API requests.

@@ -142,18 +142,12 @@ func (app *appCtx) reloadCategories() error {
 		}
 		cat := &categoryInfo{
 			catID: entry.Id,
+			thumb: entry.Image,
 		}
 
 		cat.hdr = arc.CellHeader{
 			Title: entry.Title,
 			About: entry.Description,
-			Glyphs: []*arc.AssetRef{
-				{
-					URI:    entry.Image,
-					Tags:   arc.AssetTags_IsImageMedia,
-					Scheme: arc.AssetScheme_FilePath,
-				},
-			},
 		}
 
 		if created, err := time.Parse(time.RFC3339, entry.TimestampCreated); err == nil {
@@ -175,6 +169,8 @@ func (app *appCtx) reloadCategories() error {
 }
 
 type categoryInfo struct {
-	hdr   arc.CellHeader
+	hdr    arc.CellHeader
+	thumb  string
 	catID uint32
 }
+

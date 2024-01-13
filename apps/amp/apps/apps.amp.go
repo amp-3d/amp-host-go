@@ -9,7 +9,6 @@ import (
 
 func RegisterFamily(reg arc.Registry) {
 	reg.RegisterElemType(&amp.PlayableMediaItem{})
-	reg.RegisterElemType(&amp.PlayableMediaAssets{})
 	reg.RegisterElemType(&amp.MediaPlaylist{})
 
 	bcat.RegisterApp(reg)

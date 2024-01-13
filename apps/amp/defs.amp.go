@@ -29,10 +29,13 @@ type AppBase struct {
 	arc.AppBase
 }
 
-const (
-	PlayableMediaItemSpec   = arc.AttrSpec("PlayableMediaItem") 
-	PlayableMediaAssetsSpec = arc.AttrSpec("PlayableMediaAssets")
+
+var (
+	PlayableMediaItemUID   = arc.MustFormAttrUID("PlayableMediaItem")
+	PlayableMediaUID = arc.MustFormAttrUID("PlayableMedia")
+	MediaPlaylistUID       = arc.MustFormAttrUID("MediaPlaylist")
 )
+
 // var (
 // 	MediaInfoAttrID     = arc.FormAttrUID(((*MediaInfo)(nil)).ElemTypeName())
 // 	MediaPlaylistAttrID = arc.FormAttrUID("MediaPlaylist")
@@ -55,8 +58,9 @@ type Cell[AppT arc.AppContext] interface {
 }
 
 type CellBase[AppT arc.AppContext] struct {
+	Self   Cell[AppT]
 	arc.CellID
-	Self Cell[AppT]
+	Parent arc.CellID
 }
 
 type PinnedCell[AppT arc.AppContext] struct {
