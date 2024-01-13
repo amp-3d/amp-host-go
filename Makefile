@@ -5,8 +5,8 @@ BUILD_PATH  := $(patsubst %/,%,$(abspath $(dir $(lastword $(MAKEFILE_LIST)))))
 PARENT_PATH := $(patsubst %/,%,$(dir $(BUILD_PATH)))
 UNITY_PROJ := ${PARENT_PATH}/arcspace.unity-app
 UNITY_PATH := $(shell python3 ${UNITY_PROJ}/arc-utils.py UNITY_PATH "${UNITY_PROJ}")
-UNITY_ARC_LIBS = ${UNITY_PROJ}/Assets/Plugins/ArcXR/Plugins
-ARC_UNITY_PATH = ${UNITY_PROJ}/Assets/ArcXR
+UNITY_ARC_LIBS = ${UNITY_PROJ}/Assets/Plugins/AMP/Plugins
+ARC_UNITY_PATH = ${UNITY_PROJ}/Assets/AMP
 LIB_PROJ := ${BUILD_PATH}/cmd/libarchost
 
 

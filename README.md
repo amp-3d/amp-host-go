@@ -1,5 +1,5 @@
 # go-archost
-This repo implements `arc.Host` as defined in the [ArcXR SDK](https://github.com/arcspace/go-arc-sdk).  It can be compiled into a binary that either embeds into a Unity or Unreal project, or runs as a server launched from command line.  In either case, any [`arc.App`](https://github.com/arcspace/go-arc-sdk/blob/main/apis/arc/api.app.go) can be plugged in, offering many possibilities as to how a developers can drive the ArcXR UI.
+This repo implements `arc.Host` as defined in the [AMP SDK](https://github.com/arcspace/go-arc-sdk).  It can be compiled into a binary that either embeds into a Unity or Unreal project, or runs as a server launched from command line.  In either case, any [`arc.App`](https://github.com/arcspace/go-arc-sdk/blob/main/apis/arc/api.app.go) can be plugged in, offering many possibilities as to how a developers can drive the AMP UI.
 
 ## Building
 
@@ -13,7 +13,7 @@ go-archost
   ARC_SDK_PATH:    /Users/aomeara/git.arcspace/go-arc-sdk
   BUILD_PATH:      /Users/aomeara/git.arcspace/go-archost
   UNITY_PROJ:      /Users/aomeara/git.arcspace/arcspace.unity-app
-  UNITY_ARC_LIBS:  /Users/aomeara/git.arcspace/arcspace.unity-app/Assets/Plugins/ArcXR/Plugins
+  UNITY_ARC_LIBS:  /Users/aomeara/git.arcspace/arcspace.unity-app/Assets/Plugins/AMP/Plugins
   UNITY_PATH:      /Users/aomeara/Applications/2022.3.8f1
   ANDROID_NDK:     /Users/aomeara/Applications/2022.3.8f1/PlaybackEngines/AndroidPlayer/NDK
   ANDROID_CC:      /Users/aomeara/Applications/2022.3.8f1/PlaybackEngines/AndroidPlayer/NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin

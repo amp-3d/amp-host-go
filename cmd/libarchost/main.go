@@ -6,6 +6,7 @@ import "C"
 import (
 	"flag"
 	"fmt"
+	"io"
 
 	"github.com/arcspace/go-arc-sdk/stdlib/log"
 
@@ -92,28 +93,29 @@ func Call_Shutdown() {
 }
 
 //export Call_PushMsg
-func Call_PushMsg(txMsg []byte) int64 {
+func Call_PushMsg(txBuf []byte) int64 {
 	sess := gLibSession
 	if sess == nil {
 		return -1
 	}
 
-	tx := arc.NewTxMsg()
-	if err := msg.Unmarshal(msg_pb[arc.TxHeader_Size:]); err != nil {
-		panic(err)
+	r := bufReader{buf: txBuf}
+	tx, err := arc.ReadTxMsg(&r)
+	if err != nil {
+		return -6665
 	}
-	sess.EnqueueIncoming(msg)
+	sess.EnqueueIncoming(tx)
 	return 0
 }
 
 //export Call_WaitOnMsg
-func Call_WaitOnMsg(txMsg *[]byte) int64 {
+func Call_WaitOnMsg(txBuf *[]byte) int64 {
 	sess := gLibSession
 	if sess == nil {
 		return -1
 	}
 
-	err := sess.DequeueOutgoing(txMsg)
+	err := sess.DequeueOutgoing(txBuf)
 	if err == nil {
 		return 0
 	}
@@ -226,4 +228,19 @@ func RenderFrame(fbID int32) {
 
 func main() {
 
+}
+
+
+type bufReader struct {
+	buf []byte
+	pos int
+}
+
+func (r *bufReader) Read(p []byte) (n int, err error) {
+	if r.pos >= len(r.buf) {
+		return 0, io.EOF
+	}
+	n = copy(p, r.buf[r.pos:])
+	r.pos += n
+	return n, nil
 }

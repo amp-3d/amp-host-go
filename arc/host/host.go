@@ -155,7 +155,7 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 // hostSess wraps a session the parent host has with a client.
 type hostSess struct {
 	task.Context
-
+	registry   arc.Registry       // forked registry for this session
 	nextID     atomic.Uint64      // next CellID to be issued
 	host       *host              // parent host
 	txIn       chan *arc.TxMsg    // tx inbound to this hostSess
@@ -200,24 +200,24 @@ func (req *appReq) GetLogLabel() string {
 	return string(str)
 }
 
-func (req *appReq) MarshalCellOp(dst *arc.TxMsg, op arc.CellOp, val arc.AttrElemVal) {
+func (req *appReq) MarshalTxOp(dst *arc.TxMsg, op arc.TxOp, val arc.AttrElemVal) {
 	if op.TargetCell.IsNil() {
-		req.Warnf("MarshalCellOp: TargetCell is nil")
+		req.Warnf("MarshalTxOp: TargetCell is nil")
 		return
 	}
 	var err error
-	op.DataStoreOfs = int64(len(dst.AttrStore))
-	dst.AttrStore, err = val.MarshalToStore(dst.AttrStore)
+	op.DataStoreOfs = int64(len(dst.DataStore))
+	dst.DataStore, err = val.MarshalToStore(dst.DataStore)
 	if err != nil {
 		req.Error(err)
 		return
 	}
-	op.DataLen = int64(len(dst.AttrStore))
+	op.DataLen = int64(len(dst.DataStore))
 }
 
 /*
 
-func (tx *TxMsg) Marshal(op CellOp, val AttrElemVal) {
+func (tx *TxMsg) Marshal(op TxOp, val AttrElemVal) {
 	if op.NilAttrUID() {
 		return
 	}
@@ -243,7 +243,7 @@ func (tx *TxMsg) Marshal(op CellOp, val AttrElemVal) {
 			return attrID
 		}
 
-		spec, err := req.sess.ResolveAttrSpec(attrSpec, false)
+		spec, err := req.sess.RegisterAttr(attrSpec, false)
 		attrID := spec.DefID
 		if err != nil {
 			attrID = 0
@@ -368,12 +368,16 @@ func (sess *hostSess) handleLogin() error {
 	if sess.loginReqID == 0 {
 		return arc.ErrCode_LoginFailed.Error("missing Req ID")
 	}
-	
+
 	if err = tx.UnmarshalAttrElem(0, &sess.login); err != nil {
 		return arc.ErrCode_LoginFailed.Error("failed to unmarshal Login")
 	}
 
-	// Importantly, this boots the planet app to mount and start the home planet
+	sess.registry = arc.NewRegistry()
+	if err := sess.hostRegistry().ExportTo(sess.registry); err != nil {
+		panic(err)
+	}
+
 	_, err = sess.GetAppInstance(planet.AppUID, true)
 	if err != nil {
 		return err
@@ -409,16 +413,10 @@ func (sess *hostSess) consumeInbox() {
 		select {
 
 		case tx := <-sess.txIn:
-			keepOpen := false
 			if tx.Status == arc.ReqStatus_Closed {
 				sess.closeReq(tx.ReqID, false, nil)
-			} else {		
-				metaAttr, err := tx.GetMetaAttr()
-				if err != nil {
-					sess.closeReq(tx.ReqID, true, err)
-				}
-				sessOp, err = sess.registry().NewAttrElem(metaAttr.AttrID)
-				keepOpen, err = sess.handleMetaAttr(tx)
+			} else {
+				keepOpen, err := sess.handleMetaOp(tx)
 				if err != nil || !keepOpen {
 					sess.closeReq(tx.ReqID, true, err)
 				}
@@ -432,15 +430,21 @@ func (sess *hostSess) consumeInbox() {
 	}
 }
 
+func (sess *hostSess) handleMetaOp(tx *arc.TxMsg) (keepOpen bool, err error) {
+	metaAttr, err := tx.GetMetaAttr()
+	if err != nil {
+		return false, err
+	}
+	metaVal, err := sess.registry().NewAttrElem(metaAttr.AttrID)
+	if err != nil {
+		return false, err
+	}
 
-func (sess *hostSess) handleMetaAttr(tx *arc.TxMsg) (keepOpen bool, err error) {
-
-	//if tx.TryExtractElem(
-	switch v := val.(type) {
+	switch v := metaVal.(type) {
 	case *arc.PinRequest:
 		{
 			var req *appReq
-			req, err = sess.getReq(reqID, clientReq)
+			req, err = sess.getReq(tx.ReqID, clientReq)
 			if err != nil {
 				return
 			}
@@ -468,7 +472,6 @@ func (sess *hostSess) handleMetaAttr(tx *arc.TxMsg) (keepOpen bool, err error) {
 		err = arc.ErrCode_InvalidReq.Error("unsupported meta attr")
 		return
 	}
-
 }
 
 type pinVerb int32
@@ -584,46 +587,13 @@ func (sess *hostSess) pinCell(req *appReq) error {
 	return nil
 }
 
-func (sess *hostSess) registry() arc.Registry {
+func (sess *hostSess) hostRegistry() arc.Registry {
 	return sess.host.Opts.Registry
 }
 
 func (sess *hostSess) LoginInfo() arc.Login {
 	return sess.login
 }
-
-// func (sess *hostSess) PushMetaAttr(val arc.AttrElemVal, reqID uint64) error {
-// 	attrSpec, err := sess.SessionRegistry.ResolveAttrSpec(val.TypeName(), false)
-// 	if err != nil {
-// 		sess.Warnf("ResolveAttrSpec() error: %v", err)
-// 		return err
-// 	}
-
-// 	AttrElemVal := arc.AttrElemVal{
-// 		AttrID: attrSpec.DefID,
-// 		Val:    val,
-// 	}
-
-// 	if reqID == 0 {
-// 		reqID = sess.loginReqID
-// 	}
-// 	msg, err := AttrElemVal.MarshalToMsg(arc.CellID(reqID))
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	msg.ReqID = sess.loginReqID
-// 	msg.Op = arc.MsgOp_MetaAttr
-// 	req, err := sess.getReq(msg.ReqID, getReq)
-// 	if req != nil && err == nil {
-// 		if !req.PushTx(msg) {
-// 			err = arc.ErrNotConnected
-// 		}
-// 	} else {
-// 		sess.PushTx(msg)
-// 	}
-// 	return err
-// }
 
 func (sess *hostSess) onAppClosing(appCtx *appContext) {
 	sess.openAppsMu.Lock()
@@ -772,7 +742,7 @@ func (ctx *appContext) PinAppCell(flags arc.PinFlags) (*appReq, error) {
 }
 
 func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.AttrElemVal) error {
-	match, err := ctx.sess.SessionRegistry.ResolveAttrSpec(attrSpec, true)
+	match, err := ctx.sess.registry().RegisterAttr(attrSpec, true)
 	if err != nil {
 		return err
 	}
@@ -803,13 +773,13 @@ func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.AttrElemVal) erro
 	}
 }
 
-func (ctx *appContext) PutAppCellAttr(attrSpec string, src arc.AttrElemVal) error {
-	spec, err := ctx.sess.ResolveAttrSpec(attrSpec, true)
+func (ctx *appContext) PutAppCellAttr(attrSpec string, val arc.AttrElemVal) error {
+	spec, err := ctx.sess.RegisterAttr(attrSpec, true)
 	if err != nil {
 		return err
 	}
 
-	msg, err := arc.FormMetaAttrTx(spec, src)
+	msg, err := arc.FormMetaAttrTx(spec, val)
 	if err != nil {
 		return err
 	}

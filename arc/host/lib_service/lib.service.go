@@ -160,7 +160,8 @@ func (sess *libSession) SendTx(tx *arc.TxMsg) error {
 	default:
 	}
 	
-	txBuf = tx.MarshalTo(txBuf[:0])
+	tx.MarshalToBytes(&txBuf)
+	
 	select {
 	case sess.toClient <- txBuf:
 		return nil
@@ -187,4 +188,14 @@ func (sess *libSession) DequeueOutgoing(txBuf *[]byte) error {
 	case <-sess.closing:
 		return arc.ErrStreamClosed
 	}
+}
+
+
+type Buffer struct {
+	bytes []byte
+}
+
+func (b *Buffer) Write(p []byte) (n int, err error) {
+	b.bytes = append(b.bytes, p...)
+	return len(p), nil
 }

@@ -24,7 +24,7 @@ type LibSession interface {
 
 	// Blocking calls to send/recv Msgs to the host
 	EnqueueIncoming(txMsg *arc.TxMsg) error
-	DequeueOutgoing(txMsg *[]byte) error
+	DequeueOutgoing(txBuf *[]byte) error
 }
 
 func (opts LibServiceOpts) NewLibService() LibService {
