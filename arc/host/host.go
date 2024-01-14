@@ -205,14 +205,11 @@ func (req *appReq) MarshalTxOp(dst *arc.TxMsg, op arc.TxOp, val arc.AttrElemVal)
 		req.Warnf("MarshalTxOp: TargetCell is nil")
 		return
 	}
-	var err error
-	op.DataStoreOfs = int64(len(dst.DataStore))
-	dst.DataStore, err = val.MarshalToStore(dst.DataStore)
+	err := dst.MarshalOp(&op, val)
 	if err != nil {
 		req.Error(err)
 		return
 	}
-	op.DataLen = int64(len(dst.DataStore))
 }
 
 /*
