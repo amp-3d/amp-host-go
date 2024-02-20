@@ -25,6 +25,11 @@ if [ $PLATFORM == iOS ]; then
 elif [ $PLATFORM == OSX ]; then
     export GOOS=darwin
     export SDK=macosx
+    if [ $GOARCH == arm64 ]; then
+        NAME="${NAME}.arm64"
+    elif [ $GOARCH == amd64 ]; then
+        NAME="${NAME}.amd64"
+    fi
     NAME="${NAME}.dylib"
     VERIFY="otool -hv "
 elif [ $PLATFORM == Android/armeabi-v7a ]; then

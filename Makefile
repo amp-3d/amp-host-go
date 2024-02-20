@@ -8,7 +8,7 @@ UNITY_PATH := $(shell python3 ${UNITY_PROJ}/arc-utils.py UNITY_PATH "${UNITY_PRO
 UNITY_ARC_LIBS = ${UNITY_PROJ}/Assets/Plugins/AMP/Plugins
 ARC_UNITY_PATH = ${UNITY_PROJ}/Assets/AMP
 LIB_PROJ := ${BUILD_PATH}/cmd/libarchost
-
+OSX_OUT := ${UNITY_ARC_LIBS}/OSX
 
 ANDROID_NDK := ${UNITY_PATH}/PlaybackEngines/AndroidPlayer/NDK
 ANDROID_CC := ${ANDROID_NDK}/toolchains/llvm/prebuilt/darwin-x86_64/bin
@@ -57,6 +57,13 @@ libarchost-osx:
 # Note: for the time being, we are currently x86_64 (amd64) only, so the archost.dylib should only be compiled on an x86_64 machine!
 	OUT_DIR="${UNITY_ARC_LIBS}"     CC="${LIB_PROJ}/clangwrap.sh" \
 	PLATFORM=OSX                    GOARCH=amd64        "${LIB_PROJ}/build.sh"
+# arm64
+	OUT_DIR="${UNITY_ARC_LIBS}"     CC="${LIB_PROJ}/clangwrap.sh" \
+	PLATFORM=OSX                    GOARCH=arm64        "${LIB_PROJ}/build.sh"
+# make fat binary
+	makefat "${OSX_OUT}/archost.dylib" "${OSX_OUT}/archost.amd64.dylib" "${OSX_OUT}/archost.arm64.dylib"
+	rm                                 "${OSX_OUT}/archost.amd64.dylib" "${OSX_OUT}/archost.arm64.dylib"
+
 
 ## builds libarchost for iOS -- build on x86_64 mac for now
 libarchost-ios:
@@ -118,3 +125,6 @@ play:
 	&& cd cmd/play \
 	&& ./play
 
+
+setup:
+	go install  github.com/randall77/makefat 
