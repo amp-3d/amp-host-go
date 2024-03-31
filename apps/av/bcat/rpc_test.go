@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/arcspace/go-archost/apps/amp"
+	"github.com/arcspace/go-archost/apps/av"
 )
 
 func TestLogin(t *testing.T) {
@@ -36,7 +36,7 @@ func TestLogin(t *testing.T) {
 	}
 
 	{
-		var pb amp.LoginCreateResponse
+		var pb av.LoginCreateResponse
 		dec := json.NewDecoder(resp.Body)
 		err := dec.Decode(&pb)
 		if err != nil {

@@ -104,9 +104,9 @@ generate:
 	protoc \
 	    -I"${ARC_SDK_PATH}/apis" \
 	    --gogoslick_out=plugins:. --gogoslick_opt=paths=source_relative \
-	    --csharp_out "${ARC_UNITY_PATH}/Arc.Apps/Amp" \
+	    --csharp_out "${ARC_UNITY_PATH}/amp.sheet.av/" \
 	    --proto_path=. \
-		apps/amp/amp.proto
+		apps/av/av.proto
 	
 	protoc \
 	    --gogoslick_out=plugins:. --gogoslick_opt=paths=source_relative \

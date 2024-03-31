@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	arc_amp "github.com/arcspace/go-archost/apps/amp/apps"
+	arc_av "github.com/arcspace/go-archost/apps/av/apps"
 	arc_bridges "github.com/arcspace/go-archost/apps/bridges/apps"
 	arc_services "github.com/arcspace/go-archost/apps/services/apps"
 	arc_sys "github.com/arcspace/go-archost/apps/sys/apps"
@@ -52,6 +52,6 @@ func StartNewHost(opts Opts) (arc.Host, error) {
 	arc_sys.RegisterFamily(reg)
 	arc_bridges.RegisterFamily(reg)
 	arc_services.RegisterFamily(reg)
-	arc_amp.RegisterFamily(reg)
+	arc_av.RegisterFamily(reg)
 	return startNewHost(opts)
 }

@@ -2,19 +2,19 @@ package bcat
 
 import (
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/apps/amp"
+	"github.com/arcspace/go-archost/apps/av"
 )
 
 type categories struct {
-	amp.CellBase[*appCtx]
+	av.CellBase[*appCtx]
 	//items []*
 }
 
 func (cats *categories) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &arc.CellHeader{
 		Title: "Internet Radio",
-		Glyphs: []*arc.AssetRef{
-			amp.DirGlyph,
+		Glyphs: []*arc.AssetTag{
+			av.DirGlyph,
 		},
 	})
 	return nil
@@ -25,13 +25,13 @@ func (cats *categories) GetLogLabel() string {
 }
 
 type category struct {
-	amp.CellBase[*appCtx]
+	av.CellBase[*appCtx]
 	catID uint32 //
 }
 
 /*
 
-func (cat *category) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+func (cat *category) PinInto(dst *av.PinnedCell[*appCtx]) error {
 
 	// if cat.itemsByID == nil {
 	// 	cat.itemsByID = map[arc.CellID]*station{}
@@ -56,11 +56,11 @@ func (cat *category) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 		return err
 	}
 
-	children := make([]*amp.CellBase[*appCtx], 0, 32)
+	children := make([]*av.CellBase[*appCtx], 0, 32)
 
 	// while the array contains values
 	for json.More() {
-		var entry amp.StationInfo
+		var entry av.StationInfo
 		err := json.Decode(&entry)
 		if err != nil {
 			return err
@@ -78,7 +78,7 @@ func (cat *category) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 				Scheme: arc.URIScheme_File,
 			},
 		})
-		sta.CellBase.AddAttr(dst.App, "", &amp.PlayableMedia{
+		sta.CellBase.AddAttr(dst.App, "", &av.PlayableMedia{
 			AuthorDesc: entry.Author,
 			Title:      entry.Title,
 		})
@@ -99,7 +99,7 @@ func (cat *category) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 }
 
 type station struct {
-	amp.CellBase[*appCtx]
+	av.CellBase[*appCtx]
 	links string
 }
 
@@ -107,7 +107,7 @@ func (sta *station) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
 
 }
 
-func (sta *station) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+func (sta *station) PinInto(dst *av.PinnedCell[*appCtx]) error {
 
 	if len(sta.links) > 0 {
 
@@ -129,7 +129,7 @@ func (sta *station) PinInto(dst *amp.PinnedCell[*appCtx]) error {
 				playable.MediaType = "audio/unknown"
 			}
 
-			sta.CellBase.SetAttr(dst.App, amp.Attr_Playable, playable)
+			sta.CellBase.SetAttr(dst.App, av.Attr_Playable, playable)
 		}
 	}
 

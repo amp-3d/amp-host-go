@@ -5,7 +5,7 @@ import (
 	"path"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/apps/amp"
+	"github.com/arcspace/go-archost/apps/av"
 	"github.com/arcspace/go-archost/apps/bridges"
 	"github.com/h2non/filetype"
 )
@@ -28,7 +28,7 @@ func UID() arc.UID {
 }
 
 func RegisterApp(reg arc.Registry) {
-	reg.RegisterElemType(&amp.MediaPlaylist{})
+	reg.RegisterElemType(&av.MediaPlaylist{})
 
 	reg.RegisterApp(&arc.App{
 		AppID:   AppID,
@@ -42,7 +42,7 @@ func RegisterApp(reg arc.Registry) {
 }
 
 type appCtx struct {
-	amp.AppBase
+	av.AppBase
 }
 
 func (app *appCtx) OnNew(ctx arc.AppContext) (err error) {
@@ -95,5 +95,5 @@ func (app *appCtx) pinnedCellForPath(pathname string) (arc.PinnedCell, error) {
 	item.pathname = pathname
 	item.setFrom(fsInfo)
 
-	return amp.NewPinnedCell(app, &item.CellBase)
+	return av.NewPinnedCell(app, &item.CellBase)
 }

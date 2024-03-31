@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/apps/amp"
-	"github.com/arcspace/go-archost/apps/amp/spotify/oauth"
+	"github.com/arcspace/go-archost/apps/av"
+	"github.com/arcspace/go-archost/apps/av/spotify/oauth"
 	respot "github.com/arcspace/go-librespot/librespot/api-respot"
 	_ "github.com/arcspace/go-librespot/librespot/core" // bootstrap
 	"github.com/zmb3/spotify/v2"
@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	AppID = "spotify" + amp.AppFamilyDomain
+	AppID = "spotify" + av.AppFamilyDomain
 )
 
 func UID() arc.UID {
@@ -67,7 +67,7 @@ var oauthConfig = oauth2.Config{
 }
 
 type appCtx struct {
-	amp.AppBase
+	av.AppBase
 	sessReady chan struct{}        // closed when session is established
 	client    *spotify.Client      // nil if not signed in
 	me        *spotify.PrivateUser // nil if not signed in
@@ -225,7 +225,7 @@ func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCel
 
 		// For now, just always pin a new home (root) cell
 		cell := app.newRootCell()
-		return amp.NewPinnedCell[*appCtx](app, &cell.CellBase)
+		return av.NewPinnedCell[*appCtx](app, &cell.CellBase)
 	}
 }
 

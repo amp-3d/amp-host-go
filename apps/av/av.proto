@@ -1,5 +1,5 @@
 syntax = "proto3";
-package amp;
+package av;
 
 option csharp_namespace = "AMP";
 
@@ -94,7 +94,7 @@ message PlayableMediaItem {
 }
 
 message PlayableMediaAssets {
-    arc.AssetRef     MainTrack  = 1;
+    arc.AssetTag     MainTrack  = 1;
   
 }
 

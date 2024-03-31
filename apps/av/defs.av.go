@@ -1,4 +1,4 @@
-package amp
+package av
 
 import (
 	"github.com/arcspace/go-arc-sdk/apis/arc"
@@ -6,22 +6,16 @@ import (
 )
 
 const (
-	AppFamilyDomain = ".amp.arcspace.systems"
+	AppFamilyDomain = ".av.arcspace.systems"
 )
 
-// MimeType (aka MediaType)
 const (
-	MimeType_Dir      = "application/x-directory"
-	MimeType_Album    = "application/x-album"
-	MimeType_Playlist = "application/x-playlist"
-
 	ListItemSeparator = " · "
 )
 
 var (
-	DirGlyph = &arc.AssetRef{
-		URI:    MimeType_Dir,
-		Scheme: arc.AssetScheme_ThemedAsset,
+	DirGlyph = &arc.AssetTag{
+		URI: arc.GlyphURIPrefix + "application/x-directory",
 	}
 )
 

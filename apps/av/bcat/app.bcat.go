@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/apps/amp"
+	"github.com/arcspace/go-archost/apps/av"
 )
 
 const (
-	AppID = "bookmark-catalog" + amp.AppFamilyDomain
+	AppID = "bookmark-catalog" + av.AppFamilyDomain
 )
 
 const kTokenAttrSpec = "LoginInfo:client-login"
@@ -34,7 +34,7 @@ func RegisterApp(reg arc.Registry) {
 }
 
 type appCtx struct {
-	amp.AppBase
+	av.AppBase
 	client *http.Client
 	cats   []*categoryInfo
 }
@@ -42,7 +42,7 @@ type appCtx struct {
 func (app *appCtx) readStoredToken() error {
 
 	// Pins the named cell relative to the user's home planet and appID (guaranteeing app and user scope)
-	login := &amp.LoginInfo{}
+	login := &av.LoginInfo{}
 	err := app.GetAppCellAttr(kTokenAttrSpec, login)
 	if err != nil {
 
@@ -68,7 +68,7 @@ func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCel
 		//cells: make([]*amp.CellBase[*appCtx], 0, 16),
 	}
 	cats.Self = nil // cats
-	return amp.NewPinnedCell[*appCtx](app, &cats.CellBase)
+	return av.NewPinnedCell[*appCtx](app, &cats.CellBase)
 }
 
 const (
@@ -132,7 +132,7 @@ func (app *appCtx) reloadCategories() error {
 
 	// while the array contains values
 	for json.More() {
-		var entry amp.CategoryInfo
+		var entry av.CategoryInfo
 		err := json.Decode(&entry)
 		if err != nil {
 			return err
@@ -147,11 +147,10 @@ func (app *appCtx) reloadCategories() error {
 		cat.hdr = arc.CellHeader{
 			Title: entry.Title,
 			About: entry.Description,
-			Glyphs: []*arc.AssetRef{
+			Glyphs: []*arc.AssetTag{
 				{
-					URI:       entry.Image,
-					MediaType: arc.UnspecifiedImageType,
-					Scheme:    arc.AssetScheme_FilePath,
+					URI:         "amp:asset/av/" + entry.Image,
+					ContentType: arc.GenericImageType,
 				},
 			},
 		}

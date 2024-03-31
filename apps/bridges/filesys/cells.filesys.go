@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/apps/amp"
+	"github.com/arcspace/go-archost/apps/av"
 	"github.com/arcspace/go-archost/arc/assets"
 )
 
 type fsItem struct {
-	amp.CellBase[*appCtx]
+	av.CellBase[*appCtx]
 
 	basename  string // base file name
 	pathname  string // non-nil when pinned (could be alternative OS handle)
@@ -24,7 +24,7 @@ type fsItem struct {
 	mediaType string
 
 	hdr        arc.CellHeader
-	mediaFlags amp.MediaFlags
+	mediaFlags av.MediaFlags
 }
 
 func (item *fsItem) Compare(oth *fsItem) int {
@@ -74,13 +74,13 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 		// TODO: make smarter
 		switch {
 		case strings.HasPrefix(item.mediaType, "audio/"):
-			item.mediaFlags |= amp.HasAudio
+			item.mediaFlags |= av.HasAudio
 			stripExt = true
 		case strings.HasPrefix(item.mediaType, "video/"):
-			item.mediaFlags |= amp.HasVideo
+			item.mediaFlags |= av.HasVideo
 			stripExt = true
 		}
-		item.mediaFlags |= amp.IsSeekable
+		item.mediaFlags |= av.IsSeekable
 	}
 
 	//////////////////  CellHeader
@@ -89,14 +89,14 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 			Modified: int64(arc.ConvertToUTC16(item.modTime)),
 		}
 		if item.isDir {
-			hdr.Glyphs = []*arc.AssetRef{
-				amp.DirGlyph,
+			hdr.Glyphs = []*arc.AssetTag{
+				av.DirGlyph,
 			}
 		} else {
-			hdr.ExternalLink = &arc.AssetRef{
-				MediaType: item.mediaType,
-				URI:       item.pathname,
-				Scheme:    arc.AssetScheme_FilePath,
+			hdr.Glyphs = []*arc.AssetTag{
+				{
+					URI: arc.GlyphURIPrefix + item.mediaType,
+				},
 			}
 		}
 		base := item.basename
@@ -120,7 +120,7 @@ func (item *fsItem) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 	return nil
 }
 
-func (item *fsItem) OnPinned(parent amp.Cell[*appCtx]) error {
+func (item *fsItem) OnPinned(parent av.Cell[*appCtx]) error {
 	parentDir := parent.(*fsDir)
 	item.pathname = path.Join(parentDir.pathname, item.basename)
 	return nil
@@ -135,20 +135,19 @@ func (item *fsFile) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 	item.fsItem.MarshalAttrs(dst, ctx)
 
 	if item.mediaFlags != 0 {
-		mediaItem := &amp.PlayableMediaItem{
+		mediaItem := &av.PlayableMediaItem{
 			Flags:      item.mediaFlags,
 			Title:      item.hdr.Title,
 			Collection: item.hdr.Subtitle,
 		}
-		dst.Marshal(ctx.GetAttrID(amp.PlayableMediaItemAttrSpec), 0, mediaItem)
+		dst.Marshal(ctx.GetAttrID(av.PlayableMediaItemAttrSpec), 0, mediaItem)
 	}
 
 	if item.pinnedURL != "" {
-		dst.Marshal(ctx.GetAttrID(amp.PlayableMediaAssetsAttrSpec), 0, &amp.PlayableMediaAssets{
-			MainTrack: &arc.AssetRef{
-				MediaType: item.mediaType,
-				URI:       item.pinnedURL,
-				Scheme:    arc.AssetScheme_HttpURL,
+		dst.Marshal(ctx.GetAttrID(av.PlayableMediaAssetsAttrSpec), 0, &av.PlayableMediaAssets{
+			MainTrack: &arc.AssetTag{
+				ContentType: item.mediaType,
+				URI:         item.pinnedURL,
 			},
 		})
 	}
@@ -156,7 +155,7 @@ func (item *fsFile) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 	return nil
 }
 
-func (item *fsFile) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+func (item *fsFile) PinInto(dst *av.PinnedCell[*appCtx]) error {
 	asset, err := assets.AssetForFilePathname(item.pathname, "")
 	if err != nil {
 		return err
@@ -173,7 +172,7 @@ type fsDir struct {
 }
 
 // reads the fsDir's catalog and issues new items as needed.
-func (dir *fsDir) PinInto(dst *amp.PinnedCell[*appCtx]) error {
+func (dir *fsDir) PinInto(dst *av.PinnedCell[*appCtx]) error {
 
 	{
 		//dir.subs = make(map[arc.CellID]os.DirEntry)
