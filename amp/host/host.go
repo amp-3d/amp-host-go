@@ -8,12 +8,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
-	"github.com/arcspace/go-arc-sdk/stdlib/task"
-	"github.com/arcspace/go-arc-sdk/stdlib/utils"
+	"github.com/arcspace/go-archost/amp/host/registry"
 	"github.com/arcspace/go-archost/apps/sys/planet"
-	"github.com/arcspace/go-archost/arc/host/registry"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/symbol"
+	"github.com/git-amp/amp-sdk-go/stdlib/task"
+	"github.com/git-amp/amp-sdk-go/stdlib/utils"
 )
 
 type host struct {
@@ -21,7 +21,7 @@ type host struct {
 	Opts Opts
 }
 
-func startNewHost(opts Opts) (arc.Host, error) {
+func startNewHost(opts Opts) (amp.Host, error) {
 	var err error
 	if opts.StatePath, err = utils.ExpandAndCheckPath(opts.StatePath, true); err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func startNewHost(opts Opts) (arc.Host, error) {
 		Label:     host.Opts.Desc,
 		IdleClose: time.Nanosecond,
 		OnClosed: func() {
-			host.Info(1, "arc.Host shutdown complete")
+			host.Info(1, "amp.Host shutdown complete")
 		},
 	})
 	if err != nil {
@@ -57,22 +57,22 @@ func startNewHost(opts Opts) (arc.Host, error) {
 	return host, nil
 }
 
-func (host *host) Registry() arc.Registry {
+func (host *host) Registry() amp.Registry {
 	return host.Opts.Registry
 }
 
-func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.HostSession, error) {
+func (host *host) StartNewSession(from amp.HostService, via amp.Transport) (amp.HostSession, error) {
 	sess := &hostSess{
 		host:     host,
-		msgsIn:   make(chan *arc.Msg),
-		msgsOut:  make(chan *arc.Msg, 4),
+		msgsIn:   make(chan *amp.Msg),
+		msgsOut:  make(chan *amp.Msg, 4),
 		openReqs: make(map[uint64]*appReq),
-		openApps: make(map[arc.UID]*appContext),
+		openApps: make(map[amp.UID]*appContext),
 	}
 
 	var err error
 	sess.Context, err = host.StartChild(&task.Task{
-		Label:     "arc.HostSession",
+		Label:     "amp.HostSession",
 		IdleClose: time.Nanosecond,
 		OnRun: func(ctx task.Context) {
 			if err := sess.handleLogin(); err != nil {
@@ -93,8 +93,8 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 	// We start them as children of the HostService, not the HostSession since we want to keep the stream running until hostSess completes closing.
 	//
 	// Possible paths:
-	//   - If the arc.Transport errors out, initiate hostSess.Close()
-	//   - If sess.Close() is called elsewhere, and when once complete, <-sessDone will signal and close the arc.Transport.
+	//   - If the amp.Transport errors out, initiate hostSess.Close()
+	//   - If sess.Close() is called elsewhere, and when once complete, <-sessDone will signal and close the amp.Transport.
 	from.StartChild(&task.Task{
 		Label:     fmt.Sprint(via.Label(), " <- ", sessDesc),
 		IdleClose: time.Nanosecond,
@@ -109,7 +109,7 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 						err := via.SendMsg(msg)
 						msg.Reclaim()
 						if err != nil {
-							if arc.GetErrCode(err) != arc.ErrCode_NotConnected {
+							if amp.GetErrCode(err) != amp.ErrCode_NotConnected {
 								ctx.Warnf("Transport.SendMsg() err: %v", err)
 							}
 						}
@@ -132,7 +132,7 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 			for running := true; running; {
 				msg, err := via.RecvMsg()
 				if err != nil {
-					if err == arc.ErrStreamClosed {
+					if err == amp.ErrStreamClosed {
 						ctx.Info(2, "transport closed")
 					} else {
 						ctx.Warnf("RecvMsg error: %v", err)
@@ -157,19 +157,19 @@ func (host *host) StartNewSession(from arc.HostService, via arc.Transport) (arc.
 // hostSess wraps a session the parent host has with a client.
 type hostSess struct {
 	task.Context
-	arc.SessionRegistry
+	amp.SessionRegistry
 
 	nextID     atomic.Uint64      // next CellID to be issued
 	host       *host              // parent host
-	msgsIn     chan *arc.Msg      // msgs inbound to this hostSess
-	msgsOut    chan *arc.Msg      // msgs outbound from this hostSess
+	msgsIn     chan *amp.Msg      // msgs inbound to this hostSess
+	msgsOut    chan *amp.Msg      // msgs outbound from this hostSess
 	openReqs   map[uint64]*appReq // ReqID maps to an open request.
 	openReqsMu sync.Mutex         // protects openReqs
 
-	login      arc.Login
+	login      amp.Login
 	loginReqID uint64 // ReqID of the login, allowing us to send session attrs back to the client.
 	openAppsMu sync.Mutex
-	openApps   map[arc.UID]*appContext
+	openApps   map[amp.UID]*appContext
 }
 
 // *** implements PinContext ***
@@ -179,18 +179,18 @@ type hostSess struct {
 //   - CellBase helps implement PinnedCell and contains support code
 type appReq struct {
 	task.Context
-	arc.PinReqParams
+	amp.PinReqParams
 	sess      *hostSess
 	appCtx    *appContext
-	pinned    arc.PinnedCell
-	parent    arc.PinnedCell
+	pinned    amp.PinnedCell
+	parent    amp.PinnedCell
 	cancel    chan struct{}
 	pinning   chan struct{} // closed once the cell is pinned
 	closed    atomic.Int32
 	attrCache map[string]uint32
 }
 
-func (req *appReq) App() arc.AppContext {
+func (req *appReq) App() amp.AppContext {
 	return req.appCtx
 }
 
@@ -217,11 +217,11 @@ func (req *appReq) GetAttrID(attrSpec string) uint32 {
 	return attrID
 }
 
-func (req *appReq) PushUpdate(msg *arc.Msg) error {
+func (req *appReq) PushUpdate(msg *amp.Msg) error {
 	status := msg.Status
-	if status == arc.ReqStatus_Synced {
-		if (req.PinReq.Flags & arc.PinFlags_CloseOnSync) != 0 {
-			status = arc.ReqStatus_Closed
+	if status == amp.ReqStatus_Synced {
+		if (req.PinReq.Flags & amp.PinFlags_CloseOnSync) != 0 {
+			status = amp.ReqStatus_Closed
 		}
 	}
 	msg.Status = status
@@ -245,11 +245,11 @@ func (req *appReq) PushUpdate(msg *arc.Msg) error {
 		select {
 		case req.Outlet <- msg:
 		case <-closing:
-			err = arc.ErrShuttingDown
+			err = amp.ErrShuttingDown
 		}
 	}
 
-	if msg.Status == arc.ReqStatus_Closed {
+	if msg.Status == amp.ReqStatus_Closed {
 		req.sess.closeReq(req.ReqID, false, nil)
 	}
 
@@ -266,18 +266,18 @@ func (sess *hostSess) closeReq(reqID uint64, sendClose bool, err error) {
 	}
 
 	if sendClose {
-		msg := arc.NewMsg()
+		msg := amp.NewMsg()
 		msg.ReqID = reqID
-		msg.Status = arc.ReqStatus_Closed
+		msg.Status = amp.ReqStatus_Closed
 
 		if err != nil {
-			elem := &arc.AttrElemPb{
-				AttrID: uint64(arc.ConstSymbol_Err.Ord()),
+			elem := &amp.AttrElemPb{
+				AttrID: uint64(amp.ConstSymbol_Err.Ord()),
 			}
-			arc.ErrorToValue(err).MarshalToBuf(&elem.ValBuf)
-			msg.CellTxs = append(msg.CellTxs, &arc.CellTxPb{
-				Op:    arc.CellTxOp_MetaAttr,
-				Elems: []*arc.AttrElemPb{elem},
+			amp.ErrorToValue(err).MarshalToBuf(&elem.ValBuf)
+			msg.CellTxs = append(msg.CellTxs, &amp.CellTxPb{
+				Op:    amp.CellTxOp_MetaAttr,
+				Elems: []*amp.AttrElemPb{elem},
 			})
 		}
 		sess.SendMsg(msg)
@@ -300,41 +300,41 @@ func (sess *hostSess) closeReq(reqID uint64, sendClose bool, err error) {
 
 }
 
-func (sess *hostSess) SendMsg(msg *arc.Msg) error {
+func (sess *hostSess) SendMsg(msg *amp.Msg) error {
 
 	// If we see a signal for a meta attr, send it to the client's session controller.
 	if msg.ReqID == 0 {
 		msg.ReqID = sess.loginReqID
-		msg.Status = arc.ReqStatus_Synced
+		msg.Status = amp.ReqStatus_Synced
 	}
 
 	select {
 	case sess.msgsOut <- msg:
 		return nil
 	case <-sess.Closing():
-		return arc.ErrShuttingDown
+		return amp.ErrShuttingDown
 	}
 }
 
-func (sess *hostSess) AssetPublisher() arc.AssetPublisher {
+func (sess *hostSess) AssetPublisher() amp.AssetPublisher {
 	return sess.host.Opts.AssetServer
 }
 
 func (sess *hostSess) handleLogin() error {
 	if sess.login.UserUID != "" {
-		return arc.ErrCode_LoginFailed.Error("already logged in")
+		return amp.ErrCode_LoginFailed.Error("already logged in")
 	}
 
 	timer := time.NewTimer(sess.host.Opts.LoginTimeout)
-	nextMsg := func() (*arc.Msg, *arc.AttrElemPb, error) {
+	nextMsg := func() (*amp.Msg, *amp.AttrElemPb, error) {
 		select {
 		case msg := <-sess.msgsIn:
 			attr, err := msg.GetMetaAttr()
 			return msg, attr, err
 		case <-timer.C:
-			return nil, nil, arc.ErrTimeout
+			return nil, nil, amp.ErrTimeout
 		case <-sess.Closing():
-			return nil, nil, arc.ErrShuttingDown
+			return nil, nil, amp.ErrShuttingDown
 		}
 	}
 
@@ -345,10 +345,10 @@ func (sess *hostSess) handleLogin() error {
 	}
 	sess.loginReqID = msg.ReqID
 	if sess.loginReqID == 0 {
-		return arc.ErrCode_LoginFailed.Error("missing Req ID")
+		return amp.ErrCode_LoginFailed.Error("missing Req ID")
 	}
 	if err = sess.login.Unmarshal(attr.ValBuf); err != nil {
-		return arc.ErrCode_LoginFailed.Error("failed to unmarshal Login")
+		return amp.ErrCode_LoginFailed.Error("failed to unmarshal Login")
 	}
 
 	// Importantly, this boots the planet app to mount and start the home planet, which calls InitSessionRegistry()
@@ -358,10 +358,10 @@ func (sess *hostSess) handleLogin() error {
 	}
 
 	{
-		chall := &arc.LoginChallenge{
+		chall := &amp.LoginChallenge{
 			// TODO
 		}
-		if err = arc.SendClientMetaAttr(sess, msg.ReqID, chall); err != nil {
+		if err = amp.SendClientMetaAttr(sess, msg.ReqID, chall); err != nil {
 			return err
 		}
 	}
@@ -369,9 +369,9 @@ func (sess *hostSess) handleLogin() error {
 	if msg, attr, err = nextMsg(); err != nil {
 		return err
 	}
-	var loginResp arc.LoginResponse
+	var loginResp amp.LoginResponse
 	if err = loginResp.Unmarshal(attr.ValBuf); err != nil {
-		return arc.ErrCode_LoginFailed.Error("failed to unmarshal LoginResponse")
+		return amp.ErrCode_LoginFailed.Error("failed to unmarshal LoginResponse")
 	}
 
 	// TODO: Check challenge response
@@ -388,7 +388,7 @@ func (sess *hostSess) consumeInbox() {
 
 		case msg := <-sess.msgsIn:
 			keepOpen := false
-			if msg.Status == arc.ReqStatus_Closed {
+			if msg.Status == amp.ReqStatus_Closed {
 				sess.closeReq(msg.ReqID, false, nil)
 			} else {
 				var err error
@@ -397,9 +397,9 @@ func (sess *hostSess) consumeInbox() {
 				if metaAttr != nil {
 					keepOpen, err = sess.handleMetaAttr(msg.ReqID, metaAttr)
 				} else {
-					// tx := &arc.MultiTx{}
+					// tx := &amp.MultiTx{}
 					// err = tx.UnmarshalFrom(msg, sess.SessionRegistry, false)
-					err = arc.ErrUnimplemented // TODO: handle cell update tx
+					err = amp.ErrUnimplemented // TODO: handle cell update tx
 				}
 				if err != nil || !keepOpen {
 					sess.closeReq(msg.ReqID, true, err)
@@ -424,10 +424,10 @@ func (sess *hostSess) InitSessionRegistry(symTable symbol.Table) {
 	}
 }
 
-func (sess *hostSess) handleMetaAttr(reqID uint64, attr *arc.AttrElemPb) (keepOpen bool, err error) {
+func (sess *hostSess) handleMetaAttr(reqID uint64, attr *amp.AttrElemPb) (keepOpen bool, err error) {
 
-	switch arc.ConstSymbol(attr.AttrID) {
-	case arc.ConstSymbol_PinRequest:
+	switch amp.ConstSymbol(attr.AttrID) {
+	case amp.ConstSymbol_PinRequest:
 		{
 			var req *appReq
 			req, err = sess.getReq(reqID, clientReq)
@@ -441,18 +441,18 @@ func (sess *hostSess) handleMetaAttr(reqID uint64, attr *arc.AttrElemPb) (keepOp
 			err = sess.pinCell(req)
 			return
 		}
-	case arc.ConstSymbol_RegisterDefs:
+	case amp.ConstSymbol_RegisterDefs:
 		{
-			var defs arc.RegisterDefs
+			var defs amp.RegisterDefs
 			if err = defs.Unmarshal(attr.ValBuf); err != nil {
 				return
 			}
 			err = sess.SessionRegistry.RegisterDefs(&defs)
 			return
 		}
-	case arc.ConstSymbol_HandleURI:
+	case amp.ConstSymbol_HandleURI:
 		{
-			var req arc.HandleURI
+			var req amp.HandleURI
 			if err = req.Unmarshal(attr.ValBuf); err != nil {
 				return
 			}
@@ -470,7 +470,7 @@ func (sess *hostSess) handleMetaAttr(reqID uint64, attr *arc.AttrElemPb) (keepOp
 			return
 		}
 	default:
-		err = arc.ErrCode_InvalidReq.Error("unsupported meta attr")
+		err = amp.ErrCode_InvalidReq.Error("unsupported meta attr")
 		return
 	}
 
@@ -493,7 +493,7 @@ func (sess *hostSess) closeAllReqs() {
 	sess.openReqsMu.Unlock()
 
 	for _, reqID := range toClose {
-		sess.closeReq(reqID, true, arc.ErrShuttingDown)
+		sess.closeReq(reqID, true, amp.ErrShuttingDown)
 	}
 }
 
@@ -519,7 +519,7 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *appReq, err error
 			case removeReq:
 				delete(sess.openReqs, reqID)
 			case clientReq:
-				err = arc.ErrCode_InvalidReq.Error("ReqID already in use")
+				err = amp.ErrCode_InvalidReq.Error("ReqID already in use")
 			}
 		} else {
 			switch verb {
@@ -535,7 +535,7 @@ func (sess *hostSess) getReq(reqID uint64, verb pinVerb) (req *appReq, err error
 	return
 }
 
-func (sess *hostSess) PinCell(pinReq arc.PinReq) (arc.PinContext, error) {
+func (sess *hostSess) PinCell(pinReq amp.PinReq) (amp.PinContext, error) {
 	req := sess.newAppReq(0)
 	req.PinReqParams = *pinReq.Params()
 
@@ -557,7 +557,7 @@ func (sess *hostSess) pinCell(req *appReq) error {
 	if len(pinReq.PinURL) > 0 {
 		req.URL, err = url.Parse(pinReq.PinURL)
 		if err != nil {
-			err = arc.ErrCode_InvalidReq.Errorf("failed to parse PinURL: %v", err)
+			err = amp.ErrCode_InvalidReq.Errorf("failed to parse PinURL: %v", err)
 			return err
 		}
 	}
@@ -565,7 +565,7 @@ func (sess *hostSess) pinCell(req *appReq) error {
 	if pinReq.ParentReqID != 0 {
 		parentReq, _ := sess.getReq(pinReq.ParentReqID, getReq)
 		if parentReq == nil {
-			err = arc.ErrCode_InvalidReq.Error("invalid ParentReqID")
+			err = amp.ErrCode_InvalidReq.Error("invalid ParentReqID")
 			return err
 		}
 		req.appCtx = parentReq.appCtx
@@ -581,7 +581,7 @@ func (sess *hostSess) pinCell(req *appReq) error {
 	}
 
 	if req.appCtx == nil {
-		err = arc.ErrCode_InvalidReq.Error("unable to resolve cell pinner")
+		err = amp.ErrCode_InvalidReq.Error("unable to resolve cell pinner")
 		return err
 	}
 
@@ -589,22 +589,22 @@ func (sess *hostSess) pinCell(req *appReq) error {
 	return nil
 }
 
-func (sess *hostSess) registry() arc.Registry {
+func (sess *hostSess) registry() amp.Registry {
 	return sess.host.Opts.Registry
 }
 
-func (sess *hostSess) LoginInfo() arc.Login {
+func (sess *hostSess) LoginInfo() amp.Login {
 	return sess.login
 }
 
-// func (sess *hostSess) PushMetaAttr(val arc.ElemVal, reqID uint64) error {
+// func (sess *hostSess) PushMetaAttr(val amp.ElemVal, reqID uint64) error {
 // 	attrSpec, err := sess.SessionRegistry.ResolveAttrSpec(val.TypeName(), false)
 // 	if err != nil {
 // 		sess.Warnf("ResolveAttrSpec() error: %v", err)
 // 		return err
 // 	}
 
-// 	attrElem := arc.AttrElem{
+// 	attrElem := amp.AttrElem{
 // 		AttrID: attrSpec.DefID,
 // 		Val:    val,
 // 	}
@@ -612,17 +612,17 @@ func (sess *hostSess) LoginInfo() arc.Login {
 // 	if reqID == 0 {
 // 		reqID = sess.loginReqID
 // 	}
-// 	msg, err := attrElem.MarshalToMsg(arc.CellID(reqID))
+// 	msg, err := attrElem.MarshalToMsg(amp.CellID(reqID))
 // 	if err != nil {
 // 		return err
 // 	}
 
 // 	msg.ReqID = sess.loginReqID
-// 	msg.Op = arc.MsgOp_MetaAttr
+// 	msg.Op = amp.MsgOp_MetaAttr
 // 	req, err := sess.getReq(msg.ReqID, getReq)
 // 	if req != nil && err == nil {
 // 		if !req.PushUpdate(msg) {
-// 			err = arc.ErrNotConnected
+// 			err = amp.ErrNotConnected
 // 		}
 // 	} else {
 // 		sess.PushUpdate(msg)
@@ -636,7 +636,7 @@ func (sess *hostSess) onAppClosing(appCtx *appContext) {
 	sess.openAppsMu.Unlock()
 }
 
-func (sess *hostSess) GetAppInstance(appID arc.UID, autoCreate bool) (arc.AppInstance, error) {
+func (sess *hostSess) GetAppInstance(appID amp.UID, autoCreate bool) (amp.AppInstance, error) {
 	if ctx, err := sess.appContextForUID(appID, autoCreate); err == nil {
 		return ctx.appInst, nil
 	} else {
@@ -644,7 +644,7 @@ func (sess *hostSess) GetAppInstance(appID arc.UID, autoCreate bool) (arc.AppIns
 	}
 }
 
-func (sess *hostSess) appContextForUID(appID arc.UID, autoCreate bool) (*appContext, error) {
+func (sess *hostSess) appContextForUID(appID amp.UID, autoCreate bool) (*appContext, error) {
 	sess.openAppsMu.Lock()
 	defer sess.openAppsMu.Unlock()
 
@@ -710,26 +710,26 @@ func (sess *hostSess) appCtxForInvocation(invocation string, autoCreate bool) (*
 	return ctx, nil
 }
 
-// appContext Implements arc.AppContext
+// appContext Implements amp.AppContext
 type appContext struct {
 	task.Context
 
 	//rng     *rand.Rand
-	appInst arc.AppInstance
+	appInst amp.AppInstance
 	sess    *hostSess
-	module  *arc.App
+	module  *amp.App
 	appReqs chan *appReq // incoming requests for the app
 }
 
-func (ctx *appContext) IssueCellID() (id arc.CellID) {
+func (ctx *appContext) IssueCellID() (id amp.CellID) {
 	id.AssignFromU64(ctx.sess.nextID.Add(1)+100, 0)
 	return
-	///return arc.IssueCellID(ctx.rng)
+	///return amp.IssueCellID(ctx.rng)
 }
 
 /*
-func (reg *sessRegistry) IssueTimeID() arc.TimeID {
-	now := int64(arc.ConvertToUTC16(time.Now()))
+func (reg *sessRegistry) IssueTimeID() amp.TimeID {
+	now := int64(amp.ConvertToUTC16(time.Now()))
 	if !reg.timeMu.CompareAndSwap(0, 1) { // spin lock
 		runtime.Gosched()
 	}
@@ -742,11 +742,11 @@ func (reg *sessRegistry) IssueTimeID() arc.TimeID {
 	reg.timeID = issued
 	reg.timeMu.Store(0) // spin unlock
 
-	return arc.TimeID(issued)
+	return amp.TimeID(issued)
 }
 */
 
-func (ctx *appContext) Session() arc.HostSession {
+func (ctx *appContext) Session() amp.HostSession {
 	return ctx.sess
 }
 
@@ -754,21 +754,21 @@ func (ctx *appContext) LocalDataPath() string {
 	return path.Join(ctx.sess.host.Opts.StatePath, ctx.module.AppID)
 }
 
-func (ctx *appContext) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) (URL string, err error) {
+func (ctx *appContext) PublishAsset(asset amp.MediaAsset, opts amp.PublishOpts) (URL string, err error) {
 	return ctx.sess.AssetPublisher().PublishAsset(asset, opts)
 }
 
-func (ctx *appContext) PinAppCell(flags arc.PinFlags) (*appReq, error) {
+func (ctx *appContext) PinAppCell(flags amp.PinFlags) (*appReq, error) {
 	// planetApp, err := ctx.sess.GetAppInstance(planet.AppUID, true)
 	// if err != nil {
 	// 	return nil, err
 	// }
 
-	req := &arc.PinReqParams{
-		Outlet: make(chan *arc.Msg, 1),
+	req := &amp.PinReqParams{
+		Outlet: make(chan *amp.Msg, 1),
 	}
-	req.PinReq.Flags = arc.PinFlags_UseNativeSymbols | flags
-	req.PinReq.PinURL = fmt.Sprintf("arc://planet/~/%s/.AppAttrs", ctx.module.AppID)
+	req.PinReq.Flags = amp.PinFlags_UseNativeSymbols | flags
+	req.PinReq.PinURL = fmt.Sprintf("amp://planet/~/%s/.AppAttrs", ctx.module.AppID)
 
 	pinCtx, err := ctx.sess.PinCell(req)
 	if err != nil {
@@ -777,7 +777,7 @@ func (ctx *appContext) PinAppCell(flags arc.PinFlags) (*appReq, error) {
 	return pinCtx.(*appReq), nil
 }
 
-func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.ElemVal) error {
+func (ctx *appContext) GetAppCellAttr(attrSpec string, dst amp.ElemVal) error {
 	match, err := ctx.sess.SessionRegistry.ResolveAttrSpec(attrSpec, true)
 	if err != nil {
 		return err
@@ -785,7 +785,7 @@ func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.ElemVal) error {
 
 	// When we pin through the runtime, there is no ReqID since this is host-side.
 	// So we use CloseOnSync and/or pinCtx.Close() when we're done.
-	pinCtx, err := ctx.PinAppCell(arc.PinFlags_CloseOnSync)
+	pinCtx, err := ctx.PinAppCell(amp.PinFlags_CloseOnSync)
 	if err != nil {
 		return err
 	}
@@ -804,23 +804,23 @@ func (ctx *appContext) GetAppCellAttr(attrSpec string, dst arc.ElemVal) error {
 			}
 			msg.Reclaim()
 		case <-pinCtx.Closing():
-			return arc.ErrCellNotFound
+			return amp.ErrCellNotFound
 		}
 	}
 }
 
-func (ctx *appContext) PutAppCellAttr(attrSpec string, src arc.ElemVal) error {
+func (ctx *appContext) PutAppCellAttr(attrSpec string, src amp.ElemVal) error {
 	spec, err := ctx.sess.ResolveAttrSpec(attrSpec, true)
 	if err != nil {
 		return err
 	}
 
-	msg, err := arc.FormMetaAttrTx(spec, src)
+	msg, err := amp.FormMetaAttrTx(spec, src)
 	if err != nil {
 		return err
 	}
 
-	pinCtx, err := ctx.PinAppCell(arc.PinFlags_NoSync)
+	pinCtx, err := ctx.PinAppCell(amp.PinFlags_NoSync)
 	if err != nil {
 		return err
 	}
@@ -857,15 +857,15 @@ func (app *appContext) handleAppReq(req *appReq) error {
 	// Once the cell is resolved, serve state in child context of the PinnedCell
 	// Even if the client closes the req before StartChild() (causing it to error), the err result will no op.
 	req.Context, err = req.pinned.Context().StartChild(&task.Task{
-		TaskRef:   arc.PinContext(req),
+		TaskRef:   amp.PinContext(req),
 		Label:     label,
 		IdleClose: time.Microsecond,
 		OnRun: func(pinCtx task.Context) {
 			err := req.pinned.ServeState(req)
-			if err != nil && err != arc.ErrShuttingDown {
+			if err != nil && err != amp.ErrShuttingDown {
 				pinCtx.Errorf("ServeState() error: %v", err)
 			}
-			if (req.PinReq.Flags & arc.PinFlags_CloseOnSync) != 0 {
+			if (req.PinReq.Flags & amp.PinFlags_CloseOnSync) != 0 {
 				pinCtx.Close()
 			} else {
 				<-pinCtx.Closing()

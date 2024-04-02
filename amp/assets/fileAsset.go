@@ -4,8 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/task"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/task"
 	"github.com/h2non/filetype"
 )
 
@@ -23,7 +23,7 @@ func GetMediaTypeForExt(pathname string) (mediaType string, extLen int) {
 	return
 }
 
-func AssetForFilePathname(pathname, mediaType string) (arc.MediaAsset, error) {
+func AssetForFilePathname(pathname, mediaType string) (amp.MediaAsset, error) {
 	a := &fileAsset{
 		pathname:  pathname,
 		mediaType: mediaType,
@@ -47,7 +47,7 @@ func (a *fileAsset) OnStart(ctx task.Context) error {
 	return nil
 }
 
-func (a *fileAsset) NewAssetReader() (arc.AssetReader, error) {
+func (a *fileAsset) NewAssetReader() (amp.AssetReader, error) {
 	file, err := os.Open(a.pathname)
 	if err != nil {
 		return nil, err

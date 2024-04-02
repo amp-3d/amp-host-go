@@ -5,18 +5,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/task"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/task"
 )
 
 // libService offers Msg transport over direct dll calls.
 type libService struct {
 	task.Context
-	host arc.Host
+	host amp.Host
 	opts LibServiceOpts
 }
 
-func (srv *libService) StartService(on arc.Host) error {
+func (srv *libService) StartService(on amp.Host) error {
 	if srv.host != nil || srv.Context != nil {
 		panic("already attached")
 	}
@@ -38,7 +38,7 @@ func (srv *libService) NewLibSession() (LibSession, error) {
 	sess := &libSession{
 		srv:        srv,
 		mallocs:    make(map[*byte]struct{}),
-		fromClient: make(chan *arc.Msg),
+		fromClient: make(chan *amp.Msg),
 		toClient:   make(chan []byte),
 		free:       make(chan []byte, 1),
 		closing:    make(chan struct{}),
@@ -60,7 +60,7 @@ func (srv *libService) GracefulStop() {
 
 type libSession struct {
 	srv       *libService
-	hostSess  arc.HostSession
+	hostSess  amp.HostSession
 	closed    int32
 	mallocs   map[*byte]struct{} // retains allocations so they are not GCed
 	mallocsMu sync.Mutex
@@ -68,7 +68,7 @@ type libSession struct {
 	// TODO: reimplement below using sync.Cond
 	//xfer     sync.Cond
 	//xferMu   sync.Mutex
-	fromClient chan *arc.Msg
+	fromClient chan *amp.Msg
 	toClient   chan []byte
 	closing    chan struct{}
 	free       chan []byte
@@ -129,32 +129,32 @@ func (sess *libSession) Realloc(buf *[]byte, newLen int64) {
 ///////////////////////// client -> host /////////////////////////
 
 // Executed on a host thread
-func (sess *libSession) RecvMsg() (*arc.Msg, error) {
+func (sess *libSession) RecvMsg() (*amp.Msg, error) {
 	select {
 	case msg := <-sess.fromClient:
 		return msg, nil
 	case <-sess.closing:
-		return nil, arc.ErrStreamClosed
+		return nil, amp.ErrStreamClosed
 	}
 }
 
 // Executed on a client thread
-func (sess *libSession) EnqueueIncoming(msg *arc.Msg) error {
+func (sess *libSession) EnqueueIncoming(msg *amp.Msg) error {
 	select {
 	case sess.fromClient <- msg:
 		return nil
 	case <-sess.closing:
-		return arc.ErrStreamClosed
+		return amp.ErrStreamClosed
 	}
 }
 
 ///////////////////////// host -> client /////////////////////////
 
 // Executed on a host thread
-func (sess *libSession) SendMsg(tx *arc.Msg) error {
+func (sess *libSession) SendMsg(tx *amp.Msg) error {
 
 	// Serialize the outgoing msg into an existing buffer (or allocate a new one)
-	txLen := tx.Size() + int(arc.TxHeader_Size)
+	txLen := tx.Size() + int(amp.TxHeader_Size)
 	var msg_pb []byte
 	select {
 	case msg_pb = <-sess.free:
@@ -169,7 +169,7 @@ func (sess *libSession) SendMsg(tx *arc.Msg) error {
 	case sess.toClient <- msg_pb:
 		return nil
 	case <-sess.closing:
-		return arc.ErrStreamClosed
+		return amp.ErrStreamClosed
 	}
 }
 
@@ -189,6 +189,6 @@ func (sess *libSession) DequeueOutgoing(msg_pb *[]byte) error {
 	case *msg_pb = <-sess.toClient:
 		return nil
 	case <-sess.closing:
-		return arc.ErrStreamClosed
+		return amp.ErrStreamClosed
 	}
 }

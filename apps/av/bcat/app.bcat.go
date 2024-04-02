@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/apps/av"
+	"github.com/git-amp/amp-sdk-go/amp"
 )
 
 const (
@@ -17,17 +17,17 @@ const (
 
 const kTokenAttrSpec = "LoginInfo:client-login"
 
-func UID() arc.UID {
-	return arc.FormUID(0xd2849a95ddb047b3, 0xa787d8a52d039c32)
+func UID() amp.UID {
+	return amp.FormUID(0xd2849a95ddb047b3, 0xa787d8a52d039c32)
 }
 
-func RegisterApp(reg arc.Registry) {
-	reg.RegisterApp(&arc.App{
+func RegisterApp(reg amp.Registry) {
+	reg.RegisterApp(&amp.App{
 		AppID:   AppID,
 		UID:     UID(),
 		Desc:    "bookmark catalog service",
 		Version: "v1.2023.2",
-		NewAppInstance: func() arc.AppInstance {
+		NewAppInstance: func() amp.AppInstance {
 			return &appCtx{}
 		},
 	})
@@ -55,7 +55,7 @@ func (app *appCtx) resetLogin() {
 
 }
 
-func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCell, error) {
+func (app *appCtx) PinCell(parent amp.PinnedCell, req amp.PinReq) (amp.PinnedCell, error) {
 
 	if app.cats == nil {
 		err := app.reloadCategories()
@@ -144,22 +144,22 @@ func (app *appCtx) reloadCategories() error {
 			catID: entry.Id,
 		}
 
-		cat.hdr = arc.CellHeader{
+		cat.hdr = amp.CellHeader{
 			Title: entry.Title,
 			About: entry.Description,
-			Glyphs: []*arc.AssetTag{
+			Glyphs: []*amp.AssetTag{
 				{
 					URI:         "amp:asset/av/" + entry.Image,
-					ContentType: arc.GenericImageType,
+					ContentType: amp.GenericImageType,
 				},
 			},
 		}
 
 		if created, err := time.Parse(time.RFC3339, entry.TimestampCreated); err == nil {
-			cat.hdr.Created = int64(arc.ConvertToUTC16(created))
+			cat.hdr.Created = int64(amp.ConvertToUTC16(created))
 		}
 		if modified, err := time.Parse(time.RFC3339, entry.TimestampModified); err == nil {
-			cat.hdr.Modified = int64(arc.ConvertToUTC16(modified))
+			cat.hdr.Modified = int64(amp.ConvertToUTC16(modified))
 		}
 		app.cats = append(app.cats, cat)
 	}
@@ -174,6 +174,6 @@ func (app *appCtx) reloadCategories() error {
 }
 
 type categoryInfo struct {
-	hdr   arc.CellHeader
+	hdr   amp.CellHeader
 	catID uint32
 }

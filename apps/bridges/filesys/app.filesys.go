@@ -4,9 +4,9 @@ import (
 	"os"
 	"path"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/apps/av"
 	"github.com/arcspace/go-archost/apps/bridges"
+	"github.com/git-amp/amp-sdk-go/amp"
 	"github.com/h2non/filetype"
 )
 
@@ -23,19 +23,19 @@ const (
 	URLParam_PinPath = "path"
 )
 
-func UID() arc.UID {
-	return arc.FormUID(0x3dae178d099340dc, 0x8b111f3a4a6b0263)
+func UID() amp.UID {
+	return amp.FormUID(0x3dae178d099340dc, 0x8b111f3a4a6b0263)
 }
 
-func RegisterApp(reg arc.Registry) {
+func RegisterApp(reg amp.Registry) {
 	reg.RegisterElemType(&av.MediaPlaylist{})
 
-	reg.RegisterApp(&arc.App{
+	reg.RegisterApp(&amp.App{
 		AppID:   AppID,
 		UID:     UID(),
 		Desc:    "local file system service",
 		Version: "v1.2023.2",
-		NewAppInstance: func() arc.AppInstance {
+		NewAppInstance: func() amp.AppInstance {
 			return &appCtx{}
 		},
 	})
@@ -45,7 +45,7 @@ type appCtx struct {
 	av.AppBase
 }
 
-func (app *appCtx) OnNew(ctx arc.AppContext) (err error) {
+func (app *appCtx) OnNew(ctx amp.AppContext) (err error) {
 	err = app.AppBase.OnNew(ctx)
 	if err != nil {
 		return
@@ -53,7 +53,7 @@ func (app *appCtx) OnNew(ctx arc.AppContext) (err error) {
 	return nil
 }
 
-func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCell, error) {
+func (app *appCtx) PinCell(parent amp.PinnedCell, req amp.PinReq) (amp.PinnedCell, error) {
 	if parent != nil {
 		return parent.PinCell(req)
 	}
@@ -63,7 +63,7 @@ func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCel
 		query := url.Query()
 		paths := query[URLParam_PinPath]
 		if len(paths) == 0 {
-			return nil, arc.ErrCode_CellNotFound.Error("missing URL argument 'path'")
+			return nil, amp.ErrCode_CellNotFound.Error("missing URL argument 'path'")
 		}
 		path = paths[0]
 	}
@@ -71,15 +71,15 @@ func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCel
 	return app.pinnedCellForPath(path)
 }
 
-func (app *appCtx) pinnedCellForPath(pathname string) (arc.PinnedCell, error) {
+func (app *appCtx) pinnedCellForPath(pathname string) (amp.PinnedCell, error) {
 	pathname = path.Clean(pathname)
 	if pathname == "" {
-		return nil, arc.ErrCode_CellNotFound.Error("missing cell ID / URL")
+		return nil, amp.ErrCode_CellNotFound.Error("missing cell ID / URL")
 	}
 
 	fsInfo, err := os.Stat(pathname)
 	if err != nil {
-		return nil, arc.ErrCode_CellNotFound.Errorf("path not found: %q", pathname)
+		return nil, amp.ErrCode_CellNotFound.Errorf("path not found: %q", pathname)
 	}
 
 	var item *fsItem

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
+	"github.com/arcspace/go-archost/amp/assets"
 	"github.com/arcspace/go-archost/apps/av"
-	"github.com/arcspace/go-archost/arc/assets"
+	"github.com/git-amp/amp-sdk-go/amp"
 )
 
 type fsItem struct {
@@ -23,7 +23,7 @@ type fsItem struct {
 	modTime   time.Time
 	mediaType string
 
-	hdr        arc.CellHeader
+	hdr        amp.CellHeader
 	mediaFlags av.MediaFlags
 }
 
@@ -85,17 +85,17 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 
 	//////////////////  CellHeader
 	{
-		hdr := arc.CellHeader{
-			Modified: int64(arc.ConvertToUTC16(item.modTime)),
+		hdr := amp.CellHeader{
+			Modified: int64(amp.ConvertToUTC16(item.modTime)),
 		}
 		if item.isDir {
-			hdr.Glyphs = []*arc.AssetTag{
+			hdr.Glyphs = []*amp.AssetTag{
 				av.DirGlyph,
 			}
 		} else {
-			hdr.Glyphs = []*arc.AssetTag{
+			hdr.Glyphs = []*amp.AssetTag{
 				{
-					URI: arc.GlyphURIPrefix + item.mediaType,
+					URI: amp.GlyphURIPrefix + item.mediaType,
 				},
 			}
 		}
@@ -115,8 +115,8 @@ func (item *fsItem) setFrom(fi os.FileInfo) {
 
 }
 
-func (item *fsItem) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
-	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &item.hdr)
+func (item *fsItem) MarshalAttrs(dst *amp.CellTx, ctx amp.PinContext) error {
+	dst.Marshal(ctx.GetAttrID(amp.CellHeaderAttrSpec), 0, &item.hdr)
 	return nil
 }
 
@@ -131,7 +131,7 @@ type fsFile struct {
 	pinnedURL string
 }
 
-func (item *fsFile) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
+func (item *fsFile) MarshalAttrs(dst *amp.CellTx, ctx amp.PinContext) error {
 	item.fsItem.MarshalAttrs(dst, ctx)
 
 	if item.mediaFlags != 0 {
@@ -145,7 +145,7 @@ func (item *fsFile) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
 
 	if item.pinnedURL != "" {
 		dst.Marshal(ctx.GetAttrID(av.PlayableMediaAssetsAttrSpec), 0, &av.PlayableMediaAssets{
-			MainTrack: &arc.AssetTag{
+			MainTrack: &amp.AssetTag{
 				ContentType: item.mediaType,
 				URI:         item.pinnedURL,
 			},
@@ -161,7 +161,7 @@ func (item *fsFile) PinInto(dst *av.PinnedCell[*appCtx]) error {
 		return err
 	}
 	app := dst.App
-	item.pinnedURL, err = app.PublishAsset(asset, arc.PublishOpts{
+	item.pinnedURL, err = app.PublishAsset(asset, amp.PublishOpts{
 		HostAddr: app.Session().LoginInfo().HostAddr,
 	})
 	return err
@@ -175,7 +175,7 @@ type fsDir struct {
 func (dir *fsDir) PinInto(dst *av.PinnedCell[*appCtx]) error {
 
 	{
-		//dir.subs = make(map[arc.CellID]os.DirEntry)
+		//dir.subs = make(map[amp.CellID]os.DirEntry)
 		openDir, err := os.Open(dir.pathname)
 		if err != nil {
 			return err

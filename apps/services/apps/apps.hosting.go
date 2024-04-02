@@ -1,9 +1,7 @@
 package apps
 
-import (
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-)
+import "github.com/git-amp/amp-sdk-go/amp"
 
-func RegisterFamily(reg arc.Registry) {
+func RegisterFamily(reg amp.Registry) {
 
 }

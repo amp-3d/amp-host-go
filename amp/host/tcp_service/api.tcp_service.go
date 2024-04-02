@@ -1,11 +1,11 @@
-// Implements a tcp server that attaches to a arc.Host instance as a transport layer.
+// Implements a tcp server that attaches to a amp.Host instance as a transport layer.
 package tcp_service
 
 import (
 	"fmt"
 	"sync"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
+	"github.com/git-amp/amp-sdk-go/amp"
 )
 
 // TcpServerOpts exposes tcp server options and params
@@ -24,7 +24,7 @@ func DefaultTcpServerOpts(listenPort int) TcpServerOpts {
 	}
 }
 
-func (opts TcpServerOpts) NewTcpServer() arc.HostService {
+func (opts TcpServerOpts) NewTcpServer() amp.HostService {
 	srv := &tcpServer{
 		opts:     opts,
 		sessions: make(map[*tcpSess]struct{}),

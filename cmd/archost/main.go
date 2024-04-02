@@ -5,12 +5,12 @@ import (
 	"path"
 	"time"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/log"
-	"github.com/arcspace/go-arc-sdk/stdlib/task"
-	"github.com/arcspace/go-arc-sdk/stdlib/utils"
-	"github.com/arcspace/go-archost/arc/host"
-	"github.com/arcspace/go-archost/arc/host/tcp_service"
+	"github.com/arcspace/go-archost/amp/host"
+	"github.com/arcspace/go-archost/amp/host/tcp_service"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/log"
+	"github.com/git-amp/amp-sdk-go/stdlib/task"
+	"github.com/git-amp/amp-sdk-go/stdlib/utils"
 )
 
 func main() {
@@ -21,8 +21,8 @@ func main() {
 	}
 	defaultDataPath := path.Join(exePath, "archost.data")
 
-	hostPort := flag.Int("host-port", int(arc.Const_DefaultServicePort), "Sets the port used to bind tcp service")
-	assetPort := flag.Int("asset-port", int(arc.Const_DefaultServicePort+1), "Sets the port used for serving pinned assets")
+	hostPort := flag.Int("host-port", int(amp.Const_DefaultServicePort), "Sets the port used to bind tcp service")
+	assetPort := flag.Int("asset-port", int(amp.Const_DefaultServicePort+1), "Sets the port used for serving pinned assets")
 	debugMode := flag.Bool("debug", false, "Enables debug mode")
 	showTree := flag.Int("show-tree", 0, "Prints the task tree periodically, checking every given number of seconds")
 	dataPath := flag.String("data-path", defaultDataPath, "Specifies the path for all file access and storage")

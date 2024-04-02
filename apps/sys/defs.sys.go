@@ -1,4 +1,4 @@
-// sys contains core arc.Host system services and bootstrapping.
+// sys contains core amp.Host system services and bootstrapping.
 package sys
 
 const (

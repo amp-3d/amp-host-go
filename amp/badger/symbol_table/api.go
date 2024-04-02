@@ -1,7 +1,7 @@
 package symbol_table
 
 import (
-	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
+	"github.com/git-amp/amp-sdk-go/stdlib/symbol"
 	"github.com/dgraph-io/badger/v4"
 )
 

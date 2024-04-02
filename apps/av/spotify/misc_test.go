@@ -9,7 +9,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/arcspace/go-arc-sdk/stdlib/platform"
+	"github.com/git-amp/amp-sdk-go/stdlib/platform"
 	"github.com/zmb3/spotify/v2"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 )

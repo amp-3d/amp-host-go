@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"sync/atomic"
 
-	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
+	"github.com/git-amp/amp-sdk-go/stdlib/symbol"
 	"github.com/dgraph-io/badger/v4"
 )
 

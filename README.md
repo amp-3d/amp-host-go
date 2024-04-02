@@ -1,5 +1,5 @@
 # go-archost
-This repo implements `arc.Host` as defined in the [AMP SDK](https://github.com/arcspace/go-arc-sdk).  It can be compiled into a binary that either embeds into a Unity or Unreal project, or runs as a server launched from command line.  In either case, any [`arc.App`](https://github.com/arcspace/go-arc-sdk/blob/main/apis/arc/api.app.go) can be plugged in, offering many possibilities as to how a developers can drive the AMP UI.
+This repo implements `amp.Host` as defined in the [AMP SDK](https://github.com/git-amp/amp-sdk-go).  It can be compiled into a binary that either embeds into a Unity or Unreal project, or runs as a server launched from command line.  In either case, any [`amp.App`](https://github.com/git-amp/amp-sdk-go/blob/main/amp/api.app.go) can be plugged in, offering many possibilities as to how a developers can drive the AMP UI.
 
 ## Building
 
@@ -10,7 +10,7 @@ $ make help
 
 go-archost
   PARENT_PATH:     /Users/aomeara/git.arcspace
-  ARC_SDK_PATH:    /Users/aomeara/git.arcspace/go-arc-sdk
+  ARC_SDK_PATH:    /Users/aomeara/git.arcspace/amp-sdk-go
   BUILD_PATH:      /Users/aomeara/git.arcspace/go-archost
   UNITY_PROJ:      /Users/aomeara/git.arcspace/arcspace.unity-app
   UNITY_ARC_LIBS:  /Users/aomeara/git.arcspace/arcspace.unity-app/Assets/Plugins/AMP/Plugins
@@ -33,19 +33,19 @@ go-archost
 ## Running
 
 ```
-[arc.Host]  task.Context tree:
-0001  arc.Host
+[amp.Host]  task.Context tree:
+0001  amp.Host
 0002     ┣ AssetServer [::]:5193
 0016     ┃    ┗ /Users/aomeara/Movies/Downloads/Alan Watts Lectures | On Pain.mp4
 0003     ┣ tcp.HostService [::]:5192
-0005     ┃    ┣ tcp 127.0.0.1:63945 <- arc.HostSession(4)
-0006     ┃    ┗ tcp 127.0.0.1:63945 -> arc.HostSession(4)
-0004     ┗ arc.HostSession
+0005     ┃    ┣ tcp 127.0.0.1:63945 <- amp.HostSession(4)
+0006     ┃    ┗ tcp 127.0.0.1:63945 -> amp.HostSession(4)
+0004     ┗ amp.HostSession
 0007          ┣ app: planet.sys.arcspace.systems
 0008          ┃    ┗ planet: aomeara
 0009          ┗ app: filesys.bridges.arcspace.systems
 0010               ┣ cell: aomeara/
-0011               ┃    ┗ [req 1003]  arc://filesys?path=/Users/aomeara
+0011               ┃    ┗ [req 1003]  amp://filesys?path=/Users/aomeara
 0012               ┣ cell: Movies/
 0013               ┃    ┗ [req 1004] 
 0014               ┣ cell: Downloads/

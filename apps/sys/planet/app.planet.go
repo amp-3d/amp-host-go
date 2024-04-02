@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
-	"github.com/arcspace/go-arc-sdk/stdlib/task"
+	"github.com/arcspace/go-archost/amp/badger/symbol_table"
 	"github.com/arcspace/go-archost/apps/sys"
-	"github.com/arcspace/go-archost/arc/badger/symbol_table"
 	"github.com/dgraph-io/badger/v4"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/symbol"
+	"github.com/git-amp/amp-sdk-go/stdlib/task"
 )
 
 const (
@@ -21,15 +21,15 @@ const (
 	HomePlanetAlias = "~" // hard-wired alias for the the current user's home planet
 )
 
-var AppUID = arc.FormUID(0xda1949fbe7a642de, 0xaa4dba7a3f939f27)
+var AppUID = amp.FormUID(0xda1949fbe7a642de, 0xaa4dba7a3f939f27)
 
-func RegisterApp(reg arc.Registry) {
-	reg.RegisterApp(&arc.App{
+func RegisterApp(reg amp.Registry) {
+	reg.RegisterApp(&amp.App{
 		AppID:   AppID,
 		UID:     AppUID,
 		Desc:    "cell storage & sync",
 		Version: "v1.2023.2",
-		NewAppInstance: func() arc.AppInstance {
+		NewAppInstance: func() amp.AppInstance {
 			return &appCtx{
 				plSess: make(map[string]*plSess),
 			}
@@ -38,7 +38,7 @@ func RegisterApp(reg arc.Registry) {
 }
 
 type appCtx struct {
-	arc.AppContext
+	amp.AppContext
 	home   *plSess            // current user's home planet
 	plSess map[string]*plSess // mounted planets
 	plMu   sync.Mutex         // plSess mutex
@@ -48,16 +48,16 @@ type appCtx struct {
 	// Or in other words, the genesis bootstrap comes from the genesis planet
 }
 
-func (app *appCtx) OnNew(ctx arc.AppContext) error {
+func (app *appCtx) OnNew(ctx amp.AppContext) error {
 	app.AppContext = ctx
 	return app.mountHomePlanet()
 }
 
 func (app *appCtx) HandleURL(*url.URL) error {
-	return arc.ErrUnimplemented
+	return amp.ErrUnimplemented
 }
 
-// func (app *appCtx) WillPinCell(res arc.CellResolver, req arc.PinReq) error {
+// func (app *appCtx) WillPinCell(res amp.CellResolver, req amp.PinReq) error {
 // 	// do we need to close all mounted planets?
 // }
 
@@ -72,7 +72,7 @@ func (app *appCtx) mountHomePlanet() error {
 
 	login := app.Session().LoginInfo()
 	if len(login.UserUID) == 0 {
-		return arc.ErrCode_PlanetFailure.Errorf("no user logged in")
+		return amp.ErrCode_PlanetFailure.Errorf("no user logged in")
 	}
 
 	var err error
@@ -88,26 +88,26 @@ func (app *appCtx) mountHomePlanet() error {
 
 func (app *appCtx) resolvePlanet(alias string) (*plSess, error) {
 	if len(alias) == 0 {
-		return nil, arc.ErrCode_PlanetFailure.Errorf("missing planet alias")
+		return nil, amp.ErrCode_PlanetFailure.Errorf("missing planet alias")
 	}
 
 	if alias == HomePlanetAlias {
 		return app.home, nil
 	}
 
-	panic("TODO: planet db name is string vers of arc.UID")
+	panic("TODO: planet db name is string vers of amp.UID")
 	//planetID := app.home.GetSymbolID([]byte(alias), false)
 }
 
-func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCell, error) {
+func (app *appCtx) PinCell(parent amp.PinnedCell, req amp.PinReq) (amp.PinnedCell, error) {
 	var pl *plSess
 
-	// arc://planet/<planet-alias>/<cell-scope>/<cell-alias>
+	// amp://planet/<planet-alias>/<cell-scope>/<cell-alias>
 	// url part       ----0----     ----1----    ----2----
 	// e.g. "~/settings/main-profile.AssetRef"
 	urlParts := req.URLPath()
 	if len(urlParts) != 3 {
-		return nil, arc.ErrCode_CellNotFound.Error("invalid planet URI")
+		return nil, amp.ErrCode_CellNotFound.Error("invalid planet URI")
 	}
 
 	for {
@@ -140,7 +140,7 @@ func (app *appCtx) mountPlanet(
 
 	// if planetID == 0 {
 	// 	if genesis == nil {
-	// 		return nil, arc.ErrCode_PlanetFailure.Error("missing PlanetID and PlanetEpoch TID")
+	// 		return nil, amp.ErrCode_PlanetFailure.Error("missing PlanetID and PlanetEpoch TID")
 	// 	}
 	// 	planetID = app.plHome.GetSymbolID(genesis.EpochTID, false)
 	// }
@@ -160,7 +160,7 @@ func (app *appCtx) mountPlanet(
 	// } else if planetID != 0 {
 	// 	fsName = string(host.home.GetSymbol(planetID, nil))
 	// 	if fsName == "" && genesis == nil {
-	// 		return nil, arc.ErrCode_PlanetFailure.Errorf("planet ID=%v failed to resolve", planetID)
+	// 		return nil, amp.ErrCode_PlanetFailure.Errorf("planet ID=%v failed to resolve", planetID)
 	// 	}
 	// } else {
 
@@ -176,7 +176,7 @@ func (app *appCtx) mountPlanet(
 	pl = &plSess{
 		app:    app,
 		dbName: dbName,
-		cells:  make(map[arc.CellID]*plCell),
+		cells:  make(map[amp.CellID]*plCell),
 	}
 
 	dbPath := path.Join(app.LocalDataPath(), dbName)
@@ -184,7 +184,7 @@ func (app *appCtx) mountPlanet(
 	// The db should already exist if opening and vice versa
 	// _, err := os.Stat(dbPath)
 	// if genesis != nil && err == nil {
-	// 	return nil, arc.ErrCode_PlanetFailure.Error("planet db already exists")
+	// 	return nil, amp.ErrCode_PlanetFailure.Error("planet db already exists")
 	// }
 
 	// Limit ValueLogFileSize to ~134mb since badger does a mmap size test on init, causing iOS 13 to error out.
@@ -200,7 +200,7 @@ func (app *appCtx) mountPlanet(
 
 	opts := symbol_table.DefaultOpts()
 	opts.Db = pl.db
-	opts.IssuerInitsAt = symbol.ID(arc.ConstSymbol_IssuerInitsAt)
+	opts.IssuerInitsAt = symbol.ID(amp.ConstSymbol_IssuerInitsAt)
 	pl.symTable, err = opts.CreateTable()
 	if err != nil {
 		pl.db.Close()
@@ -214,7 +214,7 @@ func (app *appCtx) mountPlanet(
 		Label: fmt.Sprint("planet: ", dbName),
 		OnChildClosing: func(child task.Context) {
 			pl.cellsMu.Lock()
-			delete(pl.cells, child.TaskRef().(arc.CellID))
+			delete(pl.cells, child.TaskRef().(amp.CellID))
 			pl.cellsMu.Unlock()
 		},
 		OnClosed: func() {
@@ -259,19 +259,19 @@ type plSess struct {
 	symTable symbol.Table           // each planet has separate symbol tables
 	dbName   string                 // local pathname to db
 	db       *badger.DB             // db access
-	cells    map[arc.CellID]*plCell // working set of mounted cells (pinned or idle)
+	cells    map[amp.CellID]*plCell // working set of mounted cells (pinned or idle)
 	cellsMu  sync.Mutex             // cells mutex
 	//planetID uint32                 // symbol ID (as known by the host's symbol table)
 }
 
 // plCell is a "mounted" cell serving requests for a specific cell (typically 0-2 open plReq).
 // This can be thought of as the controller for one or more active cell pins.
-// *** implements arc.PinnedCell ***
+// *** implements amp.PinnedCell ***
 type plCell struct {
-	arc.CellID
+	amp.CellID
 	pl      *plSess       // parent planet
-	ctx     task.Context  // arc.PinnedCell ctx
-	newTxns chan *arc.Msg // txns to merge
+	ctx     task.Context  // amp.PinnedCell ctx
+	newTxns chan *amp.Msg // txns to merge
 	dbKey   [kAttrOfs]byte
 	// newSubs  chan *plReq        // new requests waiting for state
 	// subsHead *plReq             // single linked list of open reqs on this cell
@@ -285,10 +285,10 @@ type plCell struct {
 // plSub?
 // plCellSub?
 // plCellReq?
-// *** implements arc.PinContext ***
+// *** implements amp.PinContext ***
 // Instantiated by a client pinning a cell.
 // type plReq struct {
-// 	client arc.PinContext // given by the runtime via CellResolver.ResolveCell()
+// 	client amp.PinContext // given by the runtime via CellResolver.ResolveCell()
 // 	parent *plCell        // parent cell controller
 // 	next   *plReq         // single linked list of same-cell reqs
 // }
@@ -304,7 +304,7 @@ type plCell struct {
     // ValType_CellSetID          = 21; // .ValInt is a CellSet ID (used for SetValType_CellSet)
 
 
-func (pl *plSess) ReadAttr(ctx arc.AppContext, nodeKey, attrKey string, decoder func(valData []byte) error) error {
+func (pl *plSess) ReadAttr(ctx amp.AppContext, nodeKey, attrKey string, decoder func(valData []byte) error) error {
 	appSID := pl.GetSymbolID([]byte(ctx.StateScope()), false)
 	nodeSID := pl.GetSymbolID([]byte(nodeKey), false)
 	attrSID := pl.GetSymbolID([]byte(attrKey), false)
@@ -317,18 +317,18 @@ func (pl *plSess) ReadAttr(ctx arc.AppContext, nodeKey, attrKey string, decoder 
 
 	item, err := dbTx.Get(key)
 	if err == badger.ErrKeyNotFound {
-		return arc.ErrCellNotFound
+		return amp.ErrCellNotFound
 	}
 
 	err = item.Value(decoder)
 	if err != nil {
-		return arc.ErrCode_CellNotFound.Errorf("failed to read cell: %v", err)
+		return amp.ErrCode_CellNotFound.Errorf("failed to read cell: %v", err)
 	}
 
 	return nil
 }
 
-func (pl *plSess) WriteAttr(ctx arc.AppContext, nodeKey, attrKey string, valData []byte) error {
+func (pl *plSess) WriteAttr(ctx amp.AppContext, nodeKey, attrKey string, valData []byte) error {
 	appSID := pl.GetSymbolID([]byte(ctx.StateScope()), true)
 	nodeSID := pl.GetSymbolID([]byte(nodeKey), true)
 	attrSID := pl.GetSymbolID([]byte(attrKey), true)
@@ -337,7 +337,7 @@ func (pl *plSess) WriteAttr(ctx arc.AppContext, nodeKey, attrKey string, valData
 	key := symbol.AppendID(symbol.AppendID(symbol.AppendID(keyBuf[:0], appSID), nodeSID), attrSID)
 
 	if appSID == 0 || nodeSID == 0 || attrSID == 0 {
-		return arc.ErrCellNotFound
+		return amp.ErrCellNotFound
 	}
 
 	dbTx := pl.db.NewTransaction(true)
@@ -346,7 +346,7 @@ func (pl *plSess) WriteAttr(ctx arc.AppContext, nodeKey, attrKey string, valData
 	dbTx.Set(key, valData)
 	err := dbTx.Commit()
 	if err != nil {
-		return arc.ErrCode_DataFailure.Errorf("failed to write cell: %v", err)
+		return amp.ErrCode_DataFailure.Errorf("failed to write cell: %v", err)
 	}
 
 	return nil
@@ -367,14 +367,14 @@ func (pl *plSess) SetSymbolID(value []byte, ID uint32) uint32 {
 
 func (pl *plSess) getCell(scopeID, nodeID uint32) (cell *plCell, err error) {
 	if nodeID == 0 {
-		return nil, arc.ErrCellNotFound
+		return nil, amp.ErrCellNotFound
 	}
 
 	pl.cellsMu.Lock()
 	defer pl.cellsMu.Unlock()
 
 	// TODO: this will change when we support child cells
-	cellID := arc.CellIDFromU64(uint64(scopeID)<<32 | uint64(nodeID), 0)
+	cellID := amp.CellIDFromU64(uint64(scopeID)<<32 | uint64(nodeID), 0)
 	
 	// If the cell is already open, make sure it doesn't auto-close while we are handling it.
 	cell = pl.cells[cellID]
@@ -384,7 +384,7 @@ func (pl *plSess) getCell(scopeID, nodeID uint32) (cell *plCell, err error) {
 
 	cell = &plCell{
 		pl:      pl,
-		newTxns: make(chan *arc.Msg),
+		newTxns: make(chan *amp.Msg),
 	}
 	cell.CellID = cellID
 
@@ -476,7 +476,7 @@ func (sess *hostSess) ServeState(req *appReq) error {
 	// Go through all the attr for this NodeType and for any series types, queue them for loading.
 	var head, prev *cellSub
 	for _, attr := range spec.Attrs {
-		if attr.SeriesType != arc.SeriesType_0 && attr.AutoPin != arc.AutoPin_0 {
+		if attr.SeriesType != amp.SeriesType_0 && attr.AutoPin != amp.AutoPin_0 {
 			sub := &cellSub{
 				sess: sess,
 				attr: attr,
@@ -488,12 +488,12 @@ func (sess *hostSess) ServeState(req *appReq) error {
 			}
 
 			switch attr.AutoPin {
-			case arc.AutoPin_All_Ascending:
+			case amp.AutoPin_All_Ascending:
 				sub.targetRange.SI_SeekTo = 0
-				sub.targetRange.SI_StopAt = uint64(arc.SI_DistantFuture)
+				sub.targetRange.SI_StopAt = uint64(amp.SI_DistantFuture)
 
-			case arc.AutoPin_All_Descending:
-				sub.targetRange.SI_SeekTo = uint64(arc.SI_DistantFuture)
+			case amp.AutoPin_All_Descending:
+				sub.targetRange.SI_SeekTo = uint64(amp.SI_DistantFuture)
 				sub.targetRange.SI_StopAt = 0
 			}
 
@@ -522,7 +522,7 @@ func (pl *planetSess) onRun(task.Context) {
 }
 
 
-func (pl *plSess) addSub(req arc.PinReq) error {
+func (pl *plSess) addSub(req amp.PinReq) error {
 
 	// Add incoming req to the cell IDs list of subs
 	cell.subsMu.Lock()
@@ -588,14 +588,14 @@ func decodeSI(raw uint64) int64 {
 	return int64((raw >> 1) ^ (-(raw & 1)))
 }
 
-func (cell *plCell) Info() arc.CellID {
+func (cell *plCell) Info() amp.CellID {
 	return cell.CellID
 }
 
-func (cell *plCell) PinCell(req arc.PinReq) (arc.PinnedCell, error) {
+func (cell *plCell) PinCell(req amp.PinReq) (amp.PinnedCell, error) {
 	// Hmmm, what does it even mean for this or child cells to be pinned by a client?
 	// Is the idea that child cells are either implicit links to cells in the same planet or explicit links to cells in other planets?
-	return nil, arc.ErrCode_Unimplemented.Error("TODO: implement cell pinning")
+	return nil, amp.ErrCode_Unimplemented.Error("TODO: implement cell pinning")
 }
 
 func (cell *plCell) Context() task.Context {
@@ -606,7 +606,7 @@ func (cell *plCell) GetLogLabel() string {
 	return fmt.Sprintf("cell: %0x", cell.CellID)
 }
 
-func (cell *plCell) ServeState(ctx arc.PinContext) error {
+func (cell *plCell) ServeState(ctx amp.PinContext) error {
 	dbTx := cell.pl.db.NewTransaction(false)
 	defer dbTx.Discard()
 
@@ -621,13 +621,13 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 
 	sess := cell.pl.app.Session()
 	params := ctx.Params()
-	useClientIDs := (params.PinReq.Flags & arc.PinFlags_UseNativeSymbols) == 0
+	useClientIDs := (params.PinReq.Flags & amp.PinFlags_UseNativeSymbols) == 0
 
 	valsBuf := make([]byte, 0, 1024)
 
-	var cellTx *arc.CellTxPb
+	var cellTx *amp.CellTxPb
 
-	// cellTxs := make([]*arc.CellTxPb, 0, 4)
+	// cellTxs := make([]*amp.CellTxPb, 0, 4)
 	// cellTxs = append(cellTxs, cellTx)
 
 	// Read the Cell from the db and push enabled (current all) attrs it to the client
@@ -652,7 +652,7 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 		}
 
 		{
-			elem := &arc.AttrElemPb{
+			elem := &amp.AttrElemPb{
 				AttrID: uint64(attrID),
 				SI:     decodeSI(SI_raw),
 			}
@@ -669,9 +669,9 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 			}
 
 			if cellTx == nil {
-				cellTx = &arc.CellTxPb{
-					Op:    arc.CellTxOp_UpsertCell,
-					Elems: make([]*arc.AttrElemPb, 0, 4),
+				cellTx = &amp.CellTxPb{
+					Op:    amp.CellTxOp_UpsertCell,
+					Elems: make([]*amp.AttrElemPb, 0, 4),
 				}
 				cellTx.CellID_0, cellTx.CellID_1 = cell.CellID.ExportAsU64()
 			}
@@ -679,25 +679,25 @@ func (cell *plCell) ServeState(ctx arc.PinContext) error {
 		}
 	}
 
-	msg := arc.NewMsg()
-	msg.Status = arc.ReqStatus_Synced
+	msg := amp.NewMsg()
+	msg.Status = amp.ReqStatus_Synced
 	if cellTx != nil {
 		msg.CellTxs = append(msg.CellTxs, cellTx)
 	}
 	return ctx.PushUpdate(msg)
 }
 
-func (cell *plCell) MergeUpdate(tx *arc.Msg) error {
+func (cell *plCell) MergeUpdate(tx *amp.Msg) error {
 	select {
 	case cell.newTxns <- tx:
 		return nil // IDEA: maybe we just block until the txn is merged?  this lets us report errors
 	case <-cell.ctx.Closing():
-		return arc.ErrShuttingDown
+		return amp.ErrShuttingDown
 	}
 }
 
 // TODO: handle SIs and children!
-func (cell *plCell) mergeUpdate(tx *arc.Msg) error {
+func (cell *plCell) mergeUpdate(tx *amp.Msg) error {
 	dbTx := cell.pl.db.NewTransaction(true)
 	defer dbTx.Discard()
 
@@ -705,7 +705,7 @@ func (cell *plCell) mergeUpdate(tx *arc.Msg) error {
 	var keyBuf [512]byte
 	key := keyBuf[:0]
 
-	var target arc.CellID
+	var target amp.CellID
 	for _, cellTx := range tx.CellTxs {
 
 		// TODO: handle child cells
@@ -743,7 +743,7 @@ func (cell *plCell) mergeUpdate(tx *arc.Msg) error {
 	return nil
 }
 
-func (cell *plCell) pushToSubs(src *arc.Msg) {
+func (cell *plCell) pushToSubs(src *amp.Msg) {
 	var childBuf [8]task.Context
 	subs := cell.ctx.GetChildren(childBuf[:0])
 
@@ -754,12 +754,12 @@ func (cell *plCell) pushToSubs(src *arc.Msg) {
 	//   - see related comments for appReq
 	for _, sub := range subs {
 		if sub.PreventIdleClose(time.Second) {
-			if subCtx, ok := sub.TaskRef().(arc.PinContext); ok {
-				if subCtx.Params().PinReq.Flags&arc.PinFlags_NoSync != 0 {
+			if subCtx, ok := sub.TaskRef().(amp.PinContext); ok {
+				if subCtx.Params().PinReq.Flags&amp.PinFlags_NoSync != 0 {
 					continue
 				}
 
-				msg := arc.NewMsg()
+				msg := amp.NewMsg()
 				msg.Status = src.Status
 				msg.CellTxs = append(msg.CellTxs[:0], src.CellTxs...)
 				
@@ -782,14 +782,14 @@ const (
 
 // This will be replaced in the future with generic use of GetCell() with a "user" App type.
 // For now, just make a table with user IDs their respective user record.
-func (pl *planetSess) getUser(req arc.Login, autoCreate bool) (seat arc.UserSeat, err error) {
+func (pl *planetSess) getUser(req amp.Login, autoCreate bool) (seat amp.UserSeat, err error) {
 	var buf [128]byte
 
 	uid := append(buf[:0], "/UID/"...)
 	uid = append(uid, req.UserUID...)
 	userID := pl.symTable.GetSymbolID(uid, autoCreate)
 	if userID == 0 {
-		return arc.UserSeat{}, arc.ErrCode_LoginFailed.Error("unknown user")
+		return amp.UserSeat{}, amp.ErrCode_LoginFailed.Error("unknown user")
 	}
 
 	dbTx := pl.db.NewTransaction(true)
@@ -820,10 +820,10 @@ func (pl *planetSess) getUser(req arc.Login, autoCreate bool) (seat arc.UserSeat
 
 // WIP -- placeholder hack until cell+attr support is added to the db
 // Full replacement of all attrs is not how this will work in the future -- this is just a placeholder
-func (pl *planetSess) ReadCell(cellKey []byte, schema *arc.AttrSchema, msgs func(msg *arc.Msg)) error {
+func (pl *planetSess) ReadCell(cellKey []byte, schema *amp.AttrSchema, msgs func(msg *amp.Msg)) error {
 	cellSymID := pl.symTable.GetSymbolID(cellKey, false)
 	if cellSymID == 0 {
-		return arc.ErrCode_CellNotFound.Error("cell not found")
+		return amp.ErrCode_CellNotFound.Error("cell not found")
 	}
 
 	var buf [128]byte
@@ -834,16 +834,16 @@ func (pl *planetSess) ReadCell(cellKey []byte, schema *arc.AttrSchema, msgs func
 	defer dbTx.Discard()
 	item, err := dbTx.Get(key)
 	if err == badger.ErrKeyNotFound {
-		return arc.ErrCode_CellNotFound.Error("cell not found")
+		return amp.ErrCode_CellNotFound.Error("cell not found")
 	}
 
-	var txn arc.Txn
+	var txn amp.Txn
 	err = item.Value(func(val []byte) error {
 		return txn.Unmarshal(val)
 	})
 
 	if err != nil {
-		return arc.ErrCode_CellNotFound.Errorf("failed to read cell: %v", err)
+		return amp.ErrCode_CellNotFound.Errorf("failed to read cell: %v", err)
 	}
 
 	for _, msg := range txn.Msgs {
@@ -890,8 +890,8 @@ func (csess *cellInst) ServeState(req *nodeReq) error {
 	baseKey := append(keyBuf[:0], csess.keyPrefix[:]...)
 
 	// Announce the new node (send SetTypeID, ItemTypeID, map mode etc)
-	msg := arc.NewMsg()
-	msg.Op = arc.MsgOp_AnnounceNode
+	msg := amp.NewMsg()
+	msg.Op = amp.MsgOp_AnnounceNode
 	msg.SetValue(&req.target)
 	err := req.PushUpdate(msg)
 	if err == nil {
@@ -907,7 +907,7 @@ func (csess *cellInst) ServeState(req *nodeReq) error {
 
 		attrKey := symbol.ID(attr.AttrID).WriteTo(baseKey)
 
-		if attr.SeriesType == arc.SeriesType_0 {
+		if attr.SeriesType == amp.SeriesType_0 {
 			item, getErr := dbTx.Get(attrKey)
 			if getErr == nil {
 				err = req.unmarshalAndPush(item)
@@ -915,7 +915,7 @@ func (csess *cellInst) ServeState(req *nodeReq) error {
 					csess.Error(err)
 				}
 			}
-		} else if attr.AutoPin == arc.AutoPin_All {
+		} else if attr.AutoPin == amp.AutoPin_All {
 
 			switch attr.SeriesType {
 
@@ -925,7 +925,7 @@ func (csess *cellInst) ServeState(req *nodeReq) error {
 
 		}
 
-		// case arc.
+		// case amp.
 
 		// case SeriesType_U16:
 
@@ -936,27 +936,27 @@ func (csess *cellInst) ServeState(req *nodeReq) error {
 			return err
 		}
 		// autoMap := attr.AutoMap
-		// if autoMap == arc.AutoMap_ForType {
+		// if autoMap == amp.AutoMap_ForType {
 
-		// 	switch arc.Type(attr.SetTypeID) {
-		// 	case arc.Type_TimeSeries:
+		// 	switch amp.Type(attr.SetTypeID) {
+		// 	case amp.Type_TimeSeries:
 
-		// 	case arc.Type_AttrSet,
-		// 		arc.Type_TimeSeries:
-		// 		autoMap = arc.AutoMap_No
-		// 	case arc.Type_NameSet:
+		// 	case amp.Type_AttrSet,
+		// 		amp.Type_TimeSeries:
+		// 		autoMap = amp.AutoMap_No
+		// 	case amp.Type_NameSet:
 		// 	}
 		// }
 
 		switch attr.AutoPin {
-		case arc.AutoPin_All:
+		case amp.AutoPin_All:
 
 		}
 	}
 
 	// Send break when done
-	msg = arc.NewMsg()
-	msg.Op = arc.MsgOp_NodeUpdated
+	msg = amp.NewMsg()
+	msg.Op = amp.MsgOp_NodeUpdated
 	err = req.PushUpdate(msg)
 	if err != nil {
 		return err
@@ -971,12 +971,12 @@ func (csess *cellInst) ServeState(req *nodeReq) error {
 // mountPlanet mounts the given planet by ID, or creates a new one if genesis is non-nil.
 func (host *host) mountPlanet(
 	planetID uint64,
-	genesis *arc.PlanetEpoch,
+	genesis *amp.PlanetEpoch,
 ) (*planetSess, error) {
 
 	if planetID == 0 {
 		if genesis == nil {
-			return nil, arc.ErrCode_PlanetFailure.Error("missing PlanetID and PlanetEpoch TID")
+			return nil, amp.ErrCode_PlanetFailure.Error("missing PlanetID and PlanetEpoch TID")
 		}
 		planetID = host.home.GetSymbolID(genesis.EpochTID, false)
 	}
@@ -996,7 +996,7 @@ func (host *host) mountPlanet(
 	} else if planetID != 0 {
 		fsName = string(host.home.GetSymbol(planetID, nil))
 		if fsName == "" && genesis == nil {
-			return nil, arc.ErrCode_PlanetFailure.Errorf("planet ID=%v failed to resolve", planetID)
+			return nil, amp.ErrCode_PlanetFailure.Errorf("planet ID=%v failed to resolve", planetID)
 		}
 	} else {
 
@@ -1012,14 +1012,14 @@ func (host *host) mountPlanet(
 	pl = &planetSess{
 		planetID: planetID,
 		dbPath:   path.Join(host.Opts.StatePath, string(fsName)),
-		cells:    make(map[arc.CellID]*cellInst),
+		cells:    make(map[amp.CellID]*cellInst),
 		//newReqs:  make(chan *appReq, 1),
 	}
 
 	// The db should already exist if opening and vice versa
 	_, err := os.Stat(pl.dbPath)
 	if genesis != nil && err == nil {
-		return nil, arc.ErrCode_PlanetFailure.Error("planet db already exists")
+		return nil, amp.ErrCode_PlanetFailure.Error("planet db already exists")
 	}
 
 	task := &task.Task{
@@ -1058,7 +1058,7 @@ func (host *host) mountPlanet(
 	return pl, nil
 }
 
-func (host *host) HostPlanet() arc.Planet {
+func (host *host) HostPlanet() amp.Planet {
 	return host.home
 }
 

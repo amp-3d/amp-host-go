@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/task"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/task"
 )
 
 const kAssetLinkPrefix = "/asset/"
@@ -31,7 +31,7 @@ type httpServer struct {
 
 type assetEntry struct {
 	task.Context
-	arc.MediaAsset
+	amp.MediaAsset
 }
 
 func newHttpServer(opts HttpServerOpts) AssetServer {
@@ -134,7 +134,7 @@ func (srv *httpServer) GracefulStop() {
 	}
 }
 
-func (srv *httpServer) PublishAsset(asset arc.MediaAsset, opts arc.PublishOpts) (URL string, err error) {
+func (srv *httpServer) PublishAsset(asset amp.MediaAsset, opts amp.PublishOpts) (URL string, err error) {
 	assetID := GenerateAssetID(srv.rng, 28)
 
 	// Extract extension and put on asset name

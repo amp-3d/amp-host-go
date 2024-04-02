@@ -3,13 +3,13 @@ package registry
 import (
 	"sync/atomic"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
-	"github.com/arcspace/go-archost/arc/host/registry/parse"
+	"github.com/arcspace/go-archost/amp/host/registry/parse"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/symbol"
 )
 
 type elemDef struct {
-	prototype arc.ElemVal
+	prototype amp.ElemVal
 }
 
 type sessRegistry struct {
@@ -22,21 +22,21 @@ type sessRegistry struct {
 	clientToNativeID map[uint32]uint32 // maps a client symbol ID to a native symbol ID
 
 	elemDefs map[uint32]elemDef     // by ElemTypeID by native ID
-	attrDefs map[uint32]arc.AttrDef // by AttrID by native ID
-	//cellDefs map[uint32]arc.CellDef // by CellTypeID by native ID
+	attrDefs map[uint32]amp.AttrDef // by AttrID by native ID
+	//cellDefs map[uint32]amp.CellDef // by CellTypeID by native ID
 }
 
-func NewSessionRegistry(table symbol.Table) arc.SessionRegistry {
+func NewSessionRegistry(table symbol.Table) amp.SessionRegistry {
 	reg := &sessRegistry{
 		table:            table,
 		nativeToClientID: make(map[uint32]uint32),
 		clientToNativeID: make(map[uint32]uint32),
 
 		elemDefs: make(map[uint32]elemDef),
-		attrDefs: make(map[uint32]arc.AttrDef),
-		//cellDefs: make(map[uint32]arc.CellDef),
+		attrDefs: make(map[uint32]amp.AttrDef),
+		//cellDefs: make(map[uint32]amp.CellDef),
 	}
-	arc.RegisterConstSymbols(reg)
+	amp.RegisterConstSymbols(reg)
 	return reg
 }
 
@@ -49,12 +49,12 @@ func (reg *sessRegistry) NativeToClientID(nativeID uint32) (uint32, bool) {
 	return clientID, ok
 }
 
-func (reg *sessRegistry) NewAttrElem(attrID uint32, native bool) (arc.ElemVal, error) {
+func (reg *sessRegistry) NewAttrElem(attrID uint32, native bool) (amp.ElemVal, error) {
 	if !native {
 		clientID := attrID
 		attrID = reg.clientToNativeID[clientID]
 		if attrID == 0 {
-			return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: unrecognized client symbol %v", clientID)
+			return nil, amp.ErrCode_DefNotFound.Errorf("NewAttrElem: unrecognized client symbol %v", clientID)
 		}
 	}
 	// Often, an attrID will be a unnamed scalar attr (which means we can get the elemDef directly.
@@ -63,17 +63,17 @@ func (reg *sessRegistry) NewAttrElem(attrID uint32, native bool) (arc.ElemVal, e
 	if !exists {
 		attrDef, exists := reg.attrDefs[attrID]
 		if !exists {
-			return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: attr DefID %v not found", attrID)
+			return nil, amp.ErrCode_DefNotFound.Errorf("NewAttrElem: attr DefID %v not found", attrID)
 		}
 		elemDef, exists = reg.elemDefs[attrDef.Native.ElemType]
 		if !exists {
-			return nil, arc.ErrCode_DefNotFound.Errorf("NewAttrElem: elemTypeID %v not found", attrDef.Client.ElemType)
+			return nil, amp.ErrCode_DefNotFound.Errorf("NewAttrElem: elemTypeID %v not found", attrDef.Client.ElemType)
 		}
 	}
 	return elemDef.prototype.New(), nil
 }
 
-func (reg *sessRegistry) RegisterElemType(proto arc.ElemVal) error {
+func (reg *sessRegistry) RegisterElemType(proto amp.ElemVal) error {
 
 	// If the client symbol for this type is not present, defer registration of this prototype
 	elemType := proto.TypeName()
@@ -86,7 +86,7 @@ func (reg *sessRegistry) RegisterElemType(proto arc.ElemVal) error {
 	return nil
 }
 
-func (reg *sessRegistry) RegisterDefs(defs *arc.RegisterDefs) error {
+func (reg *sessRegistry) RegisterDefs(defs *amp.RegisterDefs) error {
 
 	//
 	//
@@ -94,7 +94,7 @@ func (reg *sessRegistry) RegisterDefs(defs *arc.RegisterDefs) error {
 	for _, sym := range defs.Symbols {
 		nativeID := uint32(reg.table.GetSymbolID(sym.Name, true))
 		if clientID := reg.nativeToClientID[nativeID]; clientID != 0 && clientID != sym.ID {
-			return arc.ErrCode_BadSchema.Errorf("client symbol %q already registered as %v ", sym.Name, clientID)
+			return amp.ErrCode_BadSchema.Errorf("client symbol %q already registered as %v ", sym.Name, clientID)
 		}
 		reg.nativeToClientID[nativeID] = sym.ID
 		reg.clientToNativeID[sym.ID] = nativeID
@@ -104,9 +104,9 @@ func (reg *sessRegistry) RegisterDefs(defs *arc.RegisterDefs) error {
 	//
 	// AttrSpecs
 	for _, attrSpec := range defs.Attrs {
-		def := arc.AttrDef{
+		def := amp.AttrDef{
 			Client: *attrSpec,
-			Native: arc.AttrSpec{
+			Native: amp.AttrSpec{
 				DefID:           reg.clientToNativeID[attrSpec.DefID],
 				AttrName:        reg.clientToNativeID[attrSpec.AttrName],
 				ElemType:        reg.clientToNativeID[attrSpec.ElemType],
@@ -117,13 +117,13 @@ func (reg *sessRegistry) RegisterDefs(defs *arc.RegisterDefs) error {
 
 		switch {
 		case def.Client.AttrName == 0 && def.Native.AttrName != 0:
-			return arc.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve AttrName", def.Client.DefID)
+			return amp.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve AttrName", def.Client.DefID)
 		case def.Client.ElemType == 0 && def.Native.ElemType != 0:
-			return arc.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve ElemType", def.Client.DefID)
+			return amp.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve ElemType", def.Client.DefID)
 		case def.Client.SeriesSpec == 0 && def.Native.SeriesSpec != 0:
-			return arc.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve SeriesSpec", def.Client.DefID)
+			return amp.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve SeriesSpec", def.Client.DefID)
 		case def.Native.DefID == 0:
-			return arc.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve DefID", def.Client.DefID)
+			return amp.ErrCode_BadSchema.Errorf("RegisterDefs: AttrSpec %v failed to resolve DefID", def.Client.DefID)
 		}
 
 		// In the case an attr was already registered natively, we want to still overwrite since the client IDs will now be available.
@@ -134,7 +134,7 @@ func (reg *sessRegistry) RegisterDefs(defs *arc.RegisterDefs) error {
 	//
 	// CellSpecs
 	// for _, cellSpec := range defs.Cells {
-	// 	def := arc.CellDef{
+	// 	def := amp.CellDef{
 	// 		ClientDefID: cellSpec.DefID,
 	// 		NativeDefID: reg.clientToNativeID[cellSpec.DefID],
 	// 	}
@@ -148,18 +148,18 @@ func (reg *sessRegistry) resolveNative(name string) uint32 {
 	return uint32(reg.table.GetSymbolID([]byte(name), true))
 }
 
-func (reg *sessRegistry) ResolveAttrSpec(attrSpec string, native bool) (def arc.AttrSpec, err error) {
+func (reg *sessRegistry) ResolveAttrSpec(attrSpec string, native bool) (def amp.AttrSpec, err error) {
 	expr, err := parse.AttrSpecParser.ParseString("", attrSpec)
 	if err != nil {
-		return arc.AttrSpec{}, err
+		return amp.AttrSpec{}, err
 	}
 
-	spec := arc.AttrSpec{
+	spec := amp.AttrSpec{
 		DefID:           reg.resolveNative(attrSpec),
 		AttrName:        reg.resolveNative(expr.AttrName),
 		ElemType:        reg.resolveNative(expr.ElemType),
 		SeriesSpec:      reg.resolveNative(expr.SeriesSpec),
-		SeriesIndexType: arc.GetSeriesIndexType(expr.SeriesSpec),
+		SeriesIndexType: amp.GetSeriesIndexType(expr.SeriesSpec),
 	}
 
 	// If resolving a native-only attr spec, also register it since RegisterDefs() is for client defs only.
@@ -167,16 +167,16 @@ func (reg *sessRegistry) ResolveAttrSpec(attrSpec string, native bool) (def arc.
 		prev, exists := reg.attrDefs[spec.DefID]
 		if exists {
 			if prev.Native != spec {
-				err = arc.ErrCode_BadSchema.Errorf("native AttrSpec %v already registered with different fields ", spec.DefID)
+				err = amp.ErrCode_BadSchema.Errorf("native AttrSpec %v already registered with different fields ", spec.DefID)
 			}
 		} else {
 			// If the client also registers the this attr spec later, the client portion will be updated.
-			reg.attrDefs[spec.DefID] = arc.AttrDef{
+			reg.attrDefs[spec.DefID] = amp.AttrDef{
 				Native: spec,
 			}
 		}
 	} else {
-		clientSpec := arc.AttrSpec{
+		clientSpec := amp.AttrSpec{
 			DefID:           reg.nativeToClientID[spec.DefID],
 			AttrName:        reg.nativeToClientID[spec.AttrName],
 			ElemType:        reg.nativeToClientID[spec.ElemType],
@@ -186,13 +186,13 @@ func (reg *sessRegistry) ResolveAttrSpec(attrSpec string, native bool) (def arc.
 
 		switch {
 		case clientSpec.AttrName == 0 && spec.AttrName != 0:
-			err = arc.ErrCode_BadSchema.Errorf("failed to resolve AttrName %q for AttrSpec %q", expr.AttrName, attrSpec)
+			err = amp.ErrCode_BadSchema.Errorf("failed to resolve AttrName %q for AttrSpec %q", expr.AttrName, attrSpec)
 		case clientSpec.ElemType == 0 && spec.ElemType != 0:
-			err = arc.ErrCode_BadSchema.Errorf("failed to resolve ElemType %q for AttrSpec %q", expr.ElemType, attrSpec)
+			err = amp.ErrCode_BadSchema.Errorf("failed to resolve ElemType %q for AttrSpec %q", expr.ElemType, attrSpec)
 		case clientSpec.SeriesSpec == 0 && spec.SeriesSpec != 0:
-			err = arc.ErrCode_BadSchema.Errorf("failed to resolve SeriesSpec %q for AttrSpec %q", expr.SeriesSpec, attrSpec)
+			err = amp.ErrCode_BadSchema.Errorf("failed to resolve SeriesSpec %q for AttrSpec %q", expr.SeriesSpec, attrSpec)
 		case clientSpec.DefID == 0:
-			err = arc.ErrCode_BadSchema.Errorf("failed to resolve %q", attrSpec)
+			err = amp.ErrCode_BadSchema.Errorf("failed to resolve %q", attrSpec)
 		}
 
 		spec = clientSpec
@@ -202,20 +202,20 @@ func (reg *sessRegistry) ResolveAttrSpec(attrSpec string, native bool) (def arc.
 }
 
 /*
-func (reg *sessRegistry) ResolveCellSpec(cellSpec string) (arc.CellDef, error) {
+func (reg *sessRegistry) ResolveCellSpec(cellSpec string) (amp.CellDef, error) {
 	// TODO: build parser for CellSpec -- for now just assume cellSpec is canonic and good to go
 
 	nativeSpecID := reg.resolveNative(cellSpec)
 	//def, exists := reg.cellDefs[nativeSpecID]
 
-	def := arc.CellDef{
+	def := amp.CellDef{
 		NativeDefID: nativeSpecID,
 		ClientDefID: reg.nativeToClientID[nativeSpecID],
 	}
 
 	var err error
 	if def.ClientDefID == 0 {
-		err = arc.ErrCode_BadSchema.Errorf("ResolveCellSpec: failed to resolve %q", cellSpec)
+		err = amp.ErrCode_BadSchema.Errorf("ResolveCellSpec: failed to resolve %q", cellSpec)
 	}
 
 	return def, err
@@ -260,7 +260,7 @@ func (reg *sessRegistry) NewAttrForID(attrID uint32) (AttrElem, error) {
 	typ, found := reg.types[attrID]
 	reg.typesMu.RUnlock()
 	if found {
-		return AttrElem{}, arc.ErrCode_BadSchema.Errorf("unknown attr ID %v", attrID)
+		return AttrElem{}, amp.ErrCode_BadSchema.Errorf("unknown attr ID %v", attrID)
 	}
 
 	return AttrElem{
@@ -293,14 +293,14 @@ func (reg *sessRegistry) ResolveAttr(spec *AttrSpec, autoIssue bool) error {
 	// The above is the hot path and so if it's not found, retroactively check for bad syntax.
 	if autoIssue {
 		if strings.ContainsAny(spec.AttrName, "./ ") {
-			return arc.ErrCode_BadSchema.Errorf("illegal attr name: %q", spec.AttrName)
+			return amp.ErrCode_BadSchema.Errorf("illegal attr name: %q", spec.AttrName)
 		}
 		if strings.ContainsAny(spec.ElemType, "/ ") || len(spec.ElemType) <= 2 || spec.ElemType[0] != '.' {
-			return arc.ErrCode_BadSchema.Errorf("illegal type name: %q", spec.ElemType)
+			return amp.ErrCode_BadSchema.Errorf("illegal type name: %q", spec.ElemType)
 		}
 	} else {
 		if spec.ElemType == "" {
-			return arc.ErrCode_BadSchema.Error("missing AttrSpec.ElemType")
+			return amp.ErrCode_BadSchema.Error("missing AttrSpec.ElemType")
 		}
 	}
 
@@ -332,7 +332,7 @@ func (reg *sessRegistry) ResolveAttr(spec *AttrSpec, autoIssue bool) error {
 	}
 
 	if !gotName || !gotElem {
-		return arc.ErrCode_BadSchema.Errorf("failed to resolve AttrSpec %v", spec)
+		return amp.ErrCode_BadSchema.Errorf("failed to resolve AttrSpec %v", spec)
 	}
 
 	return nil
@@ -369,11 +369,11 @@ func (reg *sessRegistry) registerAttr(attr *AttrSpec) error {
 
 
 		if !cleanURI(&attr.AttrName) {
-			return arc.ErrCode_BadSchema.Errorf("missing AttrSpec.TypedName in attr %q", attr.String())
+			return amp.ErrCode_BadSchema.Errorf("missing AttrSpec.TypedName in attr %q", attr.String())
 		}
 
 		if attr.AttrID == 0 {
-			return arc.ErrCode_BadSchema.Errorf("missing AttrSpec.AttrID in attr %q", attr.TypedName)
+			return amp.ErrCode_BadSchema.Errorf("missing AttrSpec.AttrID in attr %q", attr.TypedName)
 		}
 
 		if attr.AttrSymID == 0 {
@@ -381,13 +381,13 @@ func (reg *sessRegistry) registerAttr(attr *AttrSpec) error {
 		}
 
 		if attr.SeriesType != SeriesType_Fixed && attr.BoundSI != 0 {
-			return arc.ErrCode_BadSchema.Errorf("AttrSpec.BoundSI is set but is ignored in attr %q", attr.TypedName)
+			return amp.ErrCode_BadSchema.Errorf("AttrSpec.BoundSI is set but is ignored in attr %q", attr.TypedName)
 		}
 
 		{
 			extPos := strings.IndexByte(attr.TypedName, '.')
 			if extPos < 0 {
-				return arc.ErrCode_BadSchema.Errorf("missing type suffix in %q", attr.TypedName)
+				return amp.ErrCode_BadSchema.Errorf("missing type suffix in %q", attr.TypedName)
 			}
 			typeName := attr.TypedName[extPos:]
 			typeID := reg.table.GetSymbolID([]byte(typeName), true).Ord()
@@ -395,7 +395,7 @@ func (reg *sessRegistry) registerAttr(attr *AttrSpec) error {
 				attr.ValTypeID = typeID
 			} else {
 				if attr.ValTypeID != typeID {
-					return arc.ErrCode_BadSchema.Errorf("AttrSpec.ValTypeID (%v) for type %q does not match the registered type (%v)", attr.ValTypeID, typeID, typeID)
+					return amp.ErrCode_BadSchema.Errorf("AttrSpec.ValTypeID (%v) for type %q does not match the registered type (%v)", attr.ValTypeID, typeID, typeID)
 				}
 			}
 		}
@@ -403,7 +403,7 @@ func (reg *sessRegistry) registerAttr(attr *AttrSpec) error {
 		def := reg.attrsBySymbol[attr.AttrSymID]
 		if def != nil {
 			// TODO: greenlight multiple definitions of the same attr that are indentical
-			return arc.ErrCode_BadSchema.Errorf("duplicate AttrID %v", attr.AttrID)
+			return amp.ErrCode_BadSchema.Errorf("duplicate AttrID %v", attr.AttrID)
 		}
 		reg.attrsBySymbol[attr.AttrSymID] = &attrDef{
 			spec: *attr,
@@ -414,7 +414,7 @@ func (reg *sessRegistry) registerAttr(attr *AttrSpec) error {
 		}
 
 		// if !cleanURI(&attr.ValTypeURI) {
-		// 	return arc.ErrCode_BadSchema.Errorf("missing Attrs[%d].ValTypeURI in schema %s for attr %s", i, schema.SchemaDesc(), attr.AttrURI)
+		// 	return amp.ErrCode_BadSchema.Errorf("missing Attrs[%d].ValTypeURI in schema %s for attr %s", i, schema.SchemaDesc(), attr.AttrURI)
 		// }
 
 		// if attr.ValTypeID == 0 {
@@ -434,7 +434,7 @@ func (reg *sessRegistry) registerAttr(attr *AttrSpec) error {
 func extractTypeName(attr *AttrSpec) (string, error) {
 	extPos := strings.IndexByte(attr.TypedName, '.')
 	if extPos < 0 {
-		return "", arc.ErrCode_BadSchema.Errorf("missing type suffix in %q", attr.TypedName)
+		return "", amp.ErrCode_BadSchema.Errorf("missing type suffix in %q", attr.TypedName)
 	}
 	typeName := attr.TypedName[:extPos]
 }
@@ -485,7 +485,7 @@ func (reg *sessRegistry) tryResolveDefs(defs []CellDef) error {
     }
 
     if unresolved >= 0 {
-        return arc.ErrCode_NodeTypeNotRegistered.ErrWithMsgf("failed to resolve NodeSpec %q", defs[unresolved].TypeName)
+        return amp.ErrCode_NodeTypeNotRegistered.ErrWithMsgf("failed to resolve NodeSpec %q", defs[unresolved].TypeName)
     }
 
     return nil
@@ -545,7 +545,7 @@ func MakeSchemaForType(valTyp reflect.Type) (*AttrSchema, error) {
 		}
 
 		if attr.ValTypeID == 0 {
-			return nil, arc.ErrCode_ExportErr.Errorf("unsupported type '%s.%s (%v)", schema.CellDataModel, attr.TypedName, attrKind)
+			return nil, amp.ErrCode_ExportErr.Errorf("unsupported type '%s.%s (%v)", schema.CellDataModel, attr.TypedName, attrKind)
 		}
 
 		schema.Attrs = append(schema.Attrs, attr)
@@ -563,7 +563,7 @@ func ReadCell(ctx AppContext, subKey string, schema *AttrSchema, dstStruct any) 
 		dst = dst.Elem()
 	case reflect.Struct:
 	default:
-		return arc.ErrCode_ExportErr.Errorf("expected struct, got %v", dst.Kind())
+		return amp.ErrCode_ExportErr.Errorf("expected struct, got %v", dst.Kind())
 	}
 
 	var keyBuf [128]byte
@@ -609,7 +609,7 @@ func WriteCell(ctx AppContext, subKey string, schema *AttrSchema, srcStruct any)
 		src = src.Elem()
 	case reflect.Struct:
 	default:
-		return arc.ErrCode_ExportErr.Errorf("expected struct, got %v", src.Kind())
+		return amp.ErrCode_ExportErr.Errorf("expected struct, got %v", src.Kind())
 	}
 
 	{

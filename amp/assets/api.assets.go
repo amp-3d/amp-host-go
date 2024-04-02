@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/task"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/task"
 )
 
-// Consumed by an arc.App wishing to post an data asset for steaming (e.g. audio, video).
+// Consumed by an amp.App wishing to post an data asset for steaming (e.g. audio, video).
 type AssetServer interface {
 	task.Context
-	arc.AssetPublisher
+	amp.AssetPublisher
 	StartService(host task.Context) error
 	GracefulStop()
 }

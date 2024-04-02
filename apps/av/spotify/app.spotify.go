@@ -4,11 +4,11 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/apps/av"
 	"github.com/arcspace/go-archost/apps/av/spotify/oauth"
-	respot "github.com/arcspace/go-librespot/librespot/api-respot"
-	_ "github.com/arcspace/go-librespot/librespot/core" // bootstrap
+	"github.com/git-amp/amp-sdk-go/amp"
+	respot "github.com/git-amp/librespot-go/librespot/api-respot"
+	_ "github.com/git-amp/librespot-go/librespot/core" // bootstrap
 	"github.com/zmb3/spotify/v2"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"golang.org/x/oauth2"
@@ -18,17 +18,17 @@ const (
 	AppID = "spotify" + av.AppFamilyDomain
 )
 
-func UID() arc.UID {
-	return arc.FormUID(0x75f4138f0e984d89, 0x968a9b7d7ffa10cd)
+func UID() amp.UID {
+	return amp.FormUID(0x75f4138f0e984d89, 0x968a9b7d7ffa10cd)
 }
 
-func RegisterApp(reg arc.Registry) {
-	reg.RegisterApp(&arc.App{
+func RegisterApp(reg amp.Registry) {
+	reg.RegisterApp(&amp.App{
 		AppID:   AppID,
 		UID:     UID(),
 		Desc:    "client for Spotify",
 		Version: "v1.2023.2",
-		NewAppInstance: func() arc.AppInstance {
+		NewAppInstance: func() amp.AppInstance {
 			return &appCtx{
 				sessReady: make(chan struct{}),
 			}
@@ -85,7 +85,7 @@ func (app *appCtx) OnClosing() {
 func (app *appCtx) HandleURL(url *url.URL) error {
 
 	if url.Path != "/auth" {
-		return arc.ErrCode_InvalidURI.Errorf("unexpected path: %q", url.Path)
+		return amp.ErrCode_InvalidURI.Errorf("unexpected path: %q", url.Path)
 	}
 
 	// Redeem the auth code and store the latest token.
@@ -116,7 +116,7 @@ func (app *appCtx) waitForSession() error {
 	case <-app.sessReady:
 		return nil
 	case <-app.Closing():
-		return arc.ErrShuttingDown
+		return amp.ErrShuttingDown
 	}
 }
 
@@ -145,7 +145,7 @@ func (app *appCtx) tryConnect() error {
 	app.me, err = app.client.CurrentUser(app)
 	if err != nil {
 		app.client = nil
-		err = arc.ErrCode_ProviderErr.Errorf("failed to get current user: %v", err)
+		err = amp.ErrCode_ProviderErr.Errorf("failed to get current user: %v", err)
 	}
 	if err != nil {
 		return err
@@ -153,7 +153,7 @@ func (app *appCtx) tryConnect() error {
 
 	// Unclear on why we need to guard on this
 	if app.auth == nil {
-		return arc.ErrShuttingDown
+		return amp.ErrShuttingDown
 	}
 
 	// At this point we have a token -- TODO it may be expired
@@ -164,7 +164,7 @@ func (app *appCtx) tryConnect() error {
 			ctx.Context = app
 			app.respot, err = respot.StartNewSession(ctx)
 			if err != nil {
-				err = arc.ErrCode_ProviderErr.Errorf("StartSession error: %v", err)
+				err = amp.ErrCode_ProviderErr.Errorf("StartSession error: %v", err)
 				app.Warn(err)
 			}
 
@@ -214,7 +214,7 @@ func (app *appCtx) endSession() {
 	}
 }
 
-func (app *appCtx) PinCell(parent arc.PinnedCell, req arc.PinReq) (arc.PinnedCell, error) {
+func (app *appCtx) PinCell(parent amp.PinnedCell, req amp.PinReq) (amp.PinnedCell, error) {
 	if err := app.waitForSession(); err != nil {
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func (app *appCtx) newRootCell() *spotifyCell {
 	cell.CellID = app.IssueCellID()
 	cell.Self = cell
 
-	cell.hdr = arc.CellHeader{
+	cell.hdr = amp.CellHeader{
 		Title: "Spotify Home",
 	}
 	cell.pinner = pin_appHome

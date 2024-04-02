@@ -1,8 +1,8 @@
 package av
 
 import (
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/task"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/task"
 )
 
 const (
@@ -14,13 +14,13 @@ const (
 )
 
 var (
-	DirGlyph = &arc.AssetTag{
-		URI: arc.GlyphURIPrefix + "application/x-directory",
+	DirGlyph = &amp.AssetTag{
+		URI: amp.GlyphURIPrefix + "application/x-directory",
 	}
 )
 
 type AppBase struct {
-	arc.AppBase
+	amp.AppBase
 }
 
 const (
@@ -29,13 +29,13 @@ const (
 	PlayableMediaAssetsAttrSpec = "PlayableMediaAssets:main"
 )
 
-type Cell[AppT arc.AppContext] interface {
-	arc.Cell
+type Cell[AppT amp.AppContext] interface {
+	amp.Cell
 
 	// Returns a human-readable label for this cell useful for debugging and logging.
 	GetLogLabel() string
 
-	MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error
+	MarshalAttrs(dst *amp.CellTx, ctx amp.PinContext) error
 
 	// Called when this cell is pinned from a parent (vs an absolute URL)
 	OnPinned(parent Cell[AppT]) error
@@ -43,16 +43,16 @@ type Cell[AppT arc.AppContext] interface {
 	PinInto(dst *PinnedCell[AppT]) error
 }
 
-type CellBase[AppT arc.AppContext] struct {
-	arc.CellID
+type CellBase[AppT amp.AppContext] struct {
+	amp.CellID
 	Self Cell[AppT]
 }
 
-type PinnedCell[AppT arc.AppContext] struct {
+type PinnedCell[AppT amp.AppContext] struct {
 	*CellBase[AppT]
 	App AppT
 
 	cellCtx   task.Context
 	children  []*CellBase[AppT]     // ordered list of children
-	childByID map[arc.CellID]uint32 // index into []children
+	childByID map[amp.CellID]uint32 // index into []children
 }

@@ -1,8 +1,8 @@
 package bcat
 
 import (
-	"github.com/arcspace/go-arc-sdk/apis/arc"
 	"github.com/arcspace/go-archost/apps/av"
+	"github.com/git-amp/amp-sdk-go/amp"
 )
 
 type categories struct {
@@ -10,10 +10,10 @@ type categories struct {
 	//items []*
 }
 
-func (cats *categories) MarshalAttrs(dst *arc.CellTx, ctx arc.PinContext) error {
-	dst.Marshal(ctx.GetAttrID(arc.CellHeaderAttrSpec), 0, &arc.CellHeader{
+func (cats *categories) MarshalAttrs(dst *amp.CellTx, ctx amp.PinContext) error {
+	dst.Marshal(ctx.GetAttrID(amp.CellHeaderAttrSpec), 0, &amp.CellHeader{
 		Title: "Internet Radio",
-		Glyphs: []*arc.AssetTag{
+		Glyphs: []*amp.AssetTag{
 			av.DirGlyph,
 		},
 	})
@@ -34,7 +34,7 @@ type category struct {
 func (cat *category) PinInto(dst *av.PinnedCell[*appCtx]) error {
 
 	// if cat.itemsByID == nil {
-	// 	cat.itemsByID = map[arc.CellID]*station{}
+	// 	cat.itemsByID = map[amp.CellID]*station{}
 	// }
 	app := dst.App
 	if err := app.makeReady(); err != nil {
@@ -69,13 +69,13 @@ func (cat *category) PinInto(dst *av.PinnedCell[*appCtx]) error {
 			links: entry.Url,
 		}
 		sta.CellBase.ResetState(dst.App.IssueCellID(), sta)
-		sta.CellBase.AddAttr(dst.App, "", &arc.CellText{
+		sta.CellBase.AddAttr(dst.App, "", &amp.CellText{
 			Title:    entry.Title,
 			Subtitle: entry.Summary,
 			About:    entry.Description,
-			Glyph: &arc.AssetRef{
+			Glyph: &amp.AssetRef{
 				URI:    entry.Image,
-				Scheme: arc.URIScheme_File,
+				Scheme: amp.URIScheme_File,
 			},
 		})
 		sta.CellBase.AddAttr(dst.App, "", &av.PlayableMedia{
@@ -103,7 +103,7 @@ type station struct {
 	links string
 }
 
-func (sta *station) MarshalAttrs(app *appCtx, dst *arc.CellTx) error {
+func (sta *station) MarshalAttrs(app *appCtx, dst *amp.CellTx) error {
 
 }
 
@@ -120,7 +120,7 @@ func (sta *station) PinInto(dst *av.PinnedCell[*appCtx]) error {
 		parts := strings.Split(URL, ":::")
 
 		if len(parts) > 0 && len(parts[0]) > 0 {
-			playable := &arc.AssetRef{
+			playable := &amp.AssetRef{
 				URI: parts[0],
 			}
 			if len(parts) >= 3 {

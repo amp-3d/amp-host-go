@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
+	"github.com/git-amp/amp-sdk-go/amp"
 	"golang.org/x/oauth2"
 )
 
@@ -16,7 +16,7 @@ const kTokenAttrSpec = "AuthToken:primary"
 type Config struct {
 	Config oauth2.Config
 	renew  oauth2.TokenSource // renews a token automatically when expired
-	ctx    arc.AppContext
+	ctx    amp.AppContext
 	token  *oauth2.Token
 }
 
@@ -24,7 +24,7 @@ type Config struct {
 // Without this, users who have already approved the app are immediately redirected to the redirect uri.
 var ShowDialog = oauth2.SetAuthURLParam("show_dialog", "true")
 
-func NewAuth(ctx arc.AppContext, config oauth2.Config) *Config {
+func NewAuth(ctx amp.AppContext, config oauth2.Config) *Config {
 	auth := &Config{
 		ctx:    ctx,
 		Config: config,
@@ -58,10 +58,10 @@ func (auth *Config) CurrentToken() *oauth2.Token {
 
 // Pushes a msg to the client to launch a URL that starts oauth flow.
 func (auth *Config) pushAuthCodeRequest() error {
-	val := &arc.HandleURI{
+	val := &amp.HandleURI{
 		URI: auth.Config.AuthCodeURL(""),
 	}
-	return arc.SendClientMetaAttr(auth.ctx.Session(), 0, val)
+	return amp.SendClientMetaAttr(auth.ctx.Session(), 0, val)
 }
 
 // NewHttpClient creates a *http.Client that will use the specified access token for its API requests.
@@ -90,11 +90,11 @@ func (auth *Config) Exchange(ctx context.Context, state string, uri *url.URL, op
 }
 
 func (auth *Config) readStoredToken() error {
-	attr := arc.AuthToken{}
+	attr := amp.AuthToken{}
 
 	err := auth.ctx.GetAppCellAttr(kTokenAttrSpec, &attr)
 	if err != nil || (attr.AccessToken == "" && attr.RefreshToken == "") {
-		return arc.ErrNoAuthToken
+		return amp.ErrNoAuthToken
 	}
 
 	// fmt.Println("AccessToken:  ", tok.AccessToken)
@@ -114,12 +114,12 @@ func (auth *Config) OnTokenUpdated(tok *oauth2.Token, saveToken bool) error {
 	auth.token = tok
 
 	if tok == nil {
-		return arc.ErrCode_InternalErr.Error("oauth token is nil")
+		return amp.ErrCode_InternalErr.Error("oauth token is nil")
 	}
 
 	var err error
 	if saveToken {
-		attr := arc.AuthToken{
+		attr := amp.AuthToken{
 			AccessToken:  tok.AccessToken,
 			TokenType:    tok.TokenType,
 			RefreshToken: tok.RefreshToken,

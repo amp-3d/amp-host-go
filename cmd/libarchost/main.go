@@ -7,17 +7,17 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/arcspace/go-arc-sdk/stdlib/log"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/log"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-archost/arc/host"
-	"github.com/arcspace/go-archost/arc/host/lib_service"
+	"github.com/arcspace/go-archost/amp/host"
+	"github.com/arcspace/go-archost/amp/host/lib_service"
 )
 
 var (
 	gLibSession lib_service.LibSession
 	gLibService lib_service.LibService
-	gHost       arc.Host
+	gHost       amp.Host
 )
 
 //export Call_SessionBegin
@@ -98,8 +98,8 @@ func Call_PushMsg(msg_pb []byte) int64 {
 		return -1
 	}
 
-	msg := arc.NewMsg()
-	if err := msg.Unmarshal(msg_pb[arc.TxHeader_Size:]); err != nil {
+	msg := amp.NewMsg()
+	if err := msg.Unmarshal(msg_pb[amp.TxHeader_Size:]); err != nil {
 		panic(err)
 	}
 	sess.EnqueueIncoming(msg)
@@ -118,7 +118,7 @@ func Call_WaitOnMsg(msg_pb *[]byte) int64 {
 		return 0
 	}
 
-	arcErr, ok := err.(*arc.Err)
+	arcErr, ok := err.(*amp.Err)
 	if ok {
 		return int64(arcErr.Code)
 	} else {

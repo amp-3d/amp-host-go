@@ -1,6 +1,6 @@
 package lib_service
 
-import "github.com/arcspace/go-arc-sdk/apis/arc"
+import "github.com/git-amp/amp-sdk-go/amp"
 
 // LibServiceOpts exposes options and settings
 type LibServiceOpts struct {
@@ -12,7 +12,7 @@ func DefaultLibServiceOpts() LibServiceOpts {
 }
 
 type LibService interface {
-	arc.HostService
+	amp.HostService
 
 	NewLibSession() (LibSession, error)
 }
@@ -23,7 +23,7 @@ type LibSession interface {
 	Realloc(buf *[]byte, newLen int64)
 
 	// Blocking calls to send/recv Msgs to the host
-	EnqueueIncoming(msg *arc.Msg) error
+	EnqueueIncoming(msg *amp.Msg) error
 	DequeueOutgoing(msg_pb *[]byte) error
 }
 

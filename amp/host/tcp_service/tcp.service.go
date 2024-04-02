@@ -10,14 +10,14 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/task"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/task"
 )
 
-// tcpServer implements arc.HostService and makes calls to arc.Host.StartNewSession() when a tcp client connects.
+// tcpServer implements amp.HostService and makes calls to amp.Host.StartNewSession() when a tcp client connects.
 type tcpServer struct {
 	task.Context
-	host    arc.Host
+	host    amp.Host
 	opts    TcpServerOpts
 	lis     net.Listener
 	stopped atomic.Bool
@@ -27,7 +27,7 @@ type tcpServer struct {
 	sessions map[*tcpSess]struct{} // contains all active client sessions
 }
 
-func (srv *tcpServer) StartService(on arc.Host) error {
+func (srv *tcpServer) StartService(on amp.Host) error {
 	if srv.host != nil || srv.lis != nil || srv.Context != nil {
 		panic("already started")
 	}
@@ -167,7 +167,7 @@ type tcpSess struct {
 	label    string
 	srv      *tcpServer
 	conn     net.Conn
-	hostSess arc.HostSession
+	hostSess amp.HostSession
 }
 
 func (sess *tcpSess) Label() string {
@@ -181,10 +181,10 @@ func (sess *tcpSess) Close() error {
 	return nil
 }
 
-func (sess *tcpSess) SendMsg(tx *arc.Msg) error {
+func (sess *tcpSess) SendMsg(tx *amp.Msg) error {
 
 	// This gets less gross when we roll our own TxMsg serialization
-	hdrSz := int(arc.TxHeader_Size)
+	hdrSz := int(amp.TxHeader_Size)
 	txLen := hdrSz + tx.Size()
 	txBuf := make([]byte, txLen)
 	if err := tx.MarshalToTxBuffer(txBuf); err != nil {
@@ -202,13 +202,13 @@ func (sess *tcpSess) SendMsg(tx *arc.Msg) error {
 	return nil
 }
 
-func (sess *tcpSess) RecvMsg() (*arc.Msg, error) {
+func (sess *tcpSess) RecvMsg() (*amp.Msg, error) {
 
 	// TODO: add guarding
 	for {
 		L := 0
 
-		var hdr [arc.TxHeader_Size]byte
+		var hdr [amp.TxHeader_Size]byte
 		for L < len(hdr) {
 			n, err := sess.conn.Read(hdr[L:])
 			if err != nil {
@@ -218,9 +218,9 @@ func (sess *tcpSess) RecvMsg() (*arc.Msg, error) {
 		}
 
 		bodyOfs := L
-		txLen := arc.TxDataStore(hdr[:]).GetTxTotalLen()
+		txLen := amp.TxDataStore(hdr[:]).GetTxTotalLen()
 		if txLen > L {
-			tx := arc.NewMsg()
+			tx := amp.NewMsg()
 			txBuf := make([]byte, txLen) // wasteful allocation -- goes away when we roll our own TxMsg serialization
 			copy(txBuf, hdr[:])
 			for L < txLen {
@@ -238,7 +238,7 @@ func (sess *tcpSess) RecvMsg() (*arc.Msg, error) {
 
 func filterErr(err error) error {
 	if err == io.EOF {
-		err = arc.ErrStreamClosed
+		err = amp.ErrStreamClosed
 	}
 	return err
 }

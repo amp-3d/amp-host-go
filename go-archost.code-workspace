@@ -4,14 +4,20 @@
 			"path": "."
 		},
 		{
-			"path": "../go-arc-sdk"
+			"path": "../amp-sdk-go"
 		},
 		{
-			"path": "../go-librespot"
+			"path": "../librespot-go"
 		}
 	],
 	"settings": {
 		"cSpell.words": [
+			"amphost",
+			"arkhost",
+			"archost",
+			"Pinnable",
+			"tunr",
+			"Tunr",
 			"archost",
 			"arcspace",
 			"elems",

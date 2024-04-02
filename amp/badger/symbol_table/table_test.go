@@ -5,10 +5,10 @@ import (
 	"path"
 	"testing"
 
-	"github.com/arcspace/go-arc-sdk/stdlib/symbol"
-	"github.com/arcspace/go-arc-sdk/stdlib/symbol/tests"
-	"github.com/arcspace/go-archost/arc/badger/symbol_table"
+	"github.com/arcspace/go-archost/amp/badger/symbol_table"
 	"github.com/dgraph-io/badger/v4"
+	"github.com/git-amp/amp-sdk-go/stdlib/symbol"
+	"github.com/git-amp/amp-sdk-go/stdlib/symbol/tests"
 )
 
 func Test_badger_table(t *testing.T) {

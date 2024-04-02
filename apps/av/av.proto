@@ -3,7 +3,7 @@ package av;
 
 option csharp_namespace = "AMP";
 
-import "arc/arc.proto";
+import "amp/amp.proto";
 
 
 
@@ -94,7 +94,7 @@ message PlayableMediaItem {
 }
 
 message PlayableMediaAssets {
-    arc.AssetTag     MainTrack  = 1;
+    amp.AssetTag     MainTrack  = 1;
   
 }
 

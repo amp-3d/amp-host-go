@@ -3,11 +3,11 @@ package av
 import (
 	"time"
 
-	"github.com/arcspace/go-arc-sdk/apis/arc"
-	"github.com/arcspace/go-arc-sdk/stdlib/task"
+	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/git-amp/amp-sdk-go/stdlib/task"
 )
 
-func (app *AppBase) OnNew(ctx arc.AppContext) (err error) {
+func (app *AppBase) OnNew(ctx amp.AppContext) (err error) {
 	err = app.AppBase.OnNew(ctx)
 	if err != nil {
 		return
@@ -15,7 +15,7 @@ func (app *AppBase) OnNew(ctx arc.AppContext) (err error) {
 	return nil
 }
 
-func NewPinnedCell[AppT arc.AppContext](app AppT, cell *CellBase[AppT]) (arc.PinnedCell, error) {
+func NewPinnedCell[AppT amp.AppContext](app AppT, cell *CellBase[AppT]) (amp.PinnedCell, error) {
 	if cell.CellID.IsNil() {
 		cell.CellID = app.IssueCellID()
 	}
@@ -47,7 +47,7 @@ func (cell *CellBase[AppT]) AddTo(dst *PinnedCell[AppT], self Cell[AppT]) {
 	dst.AddChild(cell)
 }
 
-func (parent *PinnedCell[AppT]) GetCell(target arc.CellID) *CellBase[AppT] {
+func (parent *PinnedCell[AppT]) GetCell(target amp.CellID) *CellBase[AppT] {
 	parentID := parent.CellID
 	if target == parentID {
 		return parent.CellBase
@@ -56,7 +56,7 @@ func (parent *PinnedCell[AppT]) GetCell(target arc.CellID) *CellBase[AppT] {
 	}
 }
 
-func (cell *CellBase[AppT]) Info() arc.CellID {
+func (cell *CellBase[AppT]) Info() amp.CellID {
 	return cell.CellID
 }
 
@@ -68,18 +68,18 @@ func (parent *PinnedCell[AppT]) AddChild(child *CellBase[AppT]) {
 	parent.children = append(parent.children, child)
 }
 
-func (parent *PinnedCell[AppT]) MergeUpdate(tx *arc.Msg) error {
-	return arc.ErrUnimplemented
+func (parent *PinnedCell[AppT]) MergeUpdate(tx *amp.Msg) error {
+	return amp.ErrUnimplemented
 }
 
-func (parent *PinnedCell[AppT]) GetChildCell(target arc.CellID) (cell *CellBase[AppT]) {
+func (parent *PinnedCell[AppT]) GetChildCell(target amp.CellID) (cell *CellBase[AppT]) {
 	if target == parent.CellID {
 		cell = parent.CellBase
 	} else {
 		// build a child lookup map on-demand
 		if len(parent.children) > 6 {
 			if parent.childByID == nil {
-				parent.childByID = make(map[arc.CellID]uint32, len(parent.children))
+				parent.childByID = make(map[amp.CellID]uint32, len(parent.children))
 				for i, child := range parent.children {
 					childID := child.CellID
 					parent.childByID[childID] = uint32(i)
@@ -101,7 +101,7 @@ func (parent *PinnedCell[AppT]) GetChildCell(target arc.CellID) (cell *CellBase[
 	return cell
 }
 
-func (parent *PinnedCell[AppT]) PinCell(req arc.PinReq) (arc.PinnedCell, error) {
+func (parent *PinnedCell[AppT]) PinCell(req amp.PinReq) (amp.PinnedCell, error) {
 	reqParams := req.Params()
 	if reqParams.PinCell == parent.CellID {
 		return parent, nil
@@ -109,7 +109,7 @@ func (parent *PinnedCell[AppT]) PinCell(req arc.PinReq) (arc.PinnedCell, error) 
 
 	child := parent.GetChildCell(reqParams.PinCell)
 	if child == nil {
-		return nil, arc.ErrCellNotFound
+		return nil, amp.ErrCellNotFound
 	}
 
 	if err := child.Self.OnPinned(parent.Self); err != nil {
@@ -123,20 +123,20 @@ func (parent *PinnedCell[AppT]) Context() task.Context {
 	return parent.cellCtx
 }
 
-func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
+func (parent *PinnedCell[AppT]) ServeState(ctx amp.PinContext) error {
 
-	marshalToTx := func(dst **arc.CellTxPb, target *CellBase[AppT]) error {
-		var tx arc.CellTx
-		tx.Clear(arc.CellTxOp_UpsertCell)
+	marshalToTx := func(dst **amp.CellTxPb, target *CellBase[AppT]) error {
+		var tx amp.CellTx
+		tx.Clear(amp.CellTxOp_UpsertCell)
 		tx.TargetCell = target.CellID
 		if tx.TargetCell.IsNil() {
-			return arc.ErrBadCellTx
+			return amp.ErrBadCellTx
 		}
 		err := target.Self.MarshalAttrs(&tx, ctx)
 		if err != nil {
 			return err
 		}
-		pb := &arc.CellTxPb{
+		pb := &amp.CellTxPb{
 			Op:    tx.Op,
 			Elems: tx.ElemsPb,
 		}
@@ -146,7 +146,7 @@ func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
 		return err
 	}
 
-	txs := make([]*arc.CellTxPb, 1+len(parent.children))
+	txs := make([]*amp.CellTxPb, 1+len(parent.children))
 
 	if err := marshalToTx(&txs[0], parent.CellBase); err != nil {
 		return err
@@ -157,56 +157,56 @@ func (parent *PinnedCell[AppT]) ServeState(ctx arc.PinContext) error {
 		}
 	}
 
-	msg := arc.NewMsg()
+	msg := amp.NewMsg()
 	msg.CellTxs = txs
-	msg.Status = arc.ReqStatus_Synced
+	msg.Status = amp.ReqStatus_Synced
 	return ctx.PushUpdate(msg)
 }
 
 func (v *LoginInfo) MarshalToBuf(dst *[]byte) error {
-	return arc.MarshalPbValueToBuf(v, dst)
+	return amp.MarshalPbValueToBuf(v, dst)
 }
 
 func (v *LoginInfo) TypeName() string {
 	return "LoginInfo"
 }
 
-func (v *LoginInfo) New() arc.ElemVal {
+func (v *LoginInfo) New() amp.ElemVal {
 	return &LoginInfo{}
 }
 
 func (v *PlayableMediaItem) MarshalToBuf(dst *[]byte) error {
-	return arc.MarshalPbValueToBuf(v, dst)
+	return amp.MarshalPbValueToBuf(v, dst)
 }
 
 func (v *PlayableMediaItem) TypeName() string {
 	return "PlayableMediaItem"
 }
 
-func (v *PlayableMediaItem) New() arc.ElemVal {
+func (v *PlayableMediaItem) New() amp.ElemVal {
 	return &PlayableMediaItem{}
 }
 
 func (v *PlayableMediaAssets) MarshalToBuf(dst *[]byte) error {
-	return arc.MarshalPbValueToBuf(v, dst)
+	return amp.MarshalPbValueToBuf(v, dst)
 }
 
 func (v *PlayableMediaAssets) TypeName() string {
 	return "PlayableMediaAssets"
 }
 
-func (v *PlayableMediaAssets) New() arc.ElemVal {
+func (v *PlayableMediaAssets) New() amp.ElemVal {
 	return &PlayableMediaAssets{}
 }
 
 func (v *MediaPlaylist) MarshalToBuf(dst *[]byte) error {
-	return arc.MarshalPbValueToBuf(v, dst)
+	return amp.MarshalPbValueToBuf(v, dst)
 }
 
 func (v *MediaPlaylist) TypeName() string {
 	return "MediaPlaylist"
 }
 
-func (v *MediaPlaylist) New() arc.ElemVal {
+func (v *MediaPlaylist) New() amp.ElemVal {
 	return &MediaPlaylist{}
 }
