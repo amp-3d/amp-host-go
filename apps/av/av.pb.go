@@ -6,7 +6,7 @@ package av
 import (
 	encoding_binary "encoding/binary"
 	fmt "fmt"
-	amp "github.com/git-amp/amp-sdk-go/amp"
+	amp "github.com/amp-space/amp-sdk-go/amp"
 	proto "github.com/gogo/protobuf/proto"
 	io "io"
 	math "math"

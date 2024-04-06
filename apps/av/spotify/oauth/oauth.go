@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/amp-space/amp-sdk-go/amp"
 	"golang.org/x/oauth2"
 )
 

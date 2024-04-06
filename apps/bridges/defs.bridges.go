@@ -2,5 +2,5 @@
 package bridges
 
 const (
-	AppFamilyDomain = ".bridges.arcspace.systems"
+	AppFamilyDomain = ".bridges.amp-space.systems"
 )

@@ -1,0 +1,9 @@
+[{
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.plansystems.plan",
+      "sha256_cert_fingerprints":
+      ["B1:F8:B0:71:FB:CB:E5:7D:38:88:75:33:27:47:DB:48:6A:10:3D:BC:3D:15:00:C7:16:75:AA:B8:52:DA:06:DE"]
+    }
+  }]

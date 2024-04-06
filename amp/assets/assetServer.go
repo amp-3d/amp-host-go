@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/git-amp/amp-sdk-go/amp"
-	"github.com/git-amp/amp-sdk-go/stdlib/task"
+	"github.com/amp-space/amp-sdk-go/amp"
+	"github.com/amp-space/amp-sdk-go/stdlib/task"
 )
 
 const kAssetLinkPrefix = "/asset/"

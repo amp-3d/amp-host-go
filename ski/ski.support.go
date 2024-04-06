@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/git-amp/amp-sdk-go/stdlib/bufs"
+	"github.com/amp-space/amp-sdk-go/stdlib/bufs"
 	"golang.org/x/crypto/sha3"
 
 	"golang.org/x/crypto/blake2b"

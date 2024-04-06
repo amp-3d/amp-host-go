@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/amp-space/amp-sdk-go/amp"
 )
 
 // TcpServerOpts exposes tcp server options and params

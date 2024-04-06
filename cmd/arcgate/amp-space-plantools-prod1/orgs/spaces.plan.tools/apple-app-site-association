@@ -1,0 +1,11 @@
+{
+    "applinks": {
+        "apps": [],
+        "details": [
+            {
+                "appID": "1560702114.org.plan-systems.plan-3d.app",
+                "paths": [ "*"]
+            }
+        ]
+    }
+}

@@ -1,12 +1,12 @@
 package av
 
 import (
-	"github.com/git-amp/amp-sdk-go/amp"
-	"github.com/git-amp/amp-sdk-go/stdlib/task"
+	"github.com/amp-space/amp-sdk-go/amp"
+	"github.com/amp-space/amp-sdk-go/stdlib/task"
 )
 
 const (
-	AppFamilyDomain = ".av.arcspace.systems"
+	AppFamilyDomain = "amp-space-archost-av"
 )
 
 const (

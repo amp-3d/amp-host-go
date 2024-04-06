@@ -3,12 +3,12 @@ package host
 import (
 	"time"
 
-	"github.com/arcspace/go-archost/amp/assets"
-	arc_av "github.com/arcspace/go-archost/apps/av/apps"
-	arc_bridges "github.com/arcspace/go-archost/apps/bridges/apps"
-	arc_services "github.com/arcspace/go-archost/apps/services/apps"
-	arc_sys "github.com/arcspace/go-archost/apps/sys/apps"
-	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/amp-space/amp-host-go/amp/assets"
+	arc_av "github.com/amp-space/amp-host-go/apps/av/apps"
+	arc_bridges "github.com/amp-space/amp-host-go/apps/bridges/apps"
+	arc_services "github.com/amp-space/amp-host-go/apps/services/apps"
+	arc_sys "github.com/amp-space/amp-host-go/apps/sys/apps"
+	"github.com/amp-space/amp-sdk-go/amp"
 )
 
 type Opts struct {

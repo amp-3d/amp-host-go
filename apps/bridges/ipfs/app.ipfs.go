@@ -1,8 +1,8 @@
 package ipfs
 
 import (
-	"github.com/arcspace/go-archost/apps/bridges"
-	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/amp-space/amp-host-go/apps/bridges"
+	"github.com/amp-space/amp-sdk-go/amp"
 )
 
 const (

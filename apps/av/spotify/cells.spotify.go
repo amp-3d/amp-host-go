@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/arcspace/go-archost/apps/av"
-	"github.com/git-amp/amp-sdk-go/amp"
-	respot "github.com/git-amp/librespot-go/librespot/api-respot"
+	"github.com/amp-space/amp-host-go/apps/av"
+	respot "github.com/amp-space/amp-librespot-go/librespot/api-respot"
+	"github.com/amp-space/amp-sdk-go/amp"
 	"github.com/zmb3/spotify/v2"
 )
 

@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/arcspace/go-archost/amp/badger/symbol_table"
-	"github.com/arcspace/go-archost/apps/sys"
+	"github.com/amp-space/amp-host-go/amp/badger/symbol_table"
+	"github.com/amp-space/amp-host-go/apps/sys"
+	"github.com/amp-space/amp-sdk-go/amp"
+	"github.com/amp-space/amp-sdk-go/stdlib/symbol"
+	"github.com/amp-space/amp-sdk-go/stdlib/task"
 	"github.com/dgraph-io/badger/v4"
-	"github.com/git-amp/amp-sdk-go/amp"
-	"github.com/git-amp/amp-sdk-go/stdlib/symbol"
-	"github.com/git-amp/amp-sdk-go/stdlib/task"
 )
 
 const (

@@ -1,6 +1,6 @@
 package lib_service
 
-import "github.com/git-amp/amp-sdk-go/amp"
+import "github.com/amp-space/amp-sdk-go/amp"
 
 // LibServiceOpts exposes options and settings
 type LibServiceOpts struct {

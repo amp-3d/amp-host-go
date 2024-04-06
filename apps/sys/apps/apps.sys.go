@@ -1,9 +1,9 @@
 package reg
 
 import (
-	"github.com/arcspace/go-archost/apps/sys/planet"
-	"github.com/arcspace/go-archost/apps/sys/ux"
-	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/amp-space/amp-host-go/apps/sys/planet"
+	"github.com/amp-space/amp-host-go/apps/sys/ux"
+	"github.com/amp-space/amp-sdk-go/amp"
 )
 
 func RegisterFamily(reg amp.Registry) {

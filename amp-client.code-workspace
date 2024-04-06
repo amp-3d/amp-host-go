@@ -4,14 +4,21 @@
 			"path": "."
 		},
 		{
+			"path": "../amp-client-unity"
+		},
+		{
+			"path": "../amp-client-unity-assets"
+		},
+		{
 			"path": "../amp-sdk-go"
 		},
 		{
-			"path": "../librespot-go"
+			"path": "../amp-librespot-go"
 		}
 	],
 	"settings": {
 		"cSpell.words": [
+			"stdlib",
 			"amphost",
 			"arkhost",
 			"archost",

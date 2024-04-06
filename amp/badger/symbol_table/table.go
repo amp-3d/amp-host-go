@@ -3,7 +3,7 @@ package symbol_table
 import (
 	"sync/atomic"
 
-	"github.com/git-amp/amp-sdk-go/stdlib/symbol"
+	"github.com/amp-space/amp-sdk-go/stdlib/symbol"
 	"github.com/dgraph-io/badger/v4"
 )
 

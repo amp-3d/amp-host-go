@@ -7,11 +7,11 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/git-amp/amp-sdk-go/amp"
-	"github.com/git-amp/amp-sdk-go/stdlib/log"
+	"github.com/amp-space/amp-sdk-go/amp"
+	"github.com/amp-space/amp-sdk-go/stdlib/log"
 
-	"github.com/arcspace/go-archost/amp/host"
-	"github.com/arcspace/go-archost/amp/host/lib_service"
+	"github.com/amp-space/amp-host-go/amp/host"
+	"github.com/amp-space/amp-host-go/amp/host/lib_service"
 )
 
 var (

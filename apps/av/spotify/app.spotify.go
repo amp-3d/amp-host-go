@@ -4,11 +4,11 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/arcspace/go-archost/apps/av"
-	"github.com/arcspace/go-archost/apps/av/spotify/oauth"
-	"github.com/git-amp/amp-sdk-go/amp"
-	respot "github.com/git-amp/librespot-go/librespot/api-respot"
-	_ "github.com/git-amp/librespot-go/librespot/core" // bootstrap
+	"github.com/amp-space/amp-host-go/apps/av"
+	"github.com/amp-space/amp-host-go/apps/av/spotify/oauth"
+	respot "github.com/amp-space/amp-librespot-go/librespot/api-respot"
+	_ "github.com/amp-space/amp-librespot-go/librespot/core" // bootstrap
+	"github.com/amp-space/amp-sdk-go/amp"
 	"github.com/zmb3/spotify/v2"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"golang.org/x/oauth2"

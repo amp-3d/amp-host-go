@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/git-amp/amp-sdk-go/amp"
-	"github.com/git-amp/amp-sdk-go/stdlib/task"
+	"github.com/amp-space/amp-sdk-go/amp"
+	"github.com/amp-space/amp-sdk-go/stdlib/task"
 )
 
 // Consumed by an amp.App wishing to post an data asset for steaming (e.g. audio, video).

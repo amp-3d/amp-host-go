@@ -1,0 +1,24 @@
+{
+    "Defs": [
+        {
+            "Key": "VarSpace.rev",
+            "Val": "1"
+        },
+        {
+            "Key": "demo-channel.uri",
+            "Val": "plan://plan.local/j08pf5s386hhzb0ph1jetwgurxer9r9r44x7vnfhr1jps1fe"
+        },
+        {
+            "Key": "welcome.url",
+            "Val": ""
+        },
+        {
+            "Key": "about-plan-app.url",
+            "Val": "https://www.plan-systems.org"
+        },
+        {
+            "Key": "CratesSnapshot.url",
+            "Val": "https://www.plan-systems.org/plan-3d/CrateDepot/CratesSnapshot.json"
+        }
+    ]
+}

@@ -1,10 +1,10 @@
 package apps
 
 import (
-	"github.com/arcspace/go-archost/apps/av"
-	"github.com/arcspace/go-archost/apps/av/bcat"
-	"github.com/arcspace/go-archost/apps/av/spotify"
-	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/amp-space/amp-host-go/apps/av"
+	"github.com/amp-space/amp-host-go/apps/av/bcat"
+	"github.com/amp-space/amp-host-go/apps/av/spotify"
+	"github.com/amp-space/amp-sdk-go/amp"
 )
 
 func RegisterFamily(reg amp.Registry) {

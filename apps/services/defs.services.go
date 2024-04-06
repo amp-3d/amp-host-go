@@ -2,5 +2,5 @@
 package services
 
 const (
-	AppFamilyDomain = ".services.arcspace.systems"
+	AppFamilyDomain = "amp-sys-services.systems"
 )

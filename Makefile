@@ -13,8 +13,8 @@ OSX_OUT := ${UNITY_AMP_LIBS}/OSX
 ANDROID_NDK := ${UNITY_PATH}/PlaybackEngines/AndroidPlayer/NDK
 ANDROID_CC := ${ANDROID_NDK}/toolchains/llvm/prebuilt/darwin-x86_64/bin
 
-AMP_SDK_PKG  :=github.com/git-amp/amp-sdk-go
-AMP_SDK_PATH :=$(shell go list -m -f '{{.Dir}}' $(AMP_SDK_PKG))
+AMP_SDK_PKG  :=github.com/amp-space/amp-sdk-go
+AMP_SDK_PATH :="../amp-sdk-go/"
 
 ## prints this message
 help:

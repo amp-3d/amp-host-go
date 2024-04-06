@@ -1,9 +1,9 @@
 package bridges
 
 import (
-	"github.com/arcspace/go-archost/apps/bridges/filesys"
-	"github.com/arcspace/go-archost/apps/bridges/ipfs"
-	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/amp-space/amp-host-go/apps/bridges/filesys"
+	"github.com/amp-space/amp-host-go/apps/bridges/ipfs"
+	"github.com/amp-space/amp-sdk-go/amp"
 )
 
 func RegisterFamily(reg amp.Registry) {

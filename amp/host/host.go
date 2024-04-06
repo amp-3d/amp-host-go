@@ -8,12 +8,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/arcspace/go-archost/amp/host/registry"
-	"github.com/arcspace/go-archost/apps/sys/planet"
-	"github.com/git-amp/amp-sdk-go/amp"
-	"github.com/git-amp/amp-sdk-go/stdlib/symbol"
-	"github.com/git-amp/amp-sdk-go/stdlib/task"
-	"github.com/git-amp/amp-sdk-go/stdlib/utils"
+	"github.com/amp-space/amp-host-go/amp/host/registry"
+	"github.com/amp-space/amp-host-go/apps/sys/planet"
+	"github.com/amp-space/amp-sdk-go/amp"
+	"github.com/amp-space/amp-sdk-go/stdlib/symbol"
+	"github.com/amp-space/amp-sdk-go/stdlib/task"
+	"github.com/amp-space/amp-sdk-go/stdlib/utils"
 )
 
 type host struct {

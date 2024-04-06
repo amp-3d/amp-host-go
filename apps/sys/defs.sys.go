@@ -2,5 +2,5 @@
 package sys
 
 const (
-	AppFamilyDomain = ".sys.arcspace.systems"
+	AppFamilyDomain = ".sys.amp-space.systems"
 )

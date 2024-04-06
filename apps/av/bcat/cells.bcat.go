@@ -1,8 +1,8 @@
 package bcat
 
 import (
-	"github.com/arcspace/go-archost/apps/av"
-	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/amp-space/amp-host-go/apps/av"
+	"github.com/amp-space/amp-sdk-go/amp"
 )
 
 type categories struct {

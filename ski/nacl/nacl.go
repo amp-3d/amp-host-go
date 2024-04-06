@@ -4,7 +4,7 @@ package nacl
 import (
 	"io"
 
-	"github.com/arcspace/go-archost/ski"
+	"github.com/amp-space/amp-host-go/ski"
 	"golang.org/x/crypto/pbkdf2"
 
 	box "golang.org/x/crypto/nacl/box"

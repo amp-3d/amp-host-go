@@ -4,9 +4,9 @@ import (
 	"os"
 	"path"
 
-	"github.com/arcspace/go-archost/apps/av"
-	"github.com/arcspace/go-archost/apps/bridges"
-	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/amp-space/amp-host-go/apps/av"
+	"github.com/amp-space/amp-host-go/apps/bridges"
+	"github.com/amp-space/amp-sdk-go/amp"
 	"github.com/h2non/filetype"
 )
 

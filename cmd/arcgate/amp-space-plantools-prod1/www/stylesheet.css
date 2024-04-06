@@ -1,0 +1,49 @@
+.dlbutton {
+	box-shadow: 0px 1px 0px 0px #f0f7fa;
+	background: linear-gradient(to bottom, #33bdef 5%, #019ad2 100%);
+	background-color: #00B0FF;
+	border-radius: 6px;
+	border: 1px solid #00B0FF;
+	display: inline-block;
+	cursor: pointer;
+	color: #ffffff;
+	font-family: Arial;
+	font-size: 18px;
+	font-weight: bold;
+	padding: 6px 24px;
+	text-decoration: none;
+	text-shadow: 0px -1px 0px #5b6178;
+  }
+
+.dlbutton:hover {
+	background: linear-gradient(to bottom, #019ad2 5%, #33bdef 100%);
+	background-color: #019ad2;
+  }
+  
+.dlbutton:active {
+	position: relative;
+	top: 1px;
+	 
+  }
+  
+a {
+	color: darkblue;
+	font-family: Arial;
+  }
+  
+div {
+	background-color: lightgrey;
+	width: auto;
+	border: 15px solid grey;
+	border-radius: 25px;
+	padding: 20px;
+	margin: 20px;
+  }
+
+img {
+	max-width:480px;
+  }
+
+p {
+  font-family: Arial;
+}

@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"sync/atomic"
 
-	"github.com/git-amp/amp-sdk-go/stdlib/symbol"
+	"github.com/amp-space/amp-sdk-go/stdlib/symbol"
 	"github.com/dgraph-io/badger/v4"
 )
 

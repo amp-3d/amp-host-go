@@ -5,12 +5,12 @@ import (
 	"path"
 	"time"
 
-	"github.com/arcspace/go-archost/amp/host"
-	"github.com/arcspace/go-archost/amp/host/tcp_service"
-	"github.com/git-amp/amp-sdk-go/amp"
-	"github.com/git-amp/amp-sdk-go/stdlib/log"
-	"github.com/git-amp/amp-sdk-go/stdlib/task"
-	"github.com/git-amp/amp-sdk-go/stdlib/utils"
+	"github.com/amp-space/amp-host-go/amp/host"
+	"github.com/amp-space/amp-host-go/amp/host/tcp_service"
+	"github.com/amp-space/amp-sdk-go/amp"
+	"github.com/amp-space/amp-sdk-go/stdlib/log"
+	"github.com/amp-space/amp-sdk-go/stdlib/task"
+	"github.com/amp-space/amp-sdk-go/stdlib/utils"
 )
 
 func main() {

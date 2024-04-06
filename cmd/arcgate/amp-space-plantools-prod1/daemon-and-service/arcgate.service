@@ -1,0 +1,20 @@
+#move to /lib/systemd/system/arcgate.service
+#systemctl daemon-reload
+
+[Unit]
+Description = PLAN arcgate Web Server
+After = network.target plan.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=root
+WorkingDirectory=/opt/plan/go-arcgate/cmd
+ExecStart=/opt/plan/go-arcgate/cmd/arcgate
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=arcgate
+
+[Install]
+WantedBy=multi-user.target

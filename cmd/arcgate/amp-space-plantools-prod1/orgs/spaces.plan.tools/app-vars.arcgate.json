@@ -1,0 +1,23 @@
+{
+    "AppDomain":  "spaces.plan.tools",
+    "AppDesc":    "PLAN 3D",
+    "OrgHomeURL": "https://plan.tools",
+    "AppHomeURL": "https://www.plan-systems.org",
+    "CratesSnapshotURL": "https://www.plan-systems.org/plan-3d/CrateDepot/CratesSnapshot.json",
+    "AppDownloadURLs": {
+        "Mac OS X": "https://plan-systems.org/plan-3d/__installers/PLAN_3D.dmg",
+        "Windows":  "https://plan-systems.org/plan-3d/__installers/PLAN_3D_installer.exe",
+        "iOS":      "https://apps.apple.com/app/plan-3d/id1560702114",
+        "Android":  "https://play.google.com/store/apps/details?id=org.plansystems.plan",
+        "GNU/Linux":"https://plan-systems.org/plan-3d/__installers/PLAN_3D_linux.zip",
+        "":         "https://plan.tools"
+    },
+
+    "Settings": {
+        "NodeHostName": "prod.plan.tools",
+        "OrgHomeChURI": "plan://plan.local/j08pf5s386hhzb0ph1jetwgurxer9r9r44x7vnfhr1jps1fe"
+    },
+
+    "Links": [
+    ]
+}

@@ -1,0 +1,13 @@
+#move this file to /etc/logrotate.d as arcgate
+/var/log/arcgate.log {
+	su root adm
+	rotate 4
+	weekly
+	missingok
+	notifempty
+	compress
+	delaycompress
+	sharedscripts
+	copytruncate
+        minsize 10M
+}

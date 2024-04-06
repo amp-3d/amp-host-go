@@ -1,8 +1,8 @@
 package ux
 
 import (
-	"github.com/arcspace/go-archost/apps/sys"
-	"github.com/git-amp/amp-sdk-go/amp"
+	"github.com/amp-space/amp-host-go/apps/sys"
+	"github.com/amp-space/amp-sdk-go/amp"
 )
 
 const (

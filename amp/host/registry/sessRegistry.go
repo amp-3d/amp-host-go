@@ -3,9 +3,9 @@ package registry
 import (
 	"sync/atomic"
 
-	"github.com/arcspace/go-archost/amp/host/registry/parse"
-	"github.com/git-amp/amp-sdk-go/amp"
-	"github.com/git-amp/amp-sdk-go/stdlib/symbol"
+	"github.com/amp-space/amp-host-go/amp/host/registry/parse"
+	"github.com/amp-space/amp-sdk-go/amp"
+	"github.com/amp-space/amp-sdk-go/stdlib/symbol"
 )
 
 type elemDef struct {
