@@ -19,7 +19,6 @@ AMP_SDK_PATH :="../amp-sdk-go/"
 ## prints this message
 help:
 	@echo -e "\033[32m"
-	@echo "go-archost"
 	@echo "  PARENT_PATH:     ${PARENT_PATH}"
 	@echo "  AMP_SDK_PATH:    ${AMP_SDK_PATH}"
 	@echo "  BUILD_PATH:      ${BUILD_PATH}"

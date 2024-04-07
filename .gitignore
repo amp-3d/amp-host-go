@@ -4,6 +4,7 @@
 cmd/archost/*.data
 cmd/archost/*.archost
 cmd/archost/archost
+cmd/archost/archost.exe
 
 cmd/libarchost/tmp
 

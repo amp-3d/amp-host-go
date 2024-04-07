@@ -6,12 +6,11 @@ This repo implements `amp.Host` as defined in the [AMP SDK](https://github.com/a
 Use `make build` to build the `archost` executable and the `libarchost` dynamic libraries for all platforms:
 
 ```
-$ make help
+amp-host-go % make help
 
-go-archost
   PARENT_PATH:     /Users/aomeara/amp-space
   AMP_SDK_PATH:    ../amp-sdk-go/
-  BUILD_PATH:      /Users/aomeara/amp-space/amp-archost-go
+  BUILD_PATH:      /Users/aomeara/amp-space/amp-host-go
   UNITY_PROJ:      /Users/aomeara/amp-space/amp-client-unity
   UNITY_AMP_LIBS:  /Users/aomeara/amp-space/amp-client-unity/Assets/Plugins/AMP/Plugins
   UNITY_PATH:      /Users/aomeara/Applications/2022.3.22f1
@@ -29,7 +28,6 @@ go-archost
   libarchost-ios                   builds libarchost for iOS -- build on x86_64 mac for now
   libarchost-osx                   builds libarchost for OSX -- build on x86_64 mac for now
   play                             builds fmod playback toy (experiment)
-aomeara@true amp-archost-go % 
 ```
 
 ## Running
