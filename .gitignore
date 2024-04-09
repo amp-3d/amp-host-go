@@ -6,6 +6,9 @@ cmd/archost/*.archost
 cmd/archost/archost
 cmd/archost/archost.exe
 
+cmd/arcgate/arcgate
+cmd/arcgate/arcgate.exe
+
 cmd/libarchost/tmp
 
 cmd/play/play

@@ -94,6 +94,11 @@ archost:
 	cd cmd/archost && touch main.go \
 	&& go build -trimpath .
 
+## builds arcgate headless executable
+arcgate:
+	cd cmd/arcgate && touch main.go \
+	&& go build -trimpath .
+
 
 
 

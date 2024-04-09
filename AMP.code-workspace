@@ -7,9 +7,6 @@
 			"path": "../amp-client-unity"
 		},
 		{
-			"path": "../amp-client-unity-assets"
-		},
-		{
 			"path": "../amp-sdk-go"
 		},
 		{
@@ -18,21 +15,21 @@
 	],
 	"settings": {
 		"cSpell.words": [
-			"stdlib",
 			"amphost",
-			"arkhost",
-			"archost",
-			"Pinnable",
-			"tunr",
-			"Tunr",
+			"arcgate",
 			"archost",
 			"arcspace",
+			"arkhost",
 			"elems",
 			"geobase",
 			"interoperating",
 			"pinnable",
+			"Pinnable",
 			"sess",
+			"stdlib",
 			"threadsafe",
+			"tunr",
+			"Tunr",
 			"unmarshals",
 			"upsert"
 		]

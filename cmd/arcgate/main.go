@@ -1,4 +1,4 @@
-package arcgate
+package main
 
 import (
 	"encoding/json"
@@ -21,6 +21,17 @@ import (
 	"github.com/pkg/errors"
 	"xojoc.pw/useragent"
 )
+
+func main() {
+	sg := NewServer()
+
+	err := sg.ReadFiles()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	sg.Serve()
+}
 
 const TimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
 const DefaultOrg = "spaces.plan.tools"

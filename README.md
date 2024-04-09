@@ -1,9 +1,8 @@
-# go-archost
-This repo implements `amp.Host` as defined in the [AMP SDK](https://github.com/amp-space/amp-sdk-go).  It can be compiled into a binary that either embeds into a Unity or Unreal project, or runs as a server launched from command line.  In either case, any [`amp.App`](https://github.com/amp-space/amp-sdk-go/blob/main/amp/api.app.go) can be plugged in, offering many possibilities as to how a developers can drive the AMP UI.
+# amp-host-go
+This repo implements `amp.Host` as defined in the [AMP SDK](https://github.com/amp-space/amp-sdk-go).  It can be compiled into a binary that either embeds into a [Unity](https://github.com/amp-space/amp-client-unity) or [Unreal](https://github.com/amp-space/amp-client-unreal) project, or runs as a server launched from command line.  In both cases, any [`amp.App`](https://github.com/amp-space/amp-sdk-go/blob/main/amp/api.app.go) can be plugged in, offering possibilities to how developers can use AMP.  
 
 ## Building
-
-Use `make build` to build the `archost` executable and the `libarchost` dynamic libraries for all platforms:
+Use `make build` to build the `archost` and `arcgate` executables or the `libarchost` dynamic libraries:
 
 ```
 amp-host-go % make help
@@ -17,7 +16,8 @@ amp-host-go % make help
   ANDROID_NDK:     /Users/aomeara/Applications/2022.3.22f1/PlaybackEngines/AndroidPlayer/NDK
   ANDROID_CC:      /Users/aomeara/Applications/2022.3.22f1/PlaybackEngines/AndroidPlayer/NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin
 
-  archost                          builds archost headless executable
+  arcgate                          builds arcgate executable
+  archost                          builds archost executable
   build                            builds both archost & libarchost
   generate                         generate .cs and .go files from .proto
   help                             prints this message
@@ -27,7 +27,6 @@ amp-host-go % make help
   libarchost-android-x86_64_       builds libarchost for armeabi-x86_64
   libarchost-ios                   builds libarchost for iOS -- build on x86_64 mac for now
   libarchost-osx                   builds libarchost for OSX -- build on x86_64 mac for now
-  play                             builds fmod playback toy (experiment)
 ```
 
 ## Running
@@ -55,4 +54,3 @@ amp-host-go % make help
 ```
 
 
-See [amp-space.unity-app](https://github.com/amp-space/amp-client-unity) to get started.
