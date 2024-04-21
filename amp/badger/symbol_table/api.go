@@ -1,7 +1,7 @@
 package symbol_table
 
 import (
-	"github.com/amp-space/amp-sdk-go/stdlib/symbol"
+	"github.com/amp-3d/amp-sdk-go/stdlib/symbol"
 	"github.com/dgraph-io/badger/v4"
 )
 

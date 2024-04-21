@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/amp-space/amp-sdk-go/amp"
-	"github.com/amp-space/amp-sdk-go/stdlib/task"
+	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/stdlib/task"
 )
 
 const kAssetLinkPrefix = "/asset/"
@@ -152,6 +152,9 @@ func (srv *httpServer) PublishAsset(asset amp.MediaAsset, opts amp.PublishOpts) 
 			srv.assetMu.Lock()
 			delete(srv.assets, assetID)
 			srv.assetMu.Unlock()
+			if opts.OnExpired != nil {
+				opts.OnExpired()
+			}
 		},
 	})
 	if err != nil {

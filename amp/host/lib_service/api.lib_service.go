@@ -1,6 +1,6 @@
 package lib_service
 
-import "github.com/amp-space/amp-sdk-go/amp"
+import "github.com/amp-3d/amp-sdk-go/amp"
 
 // LibServiceOpts exposes options and settings
 type LibServiceOpts struct {
@@ -23,8 +23,8 @@ type LibSession interface {
 	Realloc(buf *[]byte, newLen int64)
 
 	// Blocking calls to send/recv Msgs to the host
-	EnqueueIncoming(msg *amp.Msg) error
-	DequeueOutgoing(msg_pb *[]byte) error
+	EnqueueIncoming(tx *amp.TxMsg) error
+	DequeueOutgoing(tx_pb *[]byte) error
 }
 
 func (opts LibServiceOpts) NewLibService() LibService {

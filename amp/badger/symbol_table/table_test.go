@@ -5,9 +5,9 @@ import (
 	"path"
 	"testing"
 
-	"github.com/amp-space/amp-host-go/amp/badger/symbol_table"
-	"github.com/amp-space/amp-sdk-go/stdlib/symbol"
-	"github.com/amp-space/amp-sdk-go/stdlib/symbol/tests"
+	"github.com/amp-3d/amp-host-go/amp/badger/symbol_table"
+	"github.com/amp-3d/amp-sdk-go/stdlib/symbol"
+	"github.com/amp-3d/amp-sdk-go/stdlib/symbol/tests"
 	"github.com/dgraph-io/badger/v4"
 )
 
