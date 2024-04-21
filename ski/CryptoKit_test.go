@@ -7,10 +7,10 @@ import (
 
 	"testing"
 
-	"github.com/amp-space/amp-host-go/ski"
+	"github.com/amp-3d/amp-host-go/ski"
 
-	_ "github.com/amp-space/amp-host-go/ski/ed25519"
-	_ "github.com/amp-space/amp-host-go/ski/nacl"
+	_ "github.com/amp-3d/amp-host-go/ski/ed25519"
+	_ "github.com/amp-3d/amp-host-go/ski/nacl"
 )
 
 var gTesting *testing.T

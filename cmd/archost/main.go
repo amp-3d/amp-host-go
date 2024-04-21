@@ -5,12 +5,14 @@ import (
 	"path"
 	"time"
 
-	"github.com/amp-space/amp-host-go/amp/host"
-	"github.com/amp-space/amp-host-go/amp/host/tcp_service"
-	"github.com/amp-space/amp-sdk-go/amp"
-	"github.com/amp-space/amp-sdk-go/stdlib/log"
-	"github.com/amp-space/amp-sdk-go/stdlib/task"
-	"github.com/amp-space/amp-sdk-go/stdlib/utils"
+	"github.com/amp-3d/amp-host-go/amp/host"
+	"github.com/amp-3d/amp-host-go/amp/host/tcp_service"
+	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/stdlib/log"
+	"github.com/amp-3d/amp-sdk-go/stdlib/task"
+	"github.com/amp-3d/amp-sdk-go/stdlib/utils"
+	// _ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-av"
+	// _ "github.com/amp-3d/amp-host-go/amp/stdlib"
 )
 
 func main() {

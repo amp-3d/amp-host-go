@@ -17,7 +17,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/amp-space/amp-sdk-go/crates"
+	"github.com/amp-3d/amp-sdk-go/crates"
 	"github.com/pkg/errors"
 	"xojoc.pw/useragent"
 )

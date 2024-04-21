@@ -10,8 +10,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/amp-space/amp-sdk-go/amp"
-	"github.com/amp-space/amp-sdk-go/stdlib/task"
+	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/stdlib/task"
 )
 
 // tcpServer implements amp.HostService and makes calls to amp.Host.StartNewSession() when a tcp client connects.
@@ -168,6 +168,7 @@ type tcpSess struct {
 	srv      *tcpServer
 	conn     net.Conn
 	hostSess amp.HostSession
+	txBuf    []byte // TODO: use a pool?
 }
 
 func (sess *tcpSess) Label() string {
@@ -181,59 +182,14 @@ func (sess *tcpSess) Close() error {
 	return nil
 }
 
-func (sess *tcpSess) SendMsg(tx *amp.Msg) error {
-
-	// This gets less gross when we roll our own TxMsg serialization
-	hdrSz := int(amp.TxHeader_Size)
-	txLen := hdrSz + tx.Size()
-	txBuf := make([]byte, txLen)
-	if err := tx.MarshalToTxBuffer(txBuf); err != nil {
-		return err
-	}
-
-	for L := 0; L < txLen; {
-		n, err := sess.conn.Write(txBuf[:txLen])
-		if err != nil {
-			return filterErr(err)
-		}
-		L += n
-	}
-
-	return nil
+func (sess *tcpSess) SendTx(tx *amp.TxMsg) error {
+	err := tx.MarshalToWriter(&sess.txBuf, sess.conn)
+	return filterErr(err)
 }
 
-func (sess *tcpSess) RecvMsg() (*amp.Msg, error) {
-
-	// TODO: add guarding
-	for {
-		L := 0
-
-		var hdr [amp.TxHeader_Size]byte
-		for L < len(hdr) {
-			n, err := sess.conn.Read(hdr[L:])
-			if err != nil {
-				return nil, filterErr(err)
-			}
-			L += n
-		}
-
-		bodyOfs := L
-		txLen := amp.TxDataStore(hdr[:]).GetTxTotalLen()
-		if txLen > L {
-			tx := amp.NewMsg()
-			txBuf := make([]byte, txLen) // wasteful allocation -- goes away when we roll our own TxMsg serialization
-			copy(txBuf, hdr[:])
-			for L < txLen {
-				n, err := sess.conn.Read(txBuf[L:])
-				if err != nil {
-					return nil, filterErr(err)
-				}
-				L += n
-			}
-			err := tx.Unmarshal(txBuf[bodyOfs:])
-			return tx, err
-		}
-	}
+func (sess *tcpSess) RecvTx() (*amp.TxMsg, error) {
+	tx, err := amp.ReadTxMsg(sess.conn)
+	return tx, filterErr(err)
 }
 
 func filterErr(err error) error {

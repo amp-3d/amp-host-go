@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/amp-space/amp-sdk-go/stdlib/log"
+	"github.com/amp-3d/amp-sdk-go/stdlib/log"
 )
 
 func TestMe(t *testing.T) {

@@ -1,5 +1,5 @@
 # amp-host-go
-This repo implements `amp.Host` as defined in the [AMP SDK](https://github.com/amp-space/amp-sdk-go).  It can be compiled into a binary that either embeds into a [Unity](https://github.com/amp-space/amp-client-unity) or [Unreal](https://github.com/amp-space/amp-client-unreal) project, or runs as a server launched from command line.  In both cases, any [`amp.App`](https://github.com/amp-space/amp-sdk-go/blob/main/amp/api.app.go) can be plugged in, offering possibilities to how developers can use AMP.  
+This repo implements `amp.Host` as defined in the [AMP SDK](https://github.com/amp-3d/amp-sdk-go).  It can be compiled into a binary that either embeds into a [Unity](https://github.com/amp-3d/amp-client-unity) or [Unreal](https://github.com/amp-3d/amp-client-unreal) project, or runs as a server launched from command line.  In both cases, any [`amp.App`](https://github.com/amp-3d/amp-sdk-go/blob/main/amp/api.app.go) can be plugged in, offering possibilities to how developers can use AMP.  
 
 ## Building
 Use `make build` to build the `archost` and `arcgate` executables or the `libarchost` dynamic libraries:

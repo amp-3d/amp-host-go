@@ -13,7 +13,7 @@ OSX_OUT := ${UNITY_AMP_LIBS}/OSX
 ANDROID_NDK := ${UNITY_PATH}/PlaybackEngines/AndroidPlayer/NDK
 ANDROID_CC := ${ANDROID_NDK}/toolchains/llvm/prebuilt/darwin-x86_64/bin
 
-AMP_SDK_PKG  :=github.com/amp-space/amp-sdk-go
+AMP_SDK_PKG  :=github.com/amp-3d/amp-sdk-go
 AMP_SDK_PATH :="../amp-sdk-go/"
 
 ## prints this message
@@ -110,7 +110,7 @@ generate:
 	    --gogoslick_out=plugins:. --gogoslick_opt=paths=source_relative \
 	    --csharp_out "${AMP_UNITY_PATH}/amp.sheet.av/" \
 	    --proto_path=. \
-		apps/av/av.proto
+		amp/apps/amp-app-av/av.proto
 	
 	protoc \
 	    --gogoslick_out=plugins:. --gogoslick_opt=paths=source_relative \

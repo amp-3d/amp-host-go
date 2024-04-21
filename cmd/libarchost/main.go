@@ -6,12 +6,20 @@ import "C"
 import (
 	"flag"
 	"fmt"
+	"io"
 
-	"github.com/amp-space/amp-sdk-go/amp"
-	"github.com/amp-space/amp-sdk-go/stdlib/log"
+	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/stdlib/log"
 
-	"github.com/amp-space/amp-host-go/amp/host"
-	"github.com/amp-space/amp-host-go/amp/host/lib_service"
+	"github.com/amp-3d/amp-host-go/amp/host"
+	"github.com/amp-3d/amp-host-go/amp/host/lib_service"
+
+	_ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-av"
+	_ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-filesys"
+	_ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-planet"
+	_ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-spatial"
+	// _ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-chat"
+	// _ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-vault"
 )
 
 var (
@@ -92,28 +100,31 @@ func Call_Shutdown() {
 }
 
 //export Call_PushMsg
-func Call_PushMsg(msg_pb []byte) int64 {
+func Call_PushMsg(txBuf []byte) int64 {
 	sess := gLibSession
 	if sess == nil {
 		return -1
 	}
 
-	msg := amp.NewMsg()
-	if err := msg.Unmarshal(msg_pb[amp.TxHeader_Size:]); err != nil {
-		panic(err)
+	r := bufReader{
+		buf: txBuf,
 	}
-	sess.EnqueueIncoming(msg)
+	tx, err := amp.ReadTxMsg(&r)
+	if err != nil {
+		return -6665
+	}
+	sess.EnqueueIncoming(tx)
 	return 0
 }
 
 //export Call_WaitOnMsg
-func Call_WaitOnMsg(msg_pb *[]byte) int64 {
+func Call_WaitOnMsg(txBuf *[]byte) int64 {
 	sess := gLibSession
 	if sess == nil {
 		return -1
 	}
 
-	err := sess.DequeueOutgoing(msg_pb)
+	err := sess.DequeueOutgoing(txBuf)
 	if err == nil {
 		return 0
 	}
@@ -226,4 +237,18 @@ func RenderFrame(fbID int32) {
 
 func main() {
 
+}
+
+type bufReader struct {
+	buf []byte
+	pos int
+}
+
+func (r *bufReader) Read(p []byte) (n int, err error) {
+	if r.pos >= len(r.buf) {
+		return 0, io.EOF
+	}
+	n = copy(p, r.buf[r.pos:])
+	r.pos += n
+	return n, nil
 }
