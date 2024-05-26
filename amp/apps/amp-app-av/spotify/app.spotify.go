@@ -4,37 +4,41 @@ import (
 	"net/url"
 	"sync"
 
-	av "github.com/amp-3d/amp-host-go/amp/apps/amp-app-av"
+	"github.com/amp-3d/amp-host-go/amp/apps/amp-app-av/av"
 	"github.com/amp-3d/amp-host-go/amp/apps/amp-app-av/spotify/oauth"
 	respot "github.com/amp-3d/amp-librespot-go/librespot/api-respot"
 	_ "github.com/amp-3d/amp-librespot-go/librespot/core" // bootstrap
 	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/amp/basic"
+	"github.com/amp-3d/amp-sdk-go/amp/registry"
+	"github.com/amp-3d/amp-sdk-go/stdlib/tag"
+
 	"github.com/zmb3/spotify/v2"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"golang.org/x/oauth2"
 )
 
-const (
-	AppID = "spotify" + av.AppFamilyDomain
-)
+func init() {
+	reg := registry.Global()
 
-func RegisterApp(reg amp.Registry) {
 	reg.RegisterApp(&amp.App{
-		AppID:   AppID,
-		TagID:     amp.StringToTagID(AppID),
+		AppSpec: tag.FormSpec(av.AppSpec, "spotify"),
 		Desc:    "client for Spotify",
 		Version: "v1.2023.2",
-		NewAppInstance: func() amp.AppInstance {
-			return &appCtx{
+		NewAppInstance: func(ctx amp.AppContext) (amp.AppInstance, error) {
+			app := &appInst{
 				sessReady: make(chan struct{}),
 			}
+			app.Instance = app
+			app.AppContext = ctx
+			return app, nil
 		},
 	})
 }
 
 const (
 	//kRedirectURL = "http://localhost:5000/callback"
-	kRedirectURL         = "nodle-music-player://spotify/auth" // TODO: sent in from client
+	kRedirectURL         = "nodle-music-player://spotify/auth" // TODO: sent in from client -- check me?
 	kSpotifyClientID     = "8de730d205474e1490e696adfc10d61c"
 	kSpotifyClientSecret = "d8cd8d502b6f4ecda140b6fffa1a9f9f"
 )
@@ -62,30 +66,28 @@ var oauthConfig = oauth2.Config{
 	},
 }
 
-type appCtx struct {
-	av.AppBase
+type appInst struct {
+	basic.App[*appInst]
 	sessReady chan struct{}        // closed when session is established
 	client    *spotify.Client      // nil if not signed in
 	me        *spotify.PrivateUser // nil if not signed in
 	respot    respot.Session       // nil if not signed in
 	auth      *oauth.Config
 	sessMu    sync.Mutex
-	// home      AmpCell
-	// rootCells []*amp.CellBase[*appCtx]
 }
 
-func (app *appCtx) OnClosing() {
+func (app *appInst) OnClosing() {
 	app.endSession()
 }
 
-func (app *appCtx) HandleURL(url *url.URL) error {
+func (app *appInst) handleAuthURL(url *url.URL) error {
 
-	if url.Path != "/auth" {
-		return amp.ErrCode_InvalidURI.Errorf("unexpected path: %q", url.Path)
+	if app.auth == nil {
+		return amp.ErrCode_NotConnected.Error("unexpected auth")
 	}
 
 	// Redeem the auth code and store the latest token.
-	// Blocks but ok since we pass in the app's Context
+	// Blocks but ok since this is called in app's Context
 	token, err := app.auth.Exchange(app, "", url)
 	if err == nil {
 		err = app.auth.OnTokenUpdated(token, true)
@@ -98,7 +100,7 @@ func (app *appCtx) HandleURL(url *url.URL) error {
 }
 
 // Optionally blocks until the spotify session is ready (or AppContext is closing)
-func (app *appCtx) waitForSession() error {
+func (app *appInst) waitForSession() error {
 	select {
 	case <-app.sessReady:
 		return nil
@@ -116,7 +118,7 @@ func (app *appCtx) waitForSession() error {
 	}
 }
 
-func (app *appCtx) tryConnect() error {
+func (app *appInst) tryConnect() error {
 	app.sessMu.Lock() // needed?
 	defer app.sessMu.Unlock()
 
@@ -155,7 +157,7 @@ func (app *appCtx) tryConnect() error {
 	// At this point we have a token -- TODO it may be expired
 	if token := app.auth.CurrentToken(); token != nil {
 		if app.respot == nil {
-			info := app.Session().LoginInfo()
+			info := app.Session().Auth()
 			ctx := respot.DefaultSessionContext(info.DeviceLabel)
 			ctx.Context = app
 			app.respot, err = respot.StartNewSession(ctx)
@@ -186,7 +188,7 @@ func (app *appCtx) tryConnect() error {
 }
 
 // Resets the "session is ready" signal if needed
-func (app *appCtx) resetSignal() {
+func (app *appInst) resetSignal() {
 	select {
 	case <-app.sessReady:
 	default:
@@ -196,7 +198,7 @@ func (app *appCtx) resetSignal() {
 	}
 }
 
-func (app *appCtx) endSession() {
+func (app *appInst) endSession() {
 	app.resetSignal()
 
 	if app.client != nil {
@@ -210,29 +212,22 @@ func (app *appCtx) endSession() {
 	}
 }
 
-func (app *appCtx) PinCell(parent amp.PinnedCell, req amp.PinOp) (amp.PinnedCell, error) {
-	if err := app.waitForSession(); err != nil {
-		return nil, err
+func (app *appInst) MakeReady(op amp.Requester) error {
+	url := op.Request().URL
+	if url != nil && url.Path != "/auth" {
+		err := app.handleAuthURL(url)
+		return err
 	}
-
-	if parent != nil {
-		return parent.PinCell(req)
-	} else {
-
-		// For now, just always pin a new home (root) cell
-		cell := app.newRootCell()
-		return av.NewPinnedCell[*appCtx](app, &cell.CellBase)
-	}
+	return app.waitForSession()
 }
 
-func (app *appCtx) newRootCell() *spotifyCell {
-	cell := &spotifyCell{}
-	cell.TagID = app.IssueTagID()
-	cell.Self = cell
-
-	cell.hdr = amp.CellHeader{
-		Title: "Spotify Home",
+func (app *appInst) ServeRequest(op amp.Requester) (amp.Pin, error) {
+	cell := &spotifyHome{}
+	cell.Tab = amp.TagTab{
+		Label: "Spotify",
+		Tags: []*amp.Tag{
+			amp.PinnableCatalog,
+		},
 	}
-	cell.pinner = pin_appHome
-	return cell
+	return app.PinAndServe(cell, op)
 }

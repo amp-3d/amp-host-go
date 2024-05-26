@@ -5,6 +5,7 @@
         "ArcXR",
         "filesys",
         "pinnable",
+        "playables",
         "seekable",
         "sess",
         "upsert"

@@ -4,9 +4,6 @@
 			"path": "."
 		},
 		{
-			"path": "../amp-client-unity"
-		},
-		{
 			"path": "../amp-sdk-go"
 		},
 		{
@@ -20,16 +17,20 @@
 			"archost",
 			"arcspace",
 			"arkhost",
+			"curr",
 			"elems",
 			"geobase",
 			"interoperating",
+			"marshallable",
 			"pinnable",
 			"Pinnable",
+			"pinnables",
+			"playables",
 			"sess",
 			"stdlib",
 			"stringification",
 			"threadsafe",
-			"Trapezo",
+			"trapezo",
 			"tunr",
 			"Tunr",
 			"unmarshals",

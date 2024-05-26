@@ -11,8 +11,6 @@ import (
 	"github.com/amp-3d/amp-sdk-go/stdlib/log"
 	"github.com/amp-3d/amp-sdk-go/stdlib/task"
 	"github.com/amp-3d/amp-sdk-go/stdlib/utils"
-	// _ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-av"
-	// _ "github.com/amp-3d/amp-host-go/amp/stdlib"
 )
 
 func main() {

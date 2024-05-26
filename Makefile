@@ -110,7 +110,7 @@ generate:
 	    --gogoslick_out=plugins:. --gogoslick_opt=paths=source_relative \
 	    --csharp_out "${AMP_UNITY_PATH}/amp.sheet.av/" \
 	    --proto_path=. \
-		amp/apps/amp-app-av/av.proto
+		amp/apps/amp-app-av/av/api.av.proto
 	
 	protoc \
 	    --gogoslick_out=plugins:. --gogoslick_opt=paths=source_relative \

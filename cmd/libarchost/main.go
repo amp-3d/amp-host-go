@@ -13,13 +13,6 @@ import (
 
 	"github.com/amp-3d/amp-host-go/amp/host"
 	"github.com/amp-3d/amp-host-go/amp/host/lib_service"
-
-	_ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-av"
-	_ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-filesys"
-	_ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-planet"
-	_ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-spatial"
-	// _ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-chat"
-	// _ "github.com/amp-3d/amp-host-go/amp/apps/amp-app-vault"
 )
 
 var (

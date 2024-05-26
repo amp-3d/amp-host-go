@@ -1,6 +1,6 @@
-// maps apps spatially index cell TagIDs
+// maps apps spatially index cell Tags
 package spatial
 
 const (
-	AppFamilyDomain = ".spatial.amp-space.systems"
+	AppPrefix = "amp.app.core.spatial."
 )

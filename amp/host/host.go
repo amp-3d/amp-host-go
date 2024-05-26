@@ -8,9 +8,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	app_planet "github.com/amp-3d/amp-host-go/amp/apps/amp-app-planet/planet"
+	planet "github.com/amp-3d/amp-host-go/amp/apps/amp-app-planet"
 
 	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/amp/registry"
+	"github.com/amp-3d/amp-sdk-go/stdlib/media"
+	"github.com/amp-3d/amp-sdk-go/stdlib/tag"
 	"github.com/amp-3d/amp-sdk-go/stdlib/task"
 	"github.com/amp-3d/amp-sdk-go/stdlib/utils"
 )
@@ -36,7 +39,7 @@ func StartNewHost(opts Opts) (amp.Host, error) {
 
 	host := &host{
 		Opts:     opts,
-		Registry: RootRegistry(),
+		Registry: registry.Global(),
 	}
 
 	host.Context, err = task.Start(&task.Task{
@@ -65,11 +68,11 @@ func (host *host) HostRegistry() amp.Registry {
 
 func (host *host) StartNewSession(from amp.HostService, via amp.Transport) (amp.HostSession, error) {
 	sess := &hostSess{
-		host:     host,
-		txIn:     make(chan *amp.TxMsg),
-		txOut:    make(chan *amp.TxMsg, 4),
-		openReqs: make(map[amp.TagID]*appReq),
-		openApps: make(map[amp.TagID]*appContext),
+		host:       host,
+		txIn:       make(chan *amp.TxMsg),
+		txOut:      make(chan *amp.TxMsg, 4),
+		openOps:    make(map[tag.ID]*clientOp),
+		activeApps: make(map[tag.ID]*appContext),
 	}
 
 	sess.Registry = amp.NewRegistry()
@@ -166,153 +169,187 @@ type hostSess struct {
 	task.Context
 	amp.Registry // forked registry for this session
 
-	host       *host                 // parent host
-	txIn       chan *amp.TxMsg       // msgs inbound to this hostSess
-	txOut      chan *amp.TxMsg       // msgs outbound from this hostSess
-	openReqs   map[amp.TagID]*appReq // ReqID maps to an open request.
-	openReqsMu sync.Mutex            // protects openReqs
+	host      *host                // parent host
+	txIn      chan *amp.TxMsg      // msgs inbound to this hostSess
+	txOut     chan *amp.TxMsg      // msgs outbound from this hostSess
+	openOps   map[tag.ID]*clientOp // ReqID maps to an open request.
+	openOpsMu sync.Mutex           // protects openOps
 
-	login      amp.Login
-	loginID    amp.TagID // ReqID of the login, allowing us to send session attrs back to the client.
-	openAppsMu sync.Mutex
-	openApps   map[amp.TagID]*appContext
+	auth         amp.Login
+	loginID      tag.ID // ReqID of the login, allowing session attrs back to the client.
+	activeAppsMu sync.Mutex
+	activeApps   map[tag.ID]*appContext
 }
 
-// PinOp implements PinReq
-type pinOp struct {
-	amp.PinRequest
-	url *url.URL
-	//LogLabel string      // info string for logging and debugging
-	outlet chan *amp.TxMsg // send to this channel to transmit to the request originator
+// *** implements amp.Requester ***
+type clientOp struct {
+	req     amp.Request     // non-nil if this is a pinning request
+	outlet  chan *amp.TxMsg // send to this channel to transmit to the request originator
+	sess    *hostSess       // parent session
+	appCtx  *appContext     // app handling this request
+	pin     amp.Pin         // request executing (as a Pin)
+	parent  amp.Pin         // parent Pin, if any
+	started chan struct{}   // closed when the op is on service
+	cancel  chan struct{}   // closed when the request is closed
+	closed  atomic.Int32    // 0 = open, 1 = closed
 }
 
-func (op *pinOp) RawRequest() amp.PinRequest {
-	return op.PinRequest
+func (op *clientOp) Request() *amp.Request {
+	return &op.req
 }
 
-func (op *pinOp) URL() *url.URL {
-	return op.url
-}
-
-func (op *pinOp) ContextID() amp.TagID {
-	return amp.TagIDFromInts(op.ContextID_0, op.ContextID_1)
-}
-
-// *** implements PinContext ***
-// IDEA: rather than make this a task.Context, make a sub structure like before?
-//   - raw go routines, etc
-//   - cleaner code, less hacky for planet app to push tx to subs
-//   - CellBase helps implement PinnedCell and contains support code
-type appReq struct {
-	task.Context
-	op      pinOp
-	sess    *hostSess
-	appCtx  *appContext
-	pinned  amp.PinnedCell
-	parent  amp.PinnedCell
-	cancel  chan struct{}
-	pinning chan struct{} // closed once the cell is pinned
-	closed  atomic.Int32
-}
-
-func (req *appReq) App() amp.AppContext {
-	return req.appCtx
-}
-
-func (req *appReq) Op() amp.PinOp {
-	return &req.op
-}
-
-func (req *appReq) MarshalTxOp(dst *amp.TxMsg, op amp.TxOp, val amp.ElemVal) {
-	if err := op.Validate(); err != nil {
-		req.Warnf("MarshalTxOp: %v", err)
-		return
+func (op *clientOp) pinClosed() <-chan struct{} {
+	if op.pin != nil {
+		return op.pin.Context().Closing()
 	}
-	if err := dst.MarshalOpValue(&op, val); err != nil {
-		req.Error(err)
-		return
+	return nil
+}
+
+func (op *clientOp) WaitOnReady() error {
+	<-op.started
+
+	select {
+	case <-op.cancel:
+		return amp.ErrRequestClosed
+	case <-op.pinClosed():
+		return amp.ErrRequestClosed
+	default:
+		return nil
 	}
 }
 
-func (req *appReq) PushTx(tx *amp.TxMsg) error {
-	if tx.Status == amp.ReqStatus_Synced {
-		if (req.op.Flags & amp.PinFlags_CloseOnSync) != 0 {
-			tx.Status = amp.ReqStatus_Closed
+func (op *clientOp) PushTx(tx *amp.TxMsg) error {
+	if tx.Status == amp.OpStatus_Synced {
+		if op.req.PinSync == amp.PinSync_CloseOnSync {
+			tx.Status = amp.OpStatus_Closed
 		}
 	}
 
 	// route this update to the originating request
-	tx.RouteTo_0, tx.RouteTo_1 = req.op.ContextID().ToInts()
+	tx.SetRequestID(op.req.ID)
 
 	// If the client backs up, this will back up too which is the desired effect.
 	// Otherwise, something like reading from a db reading would quickly fill up the Msg outbox chan (and have no gain)
-	// Note that we don't need to check on req.cell or req.sess since if either close, all subs will be closed.
+	// Note that we don't need to check on op.cell or op.sess since if either close, all subs will be closed.
 	var err error
 	select {
-	case req.op.outlet <- tx:
+	case op.outlet <- tx:
 	default:
-		var closing <-chan struct{}
-		if req.Context != nil {
-			closing = req.Context.Closing()
-		} else {
-			closing = req.cancel
-		}
 		select {
-		case req.op.outlet <- tx:
-		case <-closing:
-			err = amp.ErrShuttingDown
+		case op.outlet <- tx:
+		case <-op.cancel:
+			err = amp.ErrRequestClosed
+		case <-op.pinClosed():
+			err = amp.ErrRequestClosed
 		}
 	}
 
-	if tx.Status == amp.ReqStatus_Closed {
-		req.sess.autoSendCloseReq(req.op.ContextID(), kSmartClose, nil)
+	if tx.Status == amp.OpStatus_Closed {
+		op.OnComplete(nil)
 	}
 
 	return err
 }
 
-func (sess *hostSess) autoSendCloseReq(routeTo amp.TagID, opts closeMode, err error) {
-	if routeTo.IsNil() {
-		return
-	}
-	req, _ := sess.getReq(routeTo, kClosingReq)
-	if req != nil {
-		doClose := req.closed.CompareAndSwap(0, 1)
-		if !doClose {
-			return
+func (op *clientOp) FormLogLabel() string {
+	var strBuf [128]byte
+	str := fmt.Appendf(strBuf[:0], "[req_%s] ", op.req.ID.Base32Suffix())
+	if target := op.req.PinTarget; target != nil {
+		if target.URL != "" {
+			str = fmt.Append(str, target.URL)
 		}
-	} else if opts == kSmartClose {
-		return
 	}
+	return string(str)
+}
 
-	if opts == kSmartClose && err != nil {
-		val := amp.ErrorToValue(err)
-		amp.SendMetaAttr(sess, routeTo, amp.ReqStatus_Closed, val)
-	}
+func (op *clientOp) submitToApp() error {
 
-	if req != nil {
-		// first, remove this req as a sub if applicable
-		// if cell := req.cell; cell != nil {
-		// 	cell.pl.cancelSub(req)
-		// }
-
-		// finally, close the cancel chan now that the close msg has been pushed
-		close(req.cancel)
-
-		// TODO: is there is a race condition where the ctx may not be set?
-		if req.Context != nil {
-			req.Context.Close()
+	{
+		pinTarget := op.req.PinTarget
+		if pinTarget != nil && pinTarget.URL != "" {
+			var err error
+			if op.req.URL, err = url.Parse(pinTarget.URL); err != nil {
+				err = amp.ErrCode_BadRequest.Errorf("error parsing URL: %v", err)
+				return err
+			}
+			if op.req.Values, err = url.ParseQuery(op.req.URL.RawQuery); err != nil {
+				err = amp.ErrCode_BadRequest.Errorf("error parsing URL query: %v", err)
+				return err
+			}
 		}
 	}
 
+	// If originating context is available, choose an app based on the app invocation (appearing as the hostname in the URL)
+	if op.appCtx == nil {
+		var err error
+		if op.appCtx, err = op.sess.appCtxForInvocation(op.req.URL, true); err != nil {
+			return err
+		}
+	}
+	op.appCtx.inbox <- op
+	return nil
+}
+
+func (op *clientOp) WasClosed() bool {
+	return op.closed.Load() != 0
+}
+
+func (op *clientOp) OnComplete(err error) {
+	op.sess.closeOp(op.req.ID, err)
+}
+
+func (sess *hostSess) closeAllReqs() {
+	sess.openOpsMu.Lock()
+	toClose := make([]tag.ID, 0, len(sess.openOps))
+	for reqID := range sess.openOps {
+		toClose = append(toClose, reqID)
+	}
+	sess.openOpsMu.Unlock()
+
+	for _, reqID := range toClose {
+		sess.closeOp(reqID, amp.ErrShuttingDown)
+	}
+}
+
+func (sess *hostSess) closeOp(reqID tag.ID, err error) {
+	op := sess.detachOp(reqID)
+	if op == nil {
+		return
+	}
+
+	proceed := op.closed.CompareAndSwap(0, 1)
+	if !proceed {
+		return
+	}
+	sess.sendClose(reqID, err)
+	close(op.cancel)
+
+	// TODO: is there is a race condition where the ctx may not be set?
+	if op.pin != nil {
+		op.pin.Context().Close()
+	}
+
+	if op.req.CommitTx != nil {
+		op.req.CommitTx.ReleaseRef()
+		op.req.CommitTx = nil
+	}
+}
+
+func (sess *hostSess) sendClose(reqID tag.ID, err error) {
+	var errVal amp.ElemVal
+	if err != nil {
+		sess.Warnf("request failed %s: %v", reqID, err)
+		errVal = amp.ErrorToValue(err)
+	}
+	amp.SendMetaAttr(sess, reqID, amp.OpStatus_Closed, errVal)
 }
 
 func (sess *hostSess) SendTx(tx *amp.TxMsg) error {
 
 	// If we see a signal for a meta attr, send it to the client's session controller.
-	if tx.RouteTo_0 == 0 && tx.RouteTo_1 == 0 {
-		tx.RouteTo_0, tx.RouteTo_1 = sess.loginID.ToInts()
-		tx.Status = amp.ReqStatus_Synced
+	if tx.RequestID().IsNil() {
+		tx.SetRequestID(sess.loginID)
+		tx.Status = amp.OpStatus_Synced
 	}
 
 	select {
@@ -323,21 +360,24 @@ func (sess *hostSess) SendTx(tx *amp.TxMsg) error {
 	}
 }
 
-func (sess *hostSess) AssetPublisher() amp.AssetPublisher {
+func (sess *hostSess) AssetPublisher() media.Publisher {
 	return sess.host.Opts.AssetServer
 }
 
 func (sess *hostSess) handleLogin() error {
-	if sess.login.UserTagID != "" {
+	if sess.auth.Checkpoint.Session != nil {
 		return amp.ErrCode_LoginFailed.Error("already logged in")
 	}
 
 	timer := time.NewTimer(sess.host.Opts.LoginTimeout)
 	nextTx := func() (*amp.TxMsg, amp.ElemVal, error) {
 		select {
-		case msg := <-sess.txIn:
-			attr, err := msg.ExtractMetaAttr(sess.Registry)
-			return msg, attr, err
+		case tx := <-sess.txIn:
+			attr, err := tx.CheckMetaAttr(sess.Registry)
+			if attr == nil && err == nil {
+				err = amp.ErrCode_BadRequest.Error("missing meta attr")
+			}
+			return tx, attr, err
 		case <-timer.C:
 			return nil, nil, amp.ErrTimeout
 		case <-sess.Closing():
@@ -345,49 +385,71 @@ func (sess *hostSess) handleLogin() error {
 		}
 	}
 
-	// Wait for login msg
-	tx, attr, err := nextTx()
-	if err != nil {
-		return err
-	}
-	sess.loginID = tx.GenesisID()
-	if sess.loginID.IsNil() {
-		return amp.ErrCode_LoginFailed.Error("missing genesis ID")
-	}
-	login, _ := attr.(*amp.Login)
-	if login == nil {
-		return amp.ErrCode_LoginFailed.Error("failed to unmarshal Login")
-	}
-
-	sess.login = *login
-	_, err = sess.GetAppInstance(app_planet.AppTagID, true)
-	if err != nil {
-		return err
-	}
-
+	// Login / LoginChallenge
 	{
-		chall := &amp.LoginChallenge{
-			// TODO
+		tx, attr, err := nextTx()
+		if err != nil {
+			return err
 		}
-		if err = amp.SendMetaAttr(sess, tx.RouteTo(), amp.ReqStatus_Closed, chall); err != nil {
+		defer tx.ReleaseRef()
+
+		sess.loginID = tx.RequestID()
+		if sess.loginID.IsNil() {
+			return amp.ErrCode_LoginFailed.Error("missing login Tag")
+		}
+		loginReq, _ := attr.(*amp.Login)
+		if loginReq == nil {
+			return amp.ErrCode_LoginFailed.Error("failed to unmarshal Login")
+		}
+
+		sess.auth = amp.Login{
+			Checkpoint: &amp.AuthCheckpoint{
+				Session:  &amp.Tag{},
+				Member:   &amp.Tag{},
+				HomeFeed: &amp.Tag{
+					// TODO
+				},
+			},
+		}
+
+		sess.auth.Checkpoint.Session.SetTagID(sess.loginID)
+		sess.auth.Checkpoint.Member.SetTagID(tag.FromString(loginReq.UserUID))
+
+		// Bootstrap the planet (db service) for the session user so we can get the user's home cell
+		_, err = sess.appContextForAppID(planet.AppSpec.ID, true)
+		if err != nil {
+			return err
+		}
+
+		chall := &amp.LoginChallenge{
+			Hash: []byte("TODO"), // TODO
+		}
+		if err = amp.SendMetaAttr(sess, sess.loginID, amp.OpStatus_Synced, chall); err != nil {
 			return err
 		}
 	}
 
-	if tx, attr, err = nextTx(); err != nil {
-		return err
-	}
-
-	loginResp, _ := attr.(*amp.LoginResponse)
-	if loginResp == nil {
-		return amp.ErrCode_LoginFailed.Error("failed to unmarshal LoginResponse")
-	}
-
-	// TODO: Check challenge response
+	// LoginResponse
 	{
+		tx, attr, err := nextTx()
+		if err != nil {
+			return err
+		}
+		defer tx.ReleaseRef()
+
+		loginResp, _ := attr.(*amp.LoginResponse)
+		if loginResp == nil {
+			return amp.ErrCode_LoginFailed.Error("failed to unmarshal LoginResponse")
+		}
+
+		{
+			if err = amp.SendMetaAttr(sess, sess.loginID, amp.OpStatus_Synced, &sess.auth); err != nil {
+				return err
+			}
+		}
 	}
 
-	sess.autoSendCloseReq(tx.RouteTo(), kSmartClose, err)
+	//sess.closeOp(sess.loginID, kSmartClose, err)  not needed since login is not a
 	return nil
 }
 
@@ -396,13 +458,9 @@ func (sess *hostSess) consumeInbox() {
 		select {
 
 		case tx := <-sess.txIn:
-			if tx.Status != amp.ReqStatus_Closed {
-				keepOpen, err := sess.handleMetaOp(tx)
-				if err != nil || !keepOpen {
-					sess.autoSendCloseReq(tx.RouteTo(), kSmartClose, err)
-				}
+			if tx.Status != amp.OpStatus_Closed {
+				sess.handleIncomingOp(tx)
 			}
-			tx.ReleaseRef()
 
 		case <-sess.Closing():
 			sess.closeAllReqs()
@@ -411,222 +469,148 @@ func (sess *hostSess) consumeInbox() {
 	}
 }
 
-func (sess *hostSess) handleMetaOp(tx *amp.TxMsg) (keepOpen bool, err error) {
-	metaAttr, err := tx.ExtractMetaAttr(sess)
+// Note: assumes ownership of the given tx
+func (sess *hostSess) handleIncomingOp(tx *amp.TxMsg) {
+	newReqID := tx.GenesisID()
+
+	metaAttr, err := tx.CheckMetaAttr(sess)
+	pinReq, _ := metaAttr.(*amp.PinRequest)
+	var op *clientOp
+
 	if err != nil {
-		return false, err
+		// handle err below
+	} else if metaAttr == nil {
+		op, err = sess.addClientOp(newReqID, tx.RequestID())
+		if op != nil {
+			tx.AddRef()
+			op.req.CommitTx = tx
+		}
+	} else if pinReq != nil {
+		op, err = sess.addClientOp(newReqID, tx.RequestID())
+		if op != nil {
+			op.req.PinRequest = *pinReq
+		}
+	} else {
+		err = amp.ErrCode_BadRequest.Error("unsupported meta attr")
 	}
 
-	switch v := metaAttr.(type) {
-	case *amp.PinRequest:
-		{
-			var req *appReq
-			req, err = sess.getReq(tx.RouteTo(), kOpenNewReq)
-			if err != nil {
-				return
-			}
-			req.op.PinRequest = *v
-			keepOpen = true
-			err = sess.pinCell(req)
-			return
-		}
-	case *amp.RegisterDefs:
-		{
-			err = sess.RegisterDefs(v)
-			return
-		}
-	case *amp.HandleURI:
-		{
-			var uri *url.URL
-			uri, err = url.Parse(v.URI)
-			if err != nil {
-				return
-			}
-			var appCtx *appContext
-			appCtx, err = sess.appCtxForInvocation(uri.Host, true)
-			if err != nil {
-				return
-			}
-			err = appCtx.appInst.HandleURL(uri)
-			return
-		}
-	default:
-		err = amp.ErrCode_InvalidReq.Error("unsupported meta attr")
-		return
+	if err == nil && op != nil {
+		err = op.submitToApp()
+	}
+	if err != nil || op == nil {
+		sess.closeOp(newReqID, err)
 	}
 
+	tx.ReleaseRef()
 }
 
-type pinVerb int32
+func (sess *hostSess) addClientOp(genesisID, parentID tag.ID) (*clientOp, error) {
 
-const (
-	kOpenNewReq pinVerb = iota
-	kClosingReq
-	kExistingReq
-)
-
-type closeMode int32
-
-const (
-	kSmartClose closeMode = iota
-	kBlindClose
-)
-
-func (sess *hostSess) closeAllReqs() {
-	sess.openReqsMu.Lock()
-	toClose := make([]amp.TagID, 0, len(sess.openReqs))
-	for openReq := range sess.openReqs {
-		toClose = append(toClose, openReq)
-	}
-	sess.openReqsMu.Unlock()
-
-	for _, openReqID := range toClose {
-		sess.autoSendCloseReq(openReqID, kBlindClose, amp.ErrShuttingDown)
-	}
-}
-
-func (sess *hostSess) newAppReq() *appReq {
-	req := &appReq{
+	op := &clientOp{
+		req: amp.Request{
+			ID: genesisID,
+		},
 		cancel:  make(chan struct{}),
-		pinning: make(chan struct{}),
+		started: make(chan struct{}),
 		sess:    sess,
 	}
-	return req
-}
 
-// onReq performs the given pinVerb on given reqID and returns its appReq
-func (sess *hostSess) getReq(routeTo amp.TagID, verb pinVerb) (req *appReq, err error) {
+	sess.openOpsMu.Lock()
+	defer sess.openOpsMu.Unlock()
 
-	sess.openReqsMu.Lock()
-	{
-		req = sess.openReqs[routeTo]
-		if req != nil {
-			switch verb {
-			case kClosingReq:
-				delete(sess.openReqs, routeTo)
-			case kOpenNewReq:
-				err = amp.ErrCode_InvalidReq.Error("ReqID already in use")
-			}
-		} else {
-			switch verb {
-			case kOpenNewReq:
-				req = sess.newAppReq()
-				req.op.ContextID_0, req.op.ContextID_1 = routeTo.ToInts()
-				req.op.outlet = sess.txOut
-				sess.openReqs[routeTo] = req
-			}
+	// If this is an internal request, make a memory outlet to read from
+	if op.req.ID.IsNil() {
+		op.outlet = make(chan *amp.TxMsg)
+	} else {
+		if _, exists := sess.openOps[op.req.ID]; exists {
+			return nil, amp.ErrCode_BadRequest.Error("request ID already in use")
 		}
-	}
-	sess.openReqsMu.Unlock()
-
-	return
-}
-
-func (sess *hostSess) PinCell(pinReq amp.PinOp) (amp.PinContext, error) {
-	req := sess.newAppReq()
-	req.op.PinRequest = pinReq.RawRequest()
-
-	if err := sess.pinCell(req); err != nil {
-		return nil, err
+		op.outlet = sess.txOut
+		sess.openOps[op.req.ID] = op
 	}
 
-	<-req.pinning
-	return req, nil
-}
-
-func (sess *hostSess) pinCell(req *appReq) error {
-	var err error
-
-	op := req.op
-
-	// Parse and process the pin request (PinReq)
-	if len(op.PinURL) > 0 {
-		op.url, err = url.Parse(op.PinURL)
-		if err != nil {
-			err = amp.ErrCode_InvalidReq.Errorf("failed to parse PinURL: %v", err)
-			return err
-		}
-	}
-
-	contextID := op.ContextID()
-
-	if !contextID.IsNil() {
-		parentReq, _ := sess.getReq(contextID, kExistingReq)
+	if parentID.IsSet() {
+		parentReq := sess.openOps[parentID]
 		if parentReq == nil {
-			err = amp.ErrCode_InvalidReq.Error("invalid ParentReqID")
-			return err
+			return nil, amp.ErrCode_BadRequest.Error("invalid parent / context ID")
 		}
-		req.appCtx = parentReq.appCtx
-		req.parent = parentReq.pinned
-	}
-
-	// If no app context is available, choose an app based on the app invocation (appearing as the hostname in the URL)
-	if req.appCtx == nil && op.PinURL != "" {
-		req.appCtx, err = sess.appCtxForInvocation(op.PinURL, true)
-		if err != nil {
-			return err
+		if err := parentReq.WaitOnReady(); err != nil {
+			return nil, amp.ErrCode_BadRequest.Errorf("parent request not ready: %v", err)
 		}
+		op.appCtx = parentReq.appCtx
+		op.parent = parentReq.pin
 	}
 
-	if req.appCtx == nil {
-		err = amp.ErrCode_InvalidReq.Error("unable to resolve cell pinner")
-		return err
-	}
-
-	req.appCtx.appReqs <- req
-	return nil
+	return op, nil
 }
 
-func (sess *hostSess) LoginInfo() amp.Login {
-	return sess.login
+// onReq performs the given pinVerb on given reqID and returns its clientOp
+func (sess *hostSess) detachOp(reqID tag.ID) *clientOp {
+	if reqID.IsNil() {
+		return nil
+	}
+	sess.openOpsMu.Lock()
+	op := sess.openOps[reqID]
+	if op != nil {
+		delete(sess.openOps, reqID)
+	}
+	sess.openOpsMu.Unlock()
+	return op
+}
+
+func (sess *hostSess) Auth() amp.Login {
+	return sess.auth
 }
 
 func (sess *hostSess) onAppClosing(appCtx *appContext) {
-	sess.openAppsMu.Lock()
-	delete(sess.openApps, appCtx.module.TagID)
-	sess.openAppsMu.Unlock()
+	sess.activeAppsMu.Lock()
+	delete(sess.activeApps, appCtx.module.AppSpec.ID)
+	sess.activeAppsMu.Unlock()
 }
 
-func (sess *hostSess) GetAppInstance(appID amp.TagID, autoCreate bool) (amp.AppInstance, error) {
-	if ctx, err := sess.appContextForTagID(appID, autoCreate); err == nil {
-		return ctx.appInst, nil
+func (sess *hostSess) GetAppInstance(appID tag.ID, autoCreate bool) (amp.AppInstance, error) {
+	if appCtx, err := sess.appContextForAppID(appID, autoCreate); err == nil {
+		return appCtx.inst, nil
 	} else {
 		return nil, err
 	}
 }
 
-func (sess *hostSess) appContextForTagID(appID amp.TagID, autoCreate bool) (*appContext, error) {
-	sess.openAppsMu.Lock()
-	defer sess.openAppsMu.Unlock()
+func (sess *hostSess) appContextForAppID(appID tag.ID, autoCreate bool) (*appContext, error) {
+	sess.activeAppsMu.Lock()
+	defer sess.activeAppsMu.Unlock()
 
-	app := sess.openApps[appID]
-	if app == nil && autoCreate {
-		appModule, err := sess.GetAppByTagID(appID)
+	appCtx := sess.activeApps[appID]
+	if appCtx == nil && autoCreate {
+		appModule, err := sess.GetAppByTag(appID)
 		if err != nil {
 			return nil, err
 		}
 
-		app = &appContext{
-			//rng:     rand.New(rand.NewSource(time.Now().UnixNano())),
-			appInst: appModule.NewAppInstance(),
-			sess:    sess,
-			module:  appModule,
-			appReqs: make(chan *appReq, 1),
+		appCtx = &appContext{
+			sess:   sess,
+			module: appModule,
+			instID: tag.New(),
+			inbox:  make(chan *clientOp, 1),
 		}
 
-		_, err = sess.StartChild(&task.Task{
-			Label:     "app: " + appModule.AppID,
+		appCtx.Context, err = sess.StartChild(&task.Task{
+			Label:     appModule.AppSpec.Canonic,
+			ID:        appCtx.instID,
 			IdleClose: sess.host.Opts.AppIdleClose,
 			OnStart: func(ctx task.Context) error {
-				app.Context = ctx
-				return app.appInst.OnNew(app)
+				var createErr error
+				appCtx.inst, createErr = appModule.NewAppInstance(appCtx)
+				return createErr
 			},
 			OnRun: func(ctx task.Context) {
 				for running := true; running; {
 					select {
-					case req := <-app.appReqs:
-						if reqErr := app.handleAppReq(req); reqErr != nil {
-							req.sess.autoSendCloseReq(req.op.ContextID(), kSmartClose, reqErr)
+					case op := <-appCtx.inbox:
+						if reqErr := appCtx.startOp(op); reqErr != nil {
+							op.OnComplete(reqErr)
+						} else {
+							close(op.started) // let others know when the op is on service
 						}
 					case <-ctx.Closing():
 						running = false
@@ -634,179 +618,162 @@ func (sess *hostSess) appContextForTagID(appID amp.TagID, autoCreate bool) (*app
 				}
 			},
 			OnClosing: func() {
-				sess.onAppClosing(app)
-				app.appInst.OnClosing()
+				appCtx.inst.OnClosing()
+				sess.onAppClosing(appCtx)
 			},
 		})
 		if err != nil {
 			return nil, err
 		}
 
-		sess.openApps[appModule.TagID] = app
+		sess.activeApps[appID] = appCtx
 	}
 
-	return app, nil
+	return appCtx, nil
 }
 
-func (sess *hostSess) appCtxForInvocation(invocation string, autoCreate bool) (*appContext, error) {
-	appModule, err := sess.GetAppForInvocation(invocation)
+func (sess *hostSess) appCtxForInvocation(url *url.URL, autoCreate bool) (*appContext, error) {
+	if url == nil {
+		return nil, amp.ErrCode_BadRequest.Error("missing URL")
+	}
+	appModule, err := sess.GetAppForInvocation(url.Host)
 	if err != nil {
 		return nil, err
 	}
-
-	ctx, err := sess.appContextForTagID(appModule.TagID, autoCreate)
+	appCtx, err := sess.appContextForAppID(appModule.AppSpec.ID, autoCreate)
 	if err != nil {
 		return nil, err
 	}
-	return ctx, nil
+	return appCtx, nil
 }
 
 // appContext Implements amp.AppContext
 type appContext struct {
 	task.Context
-
-	//rng     *rand.Rand
-	seed    uint64
-	appInst amp.AppInstance
-	sess    *hostSess
-	module  *amp.App
-	appReqs chan *appReq // incoming requests for the app
+	inst   amp.AppInstance
+	instID tag.ID
+	sess   *hostSess
+	module *amp.App
+	inbox  chan *clientOp // incoming client ops for the app
 }
 
-func (ctx *appContext) IssueTagID() amp.TagID {
-	timeID := amp.NewTagID()
-	ctx.seed = timeID[1] ^ (ctx.seed * 977973373171)
-	return amp.TagID{
-		uint64(timeID[0]),
-		timeID[1],
-		ctx.seed,
-	}
-}
-
-func (ctx *appContext) Session() amp.HostSession {
-	return ctx.sess
-}
-
-func (ctx *appContext) LocalDataPath() string {
-	return path.Join(ctx.sess.host.Opts.StatePath, ctx.module.AppID)
-}
-
-func (ctx *appContext) PublishAsset(asset amp.MediaAsset, opts amp.PublishOpts) (URL string, err error) {
-	return ctx.sess.AssetPublisher().PublishAsset(asset, opts)
-}
-
-func (ctx *appContext) PinAppCell(flags amp.PinFlags) (*appReq, error) {
-	// planetApp, err := ctx.sess.GetAppInstance(planet.AppTagID, true)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	op := &pinOp{
-		PinRequest: amp.PinRequest{
-			Flags:  flags,
-			PinURL: fmt.Sprintf("amp://planet/~/%s/.AppAttrs", ctx.module.AppID),
-		},
-		outlet: make(chan *amp.TxMsg, 1),
+func (appCtx *appContext) startOp(op *clientOp) error {
+	err := appCtx.inst.MakeReady(op)
+	if err != nil {
+		return err
 	}
 
-	pinCtx, err := ctx.sess.PinCell(op)
+	// If no parent Pin given, the app is responsible for resolving the request to a new Pin.
+	pinner := amp.Pinner(op.parent)
+	if pinner == nil {
+		pinner = appCtx.inst
+	} else {
+		op.parent = nil // no need to store the parent pin (which may prevent GC)
+	}
+
+	op.pin, err = pinner.ServeRequest(op)
+	return err
+}
+
+func (appCtx *appContext) Session() amp.HostSession {
+	return appCtx.sess
+}
+
+func (appCtx *appContext) LocalDataPath() string {
+	return path.Join(appCtx.sess.host.Opts.StatePath, appCtx.module.AppSpec.Canonic)
+}
+
+func (appCtx *appContext) PublishAsset(asset media.Asset, opts media.PublishOpts) (URL string, err error) {
+	return appCtx.sess.AssetPublisher().PublishAsset(asset, opts)
+}
+
+var appCellTag = tag.FromToken("AppCell")
+
+func (appCtx *appContext) pinAppAttr(appAttr tag.ID, sync amp.PinSync) (*clientOp, error) {
+
+	// Make a "local" pin that sends to a channel rather than the session client.
+	op, err := appCtx.sess.addClientOp(tag.Nil, tag.Nil)
 	if err != nil {
 		return nil, err
 	}
-	return pinCtx.(*appReq), nil
+
+	// Scope the target attr to the requesting app -- virtualized privacy
+	appCell := appCtx.module.AppSpec.ID.With(appCellTag)
+
+	op.req.PinRequest = amp.PinRequest{
+		PinSync: sync,
+		PinTarget: &amp.Tag{
+			URL:     "amp://planet/~",
+			TagID_0: int64(appCell[0]),
+			TagID_1: appCell[1],
+			TagID_2: appCell[2],
+		},
+		PinAttrs: []*amp.Tag{
+			{
+				TagID_0: int64(appAttr[0]),
+				TagID_1: appAttr[1],
+				TagID_2: appAttr[2],
+			},
+		},
+	}
+
+	if err = op.submitToApp(); err != nil {
+		return nil, err
+	}
+
+	if err := op.WaitOnReady(); err != nil {
+		return nil, err
+	}
+
+	return op, nil
 }
 
-func (ctx *appContext) GetAppAttr(tagSpec string, dst amp.ElemVal) error {
-	attrID, err := amp.FormTagSpecID(tagSpec)
+func (appCtx *appContext) GetAppAttr(appAttr tag.ID, dst amp.ElemVal) error {
+
+	// When we pin through the runtime, there is no ReqID since this is host-side request -- TODO: uniify with normal pinning
+	// Use CloseOnSync and/or pinCtx.Close() when we're done.
+	op, err := appCtx.pinAppAttr(appAttr, amp.PinSync_CloseOnSync)
 	if err != nil {
 		return err
 	}
 
-	// When we pin through the runtime, there is no ReqID since this is host-side.
-	// So we use CloseOnSync and/or pinCtx.Close() when we're done.
-	pinReq, err := ctx.PinAppCell(amp.PinFlags_CloseOnSync)
-	if err != nil {
-		return err
-	}
-
-	outlet := pinReq.op.outlet
 	for {
 		select {
-		case tx := <-outlet:
-			for i, op := range tx.Ops {
-				if op.AttrID == attrID {
+		case tx := <-op.outlet:
+			for i, txOp := range tx.Ops {
+				if txOp.AttrID == appAttr {
 					err = tx.UnmarshalOpValue(i, dst)
-					pinReq.Close()
+					op.pin.Context().Close()
+					tx.ReleaseRef()
 					return err
 				}
 			}
 			tx.ReleaseRef()
-		case <-pinReq.Closing():
+		case <-op.pin.Context().Closing():
 			return amp.ErrCellNotFound
 		}
 	}
 }
 
-func (ctx *appContext) PutAppAttr(attrSpec string, src amp.ElemVal) error {
-	tx, err := amp.MarshalMetaAttr(attrSpec, src)
+func (appCtx *appContext) PutAppAttr(appAttr tag.ID, src amp.ElemVal) error {
+	tx, err := amp.MarshalMetaAttr(appAttr, src)
 	if err != nil {
 		return err
 	}
 
-	pinCtx, err := ctx.PinAppCell(amp.PinFlags_NoSync)
+	op, err := appCtx.pinAppAttr(appAttr, amp.PinSync_None)
 	if err != nil {
 		return err
 	}
+
+	op.req.CommitTx = tx
 
 	// TODO: make this better / handle err
-	pinCtx.pinned.MergeTx(tx)
+	op.pin.ServeRequest(op)
 	// if err != nil {
 	// 	return err
 	// }
 
-	pinCtx.Close()
+	op.pin.Context().Close()
 	return nil
-}
-
-func (app *appContext) handleAppReq(req *appReq) error {
-
-	// TODO: resolve to a generic Cell and *then* pin it?
-	// Also, use pinned cell ref counting to know when it it safe to idle close?
-	var err error
-	req.pinned, err = req.appCtx.appInst.PinCell(req.parent, &req.op)
-	if err != nil {
-		return err
-	}
-
-	// Now that we have the target cell pinned, no need to retain a reference to the parent cell
-	req.parent = nil
-
-	// FUTURE: switch to ref counting rather than task.Context close detection?
-	// Once the cell is resolved, serve state in child context of the PinnedCell
-	// Even if the client closes the req before StartChild() (causing it to error), the err result will no op.
-	req.Context, err = req.pinned.Context().StartChild(&task.Task{
-		TaskRef:   req.op.ContextID(),
-		Label:     req.op.FormLogLabel(),
-		IdleClose: time.Microsecond,
-		OnRun: func(pinCtx task.Context) {
-			err := req.pinned.ServeState(req)
-			if err != nil && err != amp.ErrShuttingDown {
-				pinCtx.Errorf("ServeState() error: %v", err)
-			}
-			if (req.op.Flags & amp.PinFlags_CloseOnSync) != 0 {
-				pinCtx.Close()
-			} else {
-				<-pinCtx.Closing()
-
-			}
-
-			// If this is a client req, send a close if needed (no-op if already closed)
-			req.sess.autoSendCloseReq(req.op.ContextID(), kSmartClose, nil)
-		},
-	})
-
-	// release those waiting on this appReq to be on service
-	close(req.pinning)
-
-	return err
 }

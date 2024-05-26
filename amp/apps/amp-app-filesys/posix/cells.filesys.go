@@ -7,24 +7,30 @@ import (
 	"strings"
 	"time"
 
-	av "github.com/amp-3d/amp-host-go/amp/apps/amp-app-av"
+	"github.com/amp-3d/amp-host-go/amp/apps/amp-app-av/av"
 	"github.com/amp-3d/amp-host-go/amp/assets"
 	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/amp/basic"
+	"github.com/amp-3d/amp-sdk-go/stdlib/media"
+	"github.com/amp-3d/amp-sdk-go/stdlib/tag"
 )
 
 type fsItem struct {
-	av.CellBase[*appCtx]
+	basic.CellInfo[*appInst]
 
-	basename  string // base file name
-	pathname  string // non-nil when pinned (could be alternative OS handle)
-	mode      os.FileMode
-	size      int64
-	isDir     bool
-	modTime   time.Time
-	mediaType string
+	basename    string // base file name
+	dirname     string // non-nil when pinned (could be alternative OS handle)
+	mode        os.FileMode
+	size        int64
+	isDir       bool
+	modTime     time.Time
+	contentType string
 
-	hdr        amp.CellHeader
 	mediaFlags av.MediaFlags
+}
+
+func (item *fsItem) pathname() string {
+	return path.Join(item.dirname, item.basename)
 }
 
 func (item *fsItem) Compare(oth *fsItem) int {
@@ -54,116 +60,112 @@ func (item *fsItem) GetLogLabel() string {
 	return label
 }
 
-func (item *fsItem) setFrom(fi os.FileInfo) {
-	item.basename = fi.Name()
-	item.mode = fi.Mode()
-	item.modTime = fi.ModTime()
-	item.isDir = fi.IsDir()
+func newFsItem(dirname string, fi os.FileInfo) basic.Cell[*appInst] {
 
-	extLen := 0
-	if !item.isDir {
-		item.size = fi.Size()
-		item.mediaType, extLen = assets.GetMediaTypeForExt(item.basename)
+	item := fsItem{
+		dirname:  dirname,
+		basename: fi.Name(),
+		mode:     fi.Mode(),
+		modTime:  fi.ModTime(),
+		isDir:    fi.IsDir(),
 	}
+	//item.ID = tag.FromString(item.pathname())
 
 	stripExt := false
 
-	item.mediaFlags = 0
-	if !item.isDir {
+	extLen := 0
+	if item.isDir {
+		item.Tab.Tags = []*amp.Tag{
+			amp.GenericFolderGlyph,
+			amp.PinnableCatalog,
+		}
+	} else {
+
+		item.size = fi.Size()
+		item.contentType, extLen = assets.GetContentTypeForExt(item.basename)
+		item.Tab.AddPinnableContentTag(item.contentType)
 
 		// TODO: make smarter
 		switch {
-		case strings.HasPrefix(item.mediaType, "audio/"):
-			item.mediaFlags |= av.HasAudio
+		case strings.HasPrefix(item.contentType, "audio/"):
+			item.mediaFlags |= av.MediaFlags_HasAudio
 			stripExt = true
-		case strings.HasPrefix(item.mediaType, "video/"):
-			item.mediaFlags |= av.HasVideo
+		case strings.HasPrefix(item.contentType, "video/"):
+			item.mediaFlags |= av.MediaFlags_HasVideo
 			stripExt = true
 		}
-		item.mediaFlags |= av.IsSeekable
+		item.mediaFlags |= av.MediaFlags_IsSeekable
 	}
 
-	//////////////////  CellHeader
+	//////////////////  TagTab
 	{
-		hdr := amp.CellHeader{}
-		hdr.SetModifiedAt(item.modTime)
-		if item.isDir {
-			hdr.Glyphs = []*amp.AssetTag{
-				av.DirGlyph,
-			}
-		} else {
-			hdr.Glyphs = []*amp.AssetTag{
-				{
-					URL: amp.GenericGlyphURL + item.mediaType,
-				},
-			}
-		}
+		item.Tab.SetModifiedAt(item.modTime)
 		base := item.basename
 		if stripExt {
 			base = item.basename[:len(base)-extLen]
 		}
 		splitAt := strings.LastIndex(base, " - ")
 		if splitAt > 0 {
-			hdr.Title = base[splitAt+3:]
-			hdr.Subtitle = base[:splitAt]
+			item.Tab.Label = base[splitAt+3:]
+			item.Tab.Caption = base[:splitAt]
 		} else {
-			hdr.Title = base
+			item.Tab.Label = base
 		}
-		item.hdr = hdr
 	}
 
-}
+	if item.isDir {
+		dir := &fsDir{
+			fsItem: item,
+		}
+		return dir
+	} else {
+		file := &fsFile{
+			fsItem: item,
+		}
+		return file
+	}
 
-func (item *fsItem) MarshalAttrs(dst *amp.TxMsg, ctx amp.PinContext) error {
-	op := item.FormAttrUpsert(amp.CellHeaderAttrID)
-	ctx.MarshalTxOp(dst, op, &item.hdr)
-	return nil
-}
-
-func (item *fsItem) OnPinned(parent av.Cell[*appCtx]) error {
-	parentDir := parent.(*fsDir)
-	item.pathname = path.Join(parentDir.pathname, item.basename)
-	return nil
 }
 
 type fsFile struct {
 	fsItem
-	pinnedURL string
+	contentURL string
 }
 
-func (item *fsFile) MarshalAttrs(dst *amp.TxMsg, ctx amp.PinContext) error {
-	item.fsItem.MarshalAttrs(dst, ctx)
+func (item *fsFile) MarshalAttrs(pin *basic.Pin[*appInst]) {
+	item.fsItem.MarshalAttrs(pin)
+
+	if item.contentURL == "" {
+		return
+	}
 
 	if item.mediaFlags != 0 {
-		media := av.PlayableMediaItem{
-			Flags:      item.mediaFlags,
-			Title:      item.hdr.Title,
-			Collection: item.hdr.Subtitle,
-		}
-
-		if item.pinnedURL != "" {
-			media.Tracks = []*amp.AssetTag{
-				{
-					ContentType: item.mediaType,
-					URL:         item.pinnedURL,
+		playable := av.PlayableMedia{
+			Flags: item.mediaFlags,
+			Media: &amp.TagTab{
+				Label:   item.Tab.Label,
+				Caption: item.Tab.Caption,
+				Tags: []*amp.Tag{
+					{
+						ContentType: item.contentType,
+						URL:         item.contentURL,
+					},
 				},
-			}
+			},
 		}
-
-		op := item.FormAttrUpsert(av.PlayableMediaItemID)
-		ctx.MarshalTxOp(dst, op, &media)
+		pin.Upsert(item.ID, av.PlayableMediaSpec.ID, tag.Nil, &playable)
+	} else {
+		// TODO: 'ContentStream' should be sent instead since we want to sent any file
 	}
-	return nil
 }
 
-func (item *fsFile) PinInto(dst *av.PinnedCell[*appCtx]) error {
-	asset, err := assets.AssetForFilePathname(item.pathname, "")
+func (item *fsFile) PinInto(pin *basic.Pinned[*appInst]) error {
+	asset, err := assets.AssetForFilePathname(item.pathname(), "")
 	if err != nil {
 		return err
 	}
-	app := dst.App
-	item.pinnedURL, err = app.PublishAsset(asset, amp.PublishOpts{
-		HostAddr: app.Session().LoginInfo().HostAddr,
+	item.contentURL, err = pin.App.PublishAsset(asset, media.PublishOpts{
+		HostAddr: pin.App.Session().Auth().HostAddr,
 	})
 	return err
 }
@@ -173,43 +175,43 @@ type fsDir struct {
 }
 
 // reads the fsDir's catalog and issues new items as needed.
-func (dir *fsDir) PinInto(dst *av.PinnedCell[*appCtx]) error {
+func (dir *fsDir) PinInto(pin *basic.Pinned[*appInst]) error {
 
 	{
-		//dir.subs = make(map[amp.TagID]os.DirEntry)
-		openDir, err := os.Open(dir.pathname)
+		//dir.subs = make(map[tag.ID]os.DirEntry)
+		openDir, err := os.Open(dir.pathname())
 		if err != nil {
 			return err
 		}
 
-		dirItems, err := openDir.Readdir(-1)
+		//
+		// TODO
+		//
+		// Read ".amp/amp.posix.tags.csv", allowing persistent tag IDs
+		//
+
+		subItems, err := openDir.Readdir(-1)
 		openDir.Close()
 		if err != nil {
 			return nil
 		}
 
-		sort.Slice(dirItems, func(i, j int) bool {
-			ii := dirItems[i]
-			jj := dirItems[j]
+		sort.Slice(subItems, func(i, j int) bool {
+			ii := subItems[i]
+			jj := subItems[j]
 			if ii.IsDir() != jj.IsDir() { // return directories first
 				return ii.IsDir()
 			}
 			return ii.Name() < jj.Name() // then sort by name
 		})
 
-		for _, fsInfo := range dirItems {
+		for _, fsInfo := range subItems {
 			if strings.HasPrefix(fsInfo.Name(), ".") {
 				continue
 			}
-			if fsInfo.IsDir() {
-				dir := &fsDir{}
-				dir.setFrom(fsInfo)
-				dir.AddTo(dst, dir)
-			} else {
-				file := &fsFile{}
-				file.setFrom(fsInfo)
-				file.AddTo(dst, file)
-			}
+			cell := newFsItem(dir.dirname, fsInfo)
+			pin.AddChild(cell)
+
 		}
 
 	}

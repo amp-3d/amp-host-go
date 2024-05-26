@@ -3,23 +3,23 @@ package av;
 
 option csharp_namespace = "AMP";
 
-import "amp/api.amp.sdk.proto";
+import "amp/api.amp.proto";
 
 
 
 enum MediaFlags {
-    Unknown             = 0;
-    HasAudio            = 0x0100;
-    HasVideo            = 0x0200;
-    HasSpeech           = 0x0400;
-    NeedsNetwork        = 0x0800;
+    MediaFlags_Unknown             = 0;
+    MediaFlags_HasAudio            = 0x0100;
+    MediaFlags_HasVideo            = 0x0200;
+    MediaFlags_HasSpeech           = 0x0400;
+    MediaFlags_NeedsNetwork        = 0x0800;
     
-    IsLive              = 0x0001;
-    IsSeekable          = 0x0002;
-    IsUnending          = 0x0004;
+    MediaFlags_IsLive              = 0x0001;
+    MediaFlags_IsSeekable          = 0x0002;
+    MediaFlags_IsUnending          = 0x0004;
     
     // When set, the user is more likely to skipping short intervals than switch media items.
-    SkipIsLikely        = 0x0010; 
+    MediaFlags_SkipIsLikely        = 0x0010; 
     
 }
     
@@ -80,18 +80,17 @@ message StationInfo {
 
 
 // Invokes an fully featured media player over a panel. 
-message PlayableMediaItem {
-    MediaFlags   Flags       = 1;
-    string       Title       = 2;  // common title
-    string       AuthorDesc  = 5;  // artist(s) / author(s) description
-    string       Collection  = 6;  // name of album / series / collection
-    int32        ItemNumber  = 10; // track or episode number (0 if n/a)
-    double       Seconds     = 11; // duration in seconds
-    float        Popularity  = 12; // 0.0 to 1.0
-    int64        ReleaseDate = 14; // Unix UTC in seconds
+message PlayableMedia {
+    MediaFlags   Flags        = 1;
     
-    repeated amp.AssetTag Tracks  =  22; // playable tracks / assets
-    repeated amp.AssetTag CoverArt = 23; // viewable cover art images
+    amp.TagTab   Media        = 3;  // publicly known tag line -- i.e. summary
+    amp.TagTab   Author       = 5;  // artist(s) / author(s)
+    amp.TagTab   Collection   = 7;  // album / series 
+    
+    int32        ItemNumber   = 10; // track or episode number (0 if n/a)
+    double       Seconds      = 11; // duration in seconds
+    float        Popularity   = 12; // 0.0 to 1.0
+    int64        ReleaseDate  = 14; // Unix UTC in seconds
 
 }
 

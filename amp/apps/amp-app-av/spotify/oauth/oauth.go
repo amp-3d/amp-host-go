@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/stdlib/tag"
 	"golang.org/x/oauth2"
 )
 
-const kTokenTagSpec = "amp.token.attr.spec.oauth2.spotify"
+var LoginAuthAttrID = tag.FormSpec(amp.AttrSpec, "oauth2.LoginInfo").ID
 
 type Config struct {
 	Config oauth2.Config
@@ -58,10 +59,10 @@ func (auth *Config) CurrentToken() *oauth2.Token {
 
 // Pushes a msg to the client to launch a URL that starts oauth flow.
 func (auth *Config) pushAuthCodeRequest() error {
-	val := &amp.HandleURI{
-		URI: auth.Config.AuthCodeURL(""),
+	val := &amp.LaunchURL{
+		URL: auth.Config.AuthCodeURL(""),
 	}
-	return amp.SendMetaAttr(auth.ctx.Session(), amp.NilTag, amp.ReqStatus_Synced, val)
+	return amp.SendMetaAttr(auth.ctx.Session(), tag.ID{}, amp.OpStatus_Synced, val)
 }
 
 // NewHttpClient creates a *http.Client that will use the specified access token for its API requests.
@@ -92,7 +93,7 @@ func (auth *Config) Exchange(ctx context.Context, state string, uri *url.URL, op
 func (auth *Config) readStoredToken() error {
 	attr := amp.AuthToken{}
 
-	err := auth.ctx.GetAppAttr(kTokenTagSpec, &attr)
+	err := auth.ctx.GetAppAttr(LoginAuthAttrID, &attr)
 	if err != nil || (attr.AccessToken == "" && attr.RefreshToken == "") {
 		return amp.ErrNoAuthToken
 	}
@@ -125,7 +126,7 @@ func (auth *Config) OnTokenUpdated(tok *oauth2.Token, saveToken bool) error {
 			RefreshToken: tok.RefreshToken,
 			Expiry:       tok.Expiry.Unix(),
 		}
-		err = auth.ctx.PutAppAttr(kTokenTagSpec, &attr)
+		err = auth.ctx.PutAppAttr(LoginAuthAttrID, &attr)
 		if err == nil {
 			auth.ctx.Info(2, "wrote new oauth token")
 		} else {

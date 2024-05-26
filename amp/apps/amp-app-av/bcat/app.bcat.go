@@ -7,39 +7,45 @@ import (
 	"net/url"
 	"time"
 
-	av "github.com/amp-3d/amp-host-go/amp/apps/amp-app-av"
+	"github.com/amp-3d/amp-host-go/amp/apps/amp-app-av/av"
 	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/amp/basic"
+	"github.com/amp-3d/amp-sdk-go/amp/registry"
+	"github.com/amp-3d/amp-sdk-go/stdlib/tag"
 )
 
-const (
-	AppID = "bookmark-catalog" + av.AppFamilyDomain
+var (
+	AppSpec         = tag.FormSpec(av.AppSpec, "bookmark-catalog")
+	LoginInfoAttrID = tag.FormSpec(AppSpec, "LoginInfo").ID
 )
 
-const kTokenTagSpec = "amp.tag.data.LoginInfo.av.tunr.catalog"
+func init() {
+	reg := registry.Global()
 
-func RegisterApp(reg amp.Registry) {
 	reg.RegisterApp(&amp.App{
-		AppID:   AppID,
-		TagID:   amp.StringToTagID(AppID),
+		AppSpec: AppSpec,
 		Desc:    "bookmark catalog service",
 		Version: "v1.2023.2",
-		NewAppInstance: func() amp.AppInstance {
-			return &appCtx{}
+		NewAppInstance: func(ctx amp.AppContext) (amp.AppInstance, error) {
+			app := &appInst{}
+			app.Instance = app
+			app.AppContext = ctx
+			return app, nil
 		},
 	})
 }
 
-type appCtx struct {
-	av.AppBase
+type appInst struct {
+	basic.App[*appInst]
 	client *http.Client
-	cats   []*categoryInfo
+	cats   categories
 }
 
-func (app *appCtx) readStoredToken() error {
+func (app *appInst) readStoredToken() error {
 
 	// Pins the named cell relative to the user's home planet and appID (guaranteeing app and user scope)
 	login := &av.LoginInfo{}
-	err := app.GetAppAttr(kTokenTagSpec, login)
+	err := app.GetAppAttr(LoginInfoAttrID, login)
 	if err != nil {
 
 	}
@@ -47,24 +53,16 @@ func (app *appCtx) readStoredToken() error {
 	return nil
 }
 
-func (app *appCtx) resetLogin() {
+func (app *appInst) resetLogin() {
 
 }
 
-func (app *appCtx) PinCell(parent amp.PinnedCell, req amp.PinOp) (amp.PinnedCell, error) {
+func (app *appInst) MakeReady(req amp.Requester) error {
+	return app.makeReady()
+}
 
-	if app.cats == nil {
-		err := app.reloadCategories()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	cats := &categories{
-		//cells: make([]*amp.CellBase[*appCtx], 0, 16),
-	}
-	cats.Self = nil // cats
-	return av.NewPinnedCell[*appCtx](app, &cats.CellBase)
+func (app *appInst) ServeRequest(op amp.Requester) (amp.Pin, error) {
+	return app.PinAndServe(&app.cats, op)
 }
 
 const (
@@ -73,7 +71,7 @@ const (
 	kPassword  = "trdtrtvrtretttetrbrtbertb"
 )
 
-func (app *appCtx) makeReady() error {
+func (app *appInst) makeReady() error {
 	if app.client != nil {
 		return nil
 	}
@@ -89,7 +87,7 @@ func (app *appCtx) makeReady() error {
 	return nil
 }
 
-func (app *appCtx) doReq(endpoint string, params url.Values) (*json.Decoder, error) {
+func (app *appInst) doReq(endpoint string, params url.Values) (*json.Decoder, error) {
 	if err := app.makeReady(); err != nil {
 		return nil, err
 	}
@@ -109,67 +107,4 @@ func (app *appCtx) doReq(endpoint string, params url.Values) (*json.Decoder, err
 
 	jsonDecoder := json.NewDecoder(resp.Body)
 	return jsonDecoder, nil
-}
-
-func (app *appCtx) reloadCategories() error {
-	params := url.Values{}
-	params.Add("subtype", "S")
-
-	json, err := app.doReq("categories/", params)
-	if err != nil {
-		return err
-	}
-
-	// read '['
-	_, err = json.Token()
-	if err != nil {
-		return err
-	}
-
-	// while the array contains values
-	for json.More() {
-		var entry av.CategoryInfo
-		err := json.Decode(&entry)
-		if err != nil {
-			return err
-		}
-		if entry.Title == "Unlisted" {
-			continue
-		}
-		cat := &categoryInfo{
-			catID: entry.Id,
-		}
-
-		cat.hdr = amp.CellHeader{
-			Title: entry.Title,
-			About: entry.Description,
-			Glyphs: []*amp.AssetTag{
-				{
-					URL:         "amp:asset/av/" + entry.Image,
-					ContentType: amp.GenericImageType,
-				},
-			},
-		}
-
-		if created, err := time.Parse(time.RFC3339, entry.TimestampCreated); err == nil {
-			cat.hdr.SetCreatedAt(created)
-		}
-		if modified, err := time.Parse(time.RFC3339, entry.TimestampModified); err == nil {
-			cat.hdr.SetModifiedAt(modified)
-		}
-		app.cats = append(app.cats, cat)
-	}
-
-	// read ']'
-	_, err = json.Token()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-type categoryInfo struct {
-	hdr   amp.CellHeader
-	catID uint32
 }

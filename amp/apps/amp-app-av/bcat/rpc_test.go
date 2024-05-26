@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	av "github.com/amp-3d/amp-host-go/amp/apps/amp-app-av"
+	"github.com/amp-3d/amp-host-go/amp/apps/amp-app-av/av"
 )
 
 func TestLogin(t *testing.T) {

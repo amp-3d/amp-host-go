@@ -31,7 +31,6 @@ require (
 )
 
 require (
-	github.com/alecthomas/participle/v2 v2.1.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/brynbellomy/klog v0.0.0-20200414031930-87fbf2e555ae // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

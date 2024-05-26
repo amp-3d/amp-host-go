@@ -3,93 +3,58 @@ package posix
 import (
 	"os"
 	"path"
+	"path/filepath"
 
-	av "github.com/amp-3d/amp-host-go/amp/apps/amp-app-av"
-	filesys "github.com/amp-3d/amp-host-go/amp/apps/amp-app-filesys"
+	"github.com/amp-3d/amp-host-go/amp/apps/amp-app-filesys/filesys"
 	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/amp/basic"
+	"github.com/amp-3d/amp-sdk-go/amp/registry"
+	"github.com/amp-3d/amp-sdk-go/stdlib/tag"
 	"github.com/h2non/filetype"
+)
+
+const (
+
+	// PinURL param to pin the given absolute path
+	URLParam_PinPath = "path"
 )
 
 func init() {
 	filetype.AddType("jpeg", "image/jpeg")
 	filetype.AddType("json", "text/x-json")
 	filetype.AddType("md", "text/markdown")
-}
 
-const (
-	AppID = "posix" + filesys.AppFamilyDomain
-
-	// PinURL param to pin the given absolute path
-	URLParam_PinPath = "path"
-)
-
-func RegisterApp(reg amp.Registry) {
-	reg.RegisterPrototype("", &av.MediaPlaylist{})
-
+	reg := registry.Global()
 	reg.RegisterApp(&amp.App{
-		AppID:   AppID,
-		TagID:   amp.StringToTagID(AppID),
+		AppSpec: tag.FormSpec(filesys.AppSpec, "posix"),
 		Desc:    "local file system service",
 		Version: "v1.2023.2",
-		NewAppInstance: func() amp.AppInstance {
-			return &appCtx{}
+		NewAppInstance: func(ctx amp.AppContext) (amp.AppInstance, error) {
+			app := &appInst{}
+			app.Instance = app
+			app.AppContext = ctx
+			return app, nil
 		},
 	})
 }
 
-type appCtx struct {
-	av.AppBase
+type appInst struct {
+	basic.App[*appInst]
 }
 
-func (app *appCtx) OnNew(ctx amp.AppContext) (err error) {
-	err = app.AppBase.OnNew(ctx)
-	if err != nil {
-		return
-	}
-	return nil
-}
-
-func (app *appCtx) PinCell(parent amp.PinnedCell, op amp.PinOp) (amp.PinnedCell, error) {
-	if parent != nil {
-		return parent.PinCell(op)
-	}
-
-	var path string
-	if url := op.URL(); url != nil {
-		query := url.Query()
-		paths := query[URLParam_PinPath]
-		if len(paths) == 0 {
-			return nil, amp.ErrCode_CellNotFound.Error("missing URL argument 'path'")
-		}
-		path = paths[0]
-	}
-
-	return app.pinnedCellForPath(path)
-}
-
-func (app *appCtx) pinnedCellForPath(pathname string) (amp.PinnedCell, error) {
-	pathname = path.Clean(pathname)
+func (app *appInst) ServeRequest(op amp.Requester) (amp.Pin, error) {
+	vals := op.Request().Values
+	pathname := vals.Get(URLParam_PinPath)
 	if pathname == "" {
-		return nil, amp.ErrCode_CellNotFound.Error("missing cell ID / URL")
+		return nil, amp.ErrCode_BadRequest.Errorf("missing param %q", URLParam_PinPath)
 	}
-
+	pathname = path.Clean(pathname)
 	fsInfo, err := os.Stat(pathname)
 	if err != nil {
 		return nil, amp.ErrCode_CellNotFound.Errorf("path not found: %q", pathname)
 	}
 
-	var item *fsItem
-	if fsInfo.IsDir() {
-		dir := &fsDir{}
-		dir.Self = dir
-		item = &dir.fsItem
-	} else {
-		file := &fsFile{}
-		file.Self = file
-		item = &file.fsItem
-	}
-	item.pathname = pathname
-	item.setFrom(fsInfo)
-
-	return av.NewPinnedCell(app, &item.CellBase)
+	dirname := filepath.Dir(pathname)
+	item := newFsItem(dirname, fsInfo)
+	return app.PinAndServe(item, op)
 }

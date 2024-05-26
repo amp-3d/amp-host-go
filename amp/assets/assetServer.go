@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/stdlib/media"
 	"github.com/amp-3d/amp-sdk-go/stdlib/task"
 )
 
@@ -31,7 +31,7 @@ type httpServer struct {
 
 type assetEntry struct {
 	task.Context
-	amp.MediaAsset
+	media.Asset
 }
 
 func newHttpServer(opts HttpServerOpts) AssetServer {
@@ -59,7 +59,7 @@ func newHttpServer(opts HttpServerOpts) AssetServer {
 		entry := srv.assets[assetID]
 		srv.assetMu.Unlock()
 
-		asset := entry.MediaAsset
+		asset := entry.Asset
 		if asset == nil {
 			http.NotFound(w, r)
 			return
@@ -71,7 +71,7 @@ func newHttpServer(opts HttpServerOpts) AssetServer {
 			return
 		}
 
-		w.Header().Set("Content-Type", asset.MediaType())
+		w.Header().Set("Content-Type", asset.ContentType())
 
 		readerCtx, _ := entry.Context.StartChild(&task.Task{
 			IdleClose: time.Nanosecond,
@@ -134,14 +134,14 @@ func (srv *httpServer) GracefulStop() {
 	}
 }
 
-func (srv *httpServer) PublishAsset(asset amp.MediaAsset, opts amp.PublishOpts) (URL string, err error) {
+func (srv *httpServer) PublishAsset(asset media.Asset, opts media.PublishOpts) (URL string, err error) {
 	assetID := GenerateAssetID(srv.rng, 28)
 
 	// Extract extension and put on asset name
 	{
-		mediaType := asset.MediaType()
-		if extPos := strings.LastIndexByte(mediaType, '/'); extPos > 0 {
-			assetID += "." + mediaType[extPos+1:]
+		contentType := asset.ContentType()
+		if extPos := strings.LastIndexByte(contentType, '/'); extPos > 0 {
+			assetID += "." + contentType[extPos+1:]
 		}
 	}
 
@@ -167,8 +167,8 @@ func (srv *httpServer) PublishAsset(asset amp.MediaAsset, opts amp.PublishOpts) 
 
 	srv.assetMu.Lock()
 	srv.assets[assetID] = assetEntry{
-		MediaAsset: asset,
-		Context:    assetCtx,
+		Asset:   asset,
+		Context: assetCtx,
 	}
 	srv.assetMu.Unlock()
 

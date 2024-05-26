@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/amp-3d/amp-sdk-go/amp"
+	"github.com/amp-3d/amp-sdk-go/stdlib/media"
 	"github.com/amp-3d/amp-sdk-go/stdlib/task"
 )
 
 // Consumed by an amp.App wishing to post an data asset for steaming (e.g. audio, video).
 type AssetServer interface {
 	task.Context
-	amp.AssetPublisher
+	media.Publisher
 	StartService(host task.Context) error
 	GracefulStop()
 }
