@@ -307,7 +307,7 @@ func (op *clientOp) WasClosed() bool {
 }
 
 func (op *clientOp) OnComplete(err error) {
-	op.sess.closeOp(op.req.ID, err)
+	op.sess.closeOp(op.req.ID, err, true)
 }
 
 func (sess *session) closeAllReqs() {
@@ -319,21 +319,22 @@ func (sess *session) closeAllReqs() {
 	sess.openOpsMu.Unlock()
 
 	for _, reqID := range toClose {
-		sess.closeOp(reqID, amp.ErrShuttingDown)
+		sess.closeOp(reqID, amp.ErrShuttingDown, true)
 	}
 }
 
-func (sess *session) closeOp(reqID tag.ID, err error) {
+func (sess *session) closeOp(reqID tag.ID, err error, sendClose bool) {
 	op := sess.detachOp(reqID)
 	if op == nil {
 		return
 	}
-
 	proceed := op.closed.CompareAndSwap(0, 1)
 	if !proceed {
 		return
 	}
-	sess.sendClose(reqID, err)
+	if sendClose {
+		sess.sendClose(reqID, err)
+	}
 	close(op.cancel)
 
 	// TODO: is there is a race condition where the ctx may not be set?
@@ -456,9 +457,13 @@ func (sess *session) consumeInbox() {
 		select {
 
 		case tx := <-sess.txIn:
-			if tx.Status != amp.OpStatus_Closed {
+			switch tx.Status {
+			case amp.OpStatus_Closed:
+				sess.closeOp(tx.ContextID(), nil, false)
+			default:
 				sess.handleIncomingOp(tx)
 			}
+			tx.ReleaseRef()
 
 		case <-sess.Closing():
 			sess.closeAllReqs()
@@ -518,10 +523,8 @@ func (sess *session) handleIncomingOp(tx *amp.TxMsg) {
 		err = op.submitToApp()
 	}
 	if err != nil || op == nil {
-		sess.closeOp(newReqID, err)
+		sess.closeOp(newReqID, err, true)
 	}
-
-	tx.ReleaseRef()
 }
 
 func (sess *session) addClientOp(genesisID, parentReqID tag.ID) (*clientOp, error) {
