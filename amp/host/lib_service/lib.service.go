@@ -24,8 +24,10 @@ func (srv *libService) StartService(on amp.Host) error {
 
 	var err error
 	srv.Context, err = srv.host.StartChild(&task.Task{
-		Label:     "lib.HostService",
-		IdleClose: time.Nanosecond,
+		Info: task.Info{
+			Label:     "lib.HostService",
+			IdleClose: time.Nanosecond,
+		},
 	})
 	if err != nil {
 		return err
@@ -44,7 +46,7 @@ func (srv *libService) NewLibSession() (LibSession, error) {
 		closing:    make(chan struct{}),
 	}
 	var err error
-	sess.hostSess, err = srv.host.StartNewSession(srv, sess)
+	sess.session, err = srv.host.StartNewSession(srv, sess)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +62,7 @@ func (srv *libService) GracefulStop() {
 
 type libSession struct {
 	srv       *libService
-	hostSess  amp.HostSession
+	session   amp.Session
 	closed    int32
 	mallocs   map[*byte]struct{} // retains allocations so they are not GCed
 	mallocsMu sync.Mutex
@@ -72,11 +74,6 @@ type libSession struct {
 	toClient   chan []byte
 	closing    chan struct{}
 	free       chan []byte
-	// //outgoing   []byte
-	// //idk sync.Mutex
-	// outgoing  [2][]byte
-
-	// bufFree atomic.Value
 }
 
 func (sess *libSession) Label() string {

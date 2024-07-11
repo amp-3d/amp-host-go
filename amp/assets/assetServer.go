@@ -74,8 +74,10 @@ func newHttpServer(opts HttpServerOpts) AssetServer {
 		w.Header().Set("Content-Type", asset.ContentType())
 
 		readerCtx, _ := entry.Context.StartChild(&task.Task{
-			IdleClose: time.Nanosecond,
-			Label:     fmt.Sprintf("AssetReader.(*%v)", reflect.ValueOf(assetReader).Elem().Type().Name()),
+			Info: task.Info{
+				Label:     fmt.Sprintf("AssetReader.(*%v)", reflect.TypeOf(assetReader).Elem().Name()),
+				IdleClose: time.Nanosecond,
+			},
 			OnRun: func(ctx task.Context) {
 				http.ServeContent(w, r, asset.Label(), time.Time{}, assetReader)
 			},
@@ -103,10 +105,12 @@ func (srv *httpServer) StartService(host task.Context) error {
 
 	srv.host = host
 	srv.Context, err = srv.host.StartChild(&task.Task{
-		Label: fmt.Sprintf("AssetServer %v", lis.Addr().String()),
+		Info: task.Info{
+			Label: fmt.Sprintf("AssetServer %v", lis.Addr().String()),
+		},
 		OnRun: func(ctx task.Context) {
 			srv.server.Serve(lis)
-			ctx.Info(2, "Serve COMPLETE")
+			ctx.Log().Info(2, "Serve COMPLETE")
 		},
 		OnClosing: func() {
 			if srv.server != nil {
@@ -146,7 +150,9 @@ func (srv *httpServer) PublishAsset(asset media.Asset, opts media.PublishOpts) (
 	}
 
 	assetCtx, err := srv.Context.StartChild(&task.Task{
-		Label:   asset.Label(),
+		Info: task.Info{
+			Label: asset.Label(),
+		},
 		OnStart: asset.OnStart,
 		OnClosing: func() {
 			srv.assetMu.Lock()

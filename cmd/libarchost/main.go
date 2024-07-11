@@ -58,7 +58,7 @@ func Call_SessionBegin(userDataPath, sharedCachePath string) int64 {
 
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to start LibService: %v", err)
-		gHost.Error(errMsg)
+		gHost.Log().Error(errMsg)
 		gHost.Close()
 		return 0
 	}

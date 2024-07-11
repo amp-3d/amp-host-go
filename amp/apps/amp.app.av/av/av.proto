@@ -1,0 +1,105 @@
+syntax = "proto3";
+package av;
+
+option csharp_namespace = "AMP";
+
+// import "amp/amp.proto";
+
+
+enum MediaFlags {
+    MediaFlags_Unknown             = 0;
+    MediaFlags_HasAudio            = 0x0100;
+    MediaFlags_HasVideo            = 0x0200;
+    MediaFlags_HasSpeech           = 0x0400;
+    MediaFlags_NeedsNetwork        = 0x0800;
+    
+    MediaFlags_IsLive              = 0x0001;
+    MediaFlags_IsSeekable          = 0x0002;
+    MediaFlags_IsUnending          = 0x0004;
+    
+    // When set, the user is more likely to skipping short intervals than switch media items.
+    MediaFlags_SkipIsLikely        = 0x0010; 
+    
+}
+    
+
+message LoginInfo {
+    string              UserID       = 1;
+    string              Pass         = 2;
+    string              TokenValue   = 3;
+    int64               TokenExpires = 4;
+}
+
+
+// message PlayableInfo {
+//     string              Title        = 1;
+//     string              Subtitle     = 2;
+//     string              Artist       = 3;
+//     string              Album        = 4;
+//     int64               ReleaseDate  = 5; // unix timestamp
+//     double              Duration     = 6; // seconds
+//     PlayableFlags       Flags        = 7;
+
+// }
+
+message LoginCreateResponse {
+    string   timestamp_expires = 1;
+    string   token = 2;
+    string   chat_status = 3;
+    int64    chat_version = 4;
+}
+
+message CategoryInfo {
+    uint32 id = 1;
+    string category = 2;
+    string title = 3;
+    string description = 4;
+    string type = 5;
+    string subtype = 6;
+    string image = 7;
+    string timestamp_created = 8;
+    string timestamp_modified = 9;
+}
+
+
+message StationInfo {
+    uint32 id = 1;
+    string category = 2;
+    string title = 3;
+    string description = 4;
+    string type = 5;
+    string subtype = 6;
+    string image = 7;
+    string author = 8;
+    string url = 9;
+    string summary = 10;
+    
+}
+
+
+
+// Invokes an fully featured media player over a panel. 
+message MediaTrackInfo {
+    MediaFlags Flags = 1;
+    
+    // amp.Tag Media      = 3;  // publicly known tag line -- i.e. summary
+    // amp.Tag Author     = 5;  // artist(s) / author(s)
+    // amp.Tag Collection = 7;  // album / series 
+    
+    float  Ordering    = 10; // track or episode number (0 if n/a)
+    double Seconds     = 11; // duration in seconds
+    float  Popularity  = 12; // 0.0 to 1.0
+    int64  ReleaseDate = 14; // Unix UTC in seconds
+
+}
+
+message MediaProviderInfo {
+    
+    string              CommonName = 1;
+    bool                RequiresSubscription = 2;
+    bool                RequiresInternet = 3;
+    //string              LoggedInAs = 4;
+
+}
+
+

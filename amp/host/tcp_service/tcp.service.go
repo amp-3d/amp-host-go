@@ -40,12 +40,14 @@ func (srv *tcpServer) StartService(on amp.Host) error {
 	}
 
 	srv.Context, err = srv.host.StartChild(&task.Task{
-		Label:     fmt.Sprint("tcp.HostService ", srv.lis.Addr().String()),
-		IdleClose: time.Nanosecond,
+		Info: task.Info{
+			Label:     fmt.Sprint("tcp.HostService ", srv.lis.Addr().String()),
+			IdleClose: time.Nanosecond,
+		},
 		OnRun: func(ctx task.Context) {
-			srv.Infof(0, "Serving on \x1b[1;32m%v %v\x1b[0m", srv.opts.ListenNetwork, srv.opts.ListenAddr)
+			srv.Log().Infof(0, "Serving on \x1b[1;32m%v %v\x1b[0m", srv.opts.ListenNetwork, srv.opts.ListenAddr)
 			srv.Serve()
-			srv.Info(2, "Serve COMPLETE")
+			srv.Log().Infof(2, "Serve COMPLETE")
 		},
 		OnClosing: func() {
 			srv.Stop()
@@ -72,7 +74,7 @@ func (srv *tcpServer) Serve() {
 			if max := 1 * time.Second; errDelay > max {
 				errDelay = max
 			}
-			srv.Warnf("Accept error: %v; retrying in %v", err, errDelay)
+			srv.Log().Warnf("Accept error: %v; retrying in %v", err, errDelay)
 
 			timer := time.NewTimer(errDelay)
 			select {
@@ -138,7 +140,7 @@ func (srv *tcpServer) addClient(conn net.Conn) {
 	srv.mu.Unlock()
 
 	var err error
-	sess.hostSess, err = srv.host.StartNewSession(srv, sess)
+	sess.session, err = srv.host.StartNewSession(srv, sess)
 	if err != nil {
 		srv.tryCloseSess(sess, true)
 	}
@@ -167,7 +169,7 @@ type tcpSess struct {
 	label    string
 	srv      *tcpServer
 	conn     net.Conn
-	hostSess amp.HostSession
+	session amp.Session
 	txBuf    []byte // TODO: use a pool?
 }
 

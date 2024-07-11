@@ -48,21 +48,21 @@ func main() {
 	srv := opts.NewTcpServer()
 	err = srv.StartService(host)
 	if err != nil {
-		srv.Fatalf("failed to start tcp service: %v", err)
+		srv.Log().Fatalf("failed to start tcp service: %v", err)
 	}
 
 	gracefulStop, immediateStop := log.AwaitInterrupt()
 
 	go func() {
 		<-gracefulStop
-		srv.Info(1, "<-gracefulStop")
+		srv.Log().Infof(1, "<-gracefulStop")
 		srv.GracefulStop()
 		srv.Close()
 	}()
 
 	go func() {
 		<-immediateStop
-		srv.Info(1, "<-immediateStop")
+		srv.Log().Infof(1, "<-immediateStop")
 		srv.Close()
 	}()
 

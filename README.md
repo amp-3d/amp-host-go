@@ -37,11 +37,11 @@ amp-host-go % make help
 0002     ┣ AssetServer [::]:5193
 0016     ┃    ┗ /Users/aomeara/Movies/Downloads/Alan Watts Lectures | On Pain.mp4
 0003     ┣ tcp.HostService [::]:5192
-0005     ┃    ┣ tcp 127.0.0.1:63945 <- amp.HostSession(4)
-0006     ┃    ┗ tcp 127.0.0.1:63945 -> amp.HostSession(4)
-0004     ┗ amp.HostSession
-0007          ┣ app: planet.sys.amp-space.systems
-0008          ┃    ┗ planet: aomeara
+0005     ┃    ┣ tcp 127.0.0.1:63945 <- amp.Session(4)
+0006     ┃    ┗ tcp 127.0.0.1:63945 -> amp.Session(4)
+0004     ┗ amp.Session
+0007          ┣ app: space.sys.amp-space.systems
+0008          ┃    ┗ space: aomeara
 0009          ┗ app: filesys.bridges.amp-space.systems
 0010               ┣ cell: aomeara/
 0011               ┃    ┗ [req 1003]  amp://filesys?path=/Users/aomeara
