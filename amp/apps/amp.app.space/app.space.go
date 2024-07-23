@@ -98,18 +98,15 @@ type plSess struct {
 	cellsMu  sync.RWMutex       // cells mutex
 }
 
-// TODO -- merge with planet
-//
 // plCell is a mounted cell serving requests for a specific cell (typically 0-2 open plReq).
 // This can be thought of as the controller for one or more active cell pins.
 type plCell struct {
-	pl      *plSess         // parent space
-	commits chan *amp.TxMsg // incoming commits
-	ctx     task.Context    // cells are parents of their pins
-	ID      tag.ID          // cell ID
-	pins    []*cellPin      // pins that are maintaining sync with this cell
-	pinsMu  sync.Mutex      // cells mutex
-	rev     atomic.Uint64   // revision counter
+	pl     *plSess       // parent space
+	ctx    task.Context  // cells are parents of their pins
+	ID     tag.ID        // cell ID
+	pins   []*cellPin    // pins that are maintaining sync with this cell
+	pinsMu sync.Mutex    // cells mutex
+	rev    atomic.Uint64 // revision counter
 }
 
 // *** implements amp.Pin ***
@@ -144,10 +141,6 @@ func (app *appInst) homePlanet() (*plSess, error) {
 
 	return app.home, err
 }
-
-var (
-	ErrInvalidPlanet = amp.ErrCode_CellNotFound.Error("invalid space or cell URI")
-)
 
 func (app *appInst) ServeRequest(op amp.Requester) (amp.Pin, error) {
 	req := op.Request()
@@ -276,7 +269,7 @@ func (app *appInst) mountSpace(
 		},
 		OnChildClosing: func(child task.Context) {
 			pl.cellsMu.Lock()
-			delete(pl.cells, child.Info().ContextID)
+			delete(pl.cells, child.Info().ContextID) // ContextID is the cell ID
 			pl.cellsMu.Unlock()
 		},
 		OnClosed: func() {
@@ -367,10 +360,9 @@ func (pl *plSess) getCell(cellID tag.ID, autoMount bool) (cell *plCell, err erro
 	}
 
 	cell = &plCell{
-		pl:      pl,
-		ID:      cellID,
-		commits: make(chan *amp.TxMsg),
-		pins:    make([]*cellPin, 0, 4),
+		pl:   pl,
+		ID:   cellID,
+		pins: make([]*cellPin, 0, 4),
 	}
 
 	// Start the cell context as a child of the space it belongs to
@@ -378,17 +370,6 @@ func (pl *plSess) getCell(cellID tag.ID, autoMount bool) (cell *plCell, err erro
 		Info: task.Info{
 			Label:     fmt.Sprint("cell: ..", cell.ID.Base32Suffix()),
 			ContextID: cellID,
-		},
-		OnRun: func(ctx task.Context) {
-			for tx := range cell.commits { // exits after OnClosing()
-				err := cell.commitTx(tx)
-				if err != nil {
-					ctx.Log().Error(err)
-				}
-			}
-		},
-		OnClosing: func() {
-			close(cell.commits)
 		},
 	})
 	if err != nil {
@@ -400,9 +381,9 @@ func (pl *plSess) getCell(cellID tag.ID, autoMount bool) (cell *plCell, err erro
 }
 
 func (pl *plSess) launchPin(cellID tag.ID, op amp.Requester) (amp.Pin, error) {
-
 	req := op.Request()
 
+	// If no cellID given, get it from the request then fallback to app to handle
 	if cellID.IsNil() {
 		if req.PinTarget != nil {
 			cellID = req.PinTarget.TagID()
@@ -410,10 +391,6 @@ func (pl *plSess) launchPin(cellID tag.ID, op amp.Requester) (amp.Pin, error) {
 		if cellID.IsNil() {
 			return pl.app.ServeRequest(op)
 		}
-	}
-
-	if cellID.IsNil() {
-		return nil, amp.ErrCode_CellNotFound.Errorf("missing cell identifier")
 	}
 
 	cell, err := pl.getCell(cellID, true)
@@ -438,9 +415,7 @@ func (pl *plSess) launchPin(cellID tag.ID, op amp.Requester) (amp.Pin, error) {
 			ContextID: pin.req.ID,
 		},
 		OnChildClosing: func(task.Context) {
-			pl.cellsMu.Lock()
-			delete(pl.cells, cellID)
-			pl.cellsMu.Unlock()
+			pin.cell.removeSync(pin)
 		},
 		OnRun: func(task.Context) {
 			exeErr := pin.execute()
@@ -476,16 +451,22 @@ func (cell *plCell) removeSync(remove *cellPin) {
 }
 
 func (cell *plCell) commitTx(tx *amp.TxMsg) error {
-	var key TxOpKey
+	if tx == nil || len(tx.Ops) == 0 {
+		return nil
+	}
+	opKeys := make([]TxOpKey, len(tx.Ops))
 
+	// Note: we could surround this in a mutex buy is pointless since we handle conflicts below
 	for {
 		dbTx := cell.pl.db.NewTransaction(true)
 		defer dbTx.Discard()
 
-		for _, op := range tx.Ops {
+		for i, op := range tx.Ops {
+			key := &opKeys[i]
 			op.CellID.Put24(key[kCellOfs:])
 			op.AttrID.Put16(key[kAttrOfs:])
 			op.SI.Put16(key[kIndexOfs:])
+			op.EditID.Put16(key[kEditOfs:])
 			opVal := tx.DataStore[op.DataOfs : op.DataOfs+op.DataLen]
 			err := dbTx.Set(key[:], opVal)
 			if err != nil {
@@ -507,10 +488,9 @@ func (cell *plCell) commitTx(tx *amp.TxMsg) error {
 
 	// TODO: this needs to be way more detailed -- each TxOp:
 	//   - should only propagate if is has not already been superseded (it should be the highest for that AttrID+SI)
-	//   - should be validated (its height should be +1 more than the current height)
-	//   - ** badger's stream.Orchestrate() could be used to efficiently check all this! **
+	//   - ** badger's stream.Orchestrate() can be used to efficiently check all this! **
 	//
-	//   IDEA: instead of height + tx hash suffix, perhaps a 16 byte "reply tag" prefix?
+	//   IDEA: instead of height + tx hash suffix, perhaps a 16 byte "edit" ID?
 	//      - composed of the new entry's 8 byte time ID with a sum or hash of the previous entry and the new entry (8 + 8)
 	//      - this provides time ordering and a way to validate that the prev entry was witnessed.
 	//      - this effectively validates the previous entry witnessed and allows the tx ID to be reconstructed for each entry
@@ -593,15 +573,12 @@ func (pin *cellPin) ServeRequest(op amp.Requester) (amp.Pin, error) {
 func (pin *cellPin) execute() error {
 
 	// if received a commit, push it to the cell
-	if tx := pin.req.CommitTx; tx != nil {
-		select {
-		case pin.cell.commits <- tx:
-		case <-pin.ctx.Closing():
-			return amp.ErrRequestClosed
-		}
+	err := pin.cell.commitTx(pin.req.CommitTx)
+	if err != nil {
+		pin.ctx.Log().Errorf("failed to commit tx: %v", err)
+		return err
 	}
 
-	var err error
 	switch pin.req.StateSync {
 
 	case amp.StateSync_Maintain:
@@ -610,7 +587,6 @@ func (pin *cellPin) execute() error {
 		for running := true; running && err == nil; {
 			select {
 			case <-pin.ctx.Closing():
-				pin.cell.removeSync(pin)
 				running = false
 			case tx := <-pin.changes:
 				tx.AddRef()
