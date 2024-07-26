@@ -183,7 +183,6 @@ func (item *fsItem) MarshalAttrs(w std.CellWriter) {
 			w.PutItem(std.CellGlyphs, std.GenericFolderGlyph)
 		} else {
 			w.PutItem(std.CellGlyphs, &amp.Tag{
-				Use: amp.TagUse_Glyph,
 				URL: std.GenericGlyphURL + item.ContentType,
 			})
 		}

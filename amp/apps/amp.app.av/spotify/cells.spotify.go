@@ -149,7 +149,6 @@ func (cell *customCell) MarshalAttrs(w std.CellWriter) {
 		w.PutText(std.CellCaption, cell.caption)
 	}
 	w.PutItem(std.CellGlyphs, &amp.Tag{
-		Use:         amp.TagUse_Glyph,
 		URL:         cell.imageURL,
 		ContentType: std.GenericImageType,
 	})
@@ -314,7 +313,6 @@ func (cell *trackCell) PinInto(pin *std.Pin[*appInst]) error {
 	}
 
 	cell.assetLink = &amp.Tag{
-		Use:         amp.TagUse_Content,
 		URL:         contentURL,
 		ContentType: asset.ContentType(),
 	}
@@ -344,7 +342,6 @@ func putGlyphs(w std.CellWriter, images []spotify.Image) {
 
 	for _, img := range images {
 		tag := &amp.Tag{
-			Use:         amp.TagUse_Glyph,
 			URL:         img.URL,
 			ContentType: std.GenericImageType,
 			Metric:      amp.Metric_OrthoPixel,
@@ -421,7 +418,6 @@ func putLinks(w std.CellWriter, urls map[string]string) {
 
 	for link_key, link_url := range urls {
 		tag := &amp.Tag{
-			Use:         amp.TagUse_Link,
 			URL:         link_url,
 			ContentType: link_key,
 			Text:        link_key,

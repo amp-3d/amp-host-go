@@ -94,7 +94,6 @@ func (cat *category) MarshalAttrs(w std.CellWriter) {
 	w.PutText(std.CellLabel, cat.info.Title)
 	w.PutText(std.CellCaption, cat.info.Description)
 	w.PutItem(std.CellGlyphs, &amp.Tag{
-		Use:         amp.TagUse_Glyph,
 		URL:         "amp:asset/av/" + cat.info.Image,
 		ContentType: std.GenericImageType,
 	})
@@ -185,7 +184,6 @@ func (sta *station) MarshalAttrs(w std.CellWriter) {
 	w.PutText(std.CellCaption, sta.info.Summary)
 	w.PutText(std.CellSynopsis, sta.info.Description)
 	w.PutItem(std.CellGlyphs, &amp.Tag{
-		Use:         amp.TagUse_Glyph,
 		URL:         "file://tunr/" + sta.info.Image,
 		ContentType: std.GenericImageType,
 	})
