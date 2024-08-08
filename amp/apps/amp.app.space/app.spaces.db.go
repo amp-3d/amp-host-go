@@ -462,6 +462,10 @@ func (cell *plCell) commitTx(tx *amp.TxMsg) error {
 		defer dbTx.Discard()
 
 		for i, op := range tx.Ops {
+			if op.EditID.IsNil() {
+				cell.ctx.Log().Warnf("missing TxOp.EditID for op %d in tx %v", i, tx.TxInfo.GenesisID)
+				continue
+			}
 			key := &opKeys[i]
 			op.CellID.Put24(key[kCellOfs:])
 			op.AttrID.Put16(key[kAttrOfs:])
